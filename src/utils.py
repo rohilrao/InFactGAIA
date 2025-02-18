@@ -1,0 +1,151 @@
+import os
+import json
+import logging
+from pathlib import Path
+from AnthropicInFactNode import AnthropicInFactNode
+from GptInFactNode import GptInFactNode
+from InFactRenderer import InFactRenderer
+from IPython.display import HTML, display
+
+# ✅ Function to get processed files JSON path
+def get_processed_log_path(node_type, results_dir):
+    node_dir = results_dir / node_type  # Node-specific results directory
+    return node_dir / f"processed_files_{node_type}.json"  # ✅ Store in the correct folder
+
+# ✅ Load processed files
+def load_processed_files(node_type, results_dir):
+    processed_log_path = get_processed_log_path(node_type, results_dir)
+    if processed_log_path.exists():
+        with open(processed_log_path, "r") as f:
+            return set(json.load(f))
+    return set()
+
+# ✅ Save processed files
+def save_processed_files(processed_files, node_type, results_dir):
+    processed_log_path = get_processed_log_path(node_type, results_dir)
+    with open(processed_log_path, "w") as f:
+        json.dump(list(processed_files), f)
+
+# ✅ Function to create or load InFact nodes dynamically
+def load_or_create_node(node_type, results_dir, hypothesis, api_key):
+    """Load or create an InFact node for GPT, Anthropic, or DeepSeek."""
+    log_level = logging.DEBUG
+
+    # ✅ Define node-specific directories
+    node_dir = results_dir / node_type
+    node_dir.mkdir(parents=True, exist_ok=True)
+    node_state_path = node_dir / "infact_node_state.json"
+
+    # ✅ Load existing node state
+    if node_state_path.exists():
+        logging.info(f"🔄 Loading existing {node_type} node state...")
+        print(f"🔄 Loading existing {node_type} node state...")
+        if node_type == "anthropic":
+            node = AnthropicInFactNode.load(str(node_state_path), api_key=api_key)
+        elif node_type == "gpt":
+            node = GptInFactNode.load(str(node_state_path), api_key=api_key)
+    else:
+        logging.info(f"✨ Creating new {node_type} InFact node...")
+        print(f"✨ Creating new {node_type} InFact node...")
+        if node_type == "anthropic":
+            node = AnthropicInFactNode(hypothesis=hypothesis, api_key=api_key, log_level=log_level)
+        elif node_type == "gpt":
+            node = GptInFactNode(hypothesis=hypothesis, api_key=api_key, log_level=log_level)
+
+    return node, node_state_path, node_dir
+
+# ✅ Function to display the most recent HTML result
+def display_latest_html_inline(node_type, results_dir):
+    """Finds the most recent HTML result file and renders it inline if possible."""
+    
+    node_dir = results_dir / node_type  # Node-specific results directory
+    
+    # Get all HTML files in the results directory
+    html_files = list(node_dir.glob("*.html"))  
+    
+    if not html_files:
+        print(f"🚫 No HTML result files found for {node_type}.")
+        return None
+
+    # Get the most recently created HTML file
+    latest_html_file = max(html_files, key=os.path.getctime)
+
+    print(f"📂 Displaying most recent HTML result for {node_type}: {latest_html_file}")
+
+    # ✅ Try to read and render the HTML inline
+    try:
+        with open(latest_html_file, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        display(HTML(html_content))  # Render inline in Colab
+    except Exception as e:
+        print(f"❌ Error displaying HTML: {e}")
+
+# ✅ Function to process new evidence files and display results
+def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key, hypothesis):
+    """
+    Manually trigger processing of new evidence files for a specific node type.
+
+    Parameters:
+    - node_type (str): "gpt", "anthropic", or "deepseek"
+    - hypothesis_folder_name (str): Folder name for the hypothesis
+    - base_dir (Path): The base directory where hypothesis folders are stored
+    - api_key (str): API key for the selected model
+    - hypothesis (str): The hypothesis text
+    """
+
+    # ✅ Dynamically construct paths
+    hypo_path = base_dir / hypothesis_folder_name
+    results_dir = hypo_path / "results"
+    evidence_dir = hypo_path / "evidence"
+
+    # ✅ Ensure directories exist
+    results_dir.mkdir(parents=True, exist_ok=True)
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+
+    node, node_state_path, node_dir = load_or_create_node(node_type, results_dir, hypothesis, api_key)
+    processed_files = load_processed_files(node_type, results_dir)
+
+    all_evidence_files = {str(p) for p in evidence_dir.glob("*.*")}  # Get all files
+
+    if not all_evidence_files:  # ✅ Handle case when no files exist
+        logging.info(f"🚫 No evidence files found in {evidence_dir}. Nothing to process.")
+        print(f"🚫 No evidence files found in {evidence_dir}. Nothing to process.")
+        return
+
+    new_files = all_evidence_files - processed_files  # Only unprocessed files
+
+    if not new_files:
+        logging.info(f"✅ No new evidence files found for {node_type}.")
+        print(f"✅ No new evidence files found for {node_type}.")
+        return
+
+    logging.info(f"📂 Found {len(new_files)} new evidence files for {node_type}.")
+    print(f"📂 Found {len(new_files)} new evidence files for {node_type}.")
+
+    for evidence_file in new_files:
+        logging.info(f"🔄 Processing file: {evidence_file} with {node_type}...")
+        print(f"🔄 Processing file: {evidence_file} with {node_type}...")
+
+        node.process_data(evidence_file)  # Process new data
+
+        # Save updated node state
+        node.save(str(node_state_path))
+
+        # Save analysis results
+        analysis_path = node_dir / f"analysis_{Path(evidence_file).stem}.json"
+        node.save(str(analysis_path))
+
+        # Render output
+        renderer = InFactRenderer()
+        output_file = node_dir / f"analysis_{Path(evidence_file).stem}.html"
+        renderer.render_analysis(node, str(output_file))
+
+        # Mark as processed
+        processed_files.add(evidence_file)
+
+    save_processed_files(processed_files, node_type, results_dir)
+    logging.info(f"✅ Processing completed for {node_type}.")
+    print(f"✅ Processing completed for {node_type}.")
+
+    # ✅ Automatically display the latest HTML after processing
+    display_latest_html_inline(node_type, results_dir)
