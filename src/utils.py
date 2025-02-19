@@ -41,9 +41,9 @@ def load_or_create_node(node_type, results_dir, hypothesis, model, api_key):
         logging.info(f"🔄 Loading existing {node_type} node state...")
         print(f"🔄 Loading existing {node_type} node state...")
         if node_type == "anthropic":
-            node = AnthropicInFactNode.load(str(node_state_path), api_key=api_key)
+            node = AnthropicInFactNode.load(str(node_state_path), api_key=api_key, model = model)
         elif node_type == "gpt":
-            node = GptInFactNode.load(str(node_state_path), api_key=api_key)
+            node = GptInFactNode.load(str(node_state_path), api_key=api_key, model = model)
     else:
         logging.info(f"✨ Creating new {node_type} InFact node...")
         print(f"✨ Creating new {node_type} InFact node...")
@@ -55,7 +55,7 @@ def load_or_create_node(node_type, results_dir, hypothesis, model, api_key):
     return node, node_state_path, node_dir
 
 # ✅ Function to display the most recent HTML result
-def display_latest_html_inline(node_type, results_dir):
+def display_latest_html_result(node_type, results_dir):
     """Finds the most recent HTML result file and renders it inline if possible."""
     
     node_dir = results_dir / node_type  # Node-specific results directory
@@ -81,7 +81,7 @@ def display_latest_html_inline(node_type, results_dir):
         print(f"❌ Error displaying HTML: {e}")
 
 # ✅ Function to process new evidence files and display results
-def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key,model, hypothesis):
+def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key, model, hypothesis):
     """
     Manually trigger processing of new evidence files for a specific node type.
 
@@ -102,10 +102,14 @@ def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key,model,
     results_dir.mkdir(parents=True, exist_ok=True)
     evidence_dir.mkdir(parents=True, exist_ok=True)
 
-    node, node_state_path, node_dir = load_or_create_node(node_type, results_dir, hypothesis, model,api_key)
+    node, node_state_path, node_dir = load_or_create_node(node_type, results_dir, hypothesis, model, api_key)
     processed_files = load_processed_files(node_type, results_dir)
 
-    all_evidence_files = {str(p) for p in evidence_dir.glob("*.*")}  # Get all files
+    # Define supported file types
+    supported_file_types = {'.csv', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.html', '.htm'}
+
+    # Get all supported files
+    all_evidence_files = {str(p) for p in evidence_dir.glob("*.*") if p.suffix.lower() in supported_file_types}
 
     if not all_evidence_files:  # ✅ Handle case when no files exist
         logging.info(f"🚫 No evidence files found in {evidence_dir}. Nothing to process.")
@@ -146,6 +150,3 @@ def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key,model,
     save_processed_files(processed_files, node_type, results_dir)
     logging.info(f"✅ Processing completed for {node_type}.")
     print(f"✅ Processing completed for {node_type}.")
-
-    # ✅ Automatically display the latest HTML after processing
-    display_latest_html_inline(node_type, results_dir)

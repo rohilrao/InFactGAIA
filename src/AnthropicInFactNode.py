@@ -84,7 +84,7 @@ class AnthropicInFactNode:
             json.dump(data, f, indent=2)
 
     @classmethod
-    def load(cls, filename: str, api_key: str = None):
+    def load(cls, filename: str, model: str, api_key: str = None):
         """Load node from a JSON file."""
         with open(filename, 'r') as f:
             data = json.load(f)
@@ -93,6 +93,7 @@ class AnthropicInFactNode:
         node = cls(
             hypothesis=data['hypothesis'],
             api_key=api_key,
+            model = model,
             prior_log_odds=data['prior_log_odds']
         )
 
