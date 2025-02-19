@@ -22,7 +22,7 @@ class AnthropicInFactNode:
     def __init__(self,
                 hypothesis: str,
                 api_key: str,
-                model: str = "claude-3-5-haiku-20241022",
+                model: str,
                 prior_log_odds: float = 0.0,
                 log_level: int = logging.INFO):
         """Initialize node with logging configuration."""
@@ -250,8 +250,8 @@ class AnthropicInFactNode:
             # Send to Anthropic API
             self.logger.info("Sending request to Anthropic API")
             message = self.client.messages.create(
-                model= self.model, #'claude-3-5-haiku-20241022', #"claude-3-5-sonnet-20241022",
-                max_tokens= 1024, #8192,
+                model= self.model,
+                max_tokens= 8192, 
                 temperature=0.1,
                 messages=[{
                     "role": "user",
@@ -426,8 +426,8 @@ class AnthropicInFactNode:
             self.logger.debug(f"Analysis prompt: {prompt}")
 
             message = self.client.messages.create(
-                model= self.model, #"claude-3-5-haiku-20241022", #"claude-3-5-sonnet-20241022",
-                max_tokens= 1024, #8192
+                model= self.model, 
+                max_tokens= 8192, 
                 temperature=0.1,
                 messages=[{
                     "role": "user",
@@ -527,7 +527,7 @@ class AnthropicInFactNode:
                 self.logger.debug(f"Sending debug prompt to LLM:\n{debug_prompt}")
 
                 message = self.client.messages.create(
-                    model= self.model, #"claude-3-5-sonnet-20241022",
+                    model= self.model, 
                     max_tokens=8192,
                     temperature=0.1,
                     messages=[{
@@ -588,8 +588,8 @@ class AnthropicInFactNode:
             self.logger.debug(f"Redundancy check prompt: {prompt}")
 
             message = self.client.messages.create(
-                model= self.model, #"claude-3-5-sonnet-20241022",
-                max_tokens=4096,
+                model= self.model,
+                max_tokens=8192,
                 temperature=0.1,
                 messages=[{
                     "role": "user",

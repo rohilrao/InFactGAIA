@@ -2,6 +2,8 @@ import requests
 import time
 import random
 import xml.etree.ElementTree as ET
+import os
+from urllib.parse import urlparse
 
 def search_google(api_key, query, top_n=10):
     """
@@ -89,3 +91,71 @@ def search_arxiv_papers(query, limit=100):
 
     except requests.exceptions.RequestException as e:
         print(f"ArXiv API request failed: {e}")
+
+
+
+
+
+def download_file(url, target_directory):
+    """
+    Downloads a file (PDF or HTML) from the given URL and saves it to the target directory.
+
+    Args:
+        url (str): The URL of the file (PDF, HTML, etc.).
+        target_directory (str): The directory where the file will be saved.
+
+    Returns:
+        str: The full path of the saved file, or None if the download fails.
+    """
+    try:
+        # Ensure target directory exists
+        if not os.path.exists(target_directory):
+            print(f"⚠️ Directory does not exist. Creating: {target_directory}")
+            os.makedirs(target_directory)
+
+        # Handle ArXiv abstract -> Convert to PDF link
+        if "/abs/" in url:
+            url = url.replace("/abs/", "/pdf/") + ".pdf"
+
+        # Parse URL
+        parsed_url = urlparse(url)
+        filename = os.path.basename(parsed_url.path) or "download"
+
+        # Ensure the file has the correct extension
+        if filename.endswith(".pdf"):
+            extension = ".pdf"
+        elif filename.endswith(".html") or "semanticscholar" in url or "google" in url:
+            extension = ".html"
+        else:
+            extension = ".html"  # Default to HTML if no clear extension
+
+        # Add extension if missing
+        if not filename.endswith(extension):
+            filename += extension
+
+        # Final file path
+        filepath = os.path.join(target_directory, filename)
+
+        # Send request
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+
+        # Ensure content is not empty before saving
+        content = response.content if extension == ".pdf" else response.text
+        if not content.strip():  # If content is empty, skip saving
+            print(f"❌ Download failed: {url} (Empty content)")
+            return None
+
+        # Save file (binary for PDFs, text for HTML)
+        mode = "wb" if extension == ".pdf" else "w"
+        encoding = None if extension == ".pdf" else "utf-8"
+
+        with open(filepath, mode, encoding=encoding) as file:
+            file.write(content)
+
+        print(f"✅ Downloaded: {url} -> {filepath}")
+        return filepath
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Failed to download {url}: {e}")
+        return None
