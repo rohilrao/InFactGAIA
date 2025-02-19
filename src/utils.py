@@ -70,7 +70,7 @@ def display_latest_html_inline(node_type, results_dir):
     # Get the most recently created HTML file
     latest_html_file = max(html_files, key=os.path.getctime)
 
-    print(f"📂 Displaying most recent HTML result for {node_type}: {latest_html_file}")
+    print(f"Displaying most recent HTML result for {node_type}: {latest_html_file}")
 
     # ✅ Try to read and render the HTML inline
     try:
