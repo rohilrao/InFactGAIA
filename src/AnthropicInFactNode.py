@@ -22,6 +22,7 @@ class AnthropicInFactNode:
     def __init__(self,
                 hypothesis: str,
                 api_key: str,
+                model: str = "claude-3-5-haiku-20241022",
                 prior_log_odds: float = 0.0,
                 log_level: int = logging.INFO):
         """Initialize node with logging configuration."""
@@ -45,6 +46,7 @@ class AnthropicInFactNode:
         self.logger.addHandler(file_handler)
 
         # Initialize API client
+        self.model = model
         self.api_key = api_key
         self.logger.info(f"Initializing AnthropicInFactNode with hypothesis: {hypothesis}")
         self.client = anthropic.Anthropic(api_key=api_key)
@@ -248,7 +250,7 @@ class AnthropicInFactNode:
             # Send to Anthropic API
             self.logger.info("Sending request to Anthropic API")
             message = self.client.messages.create(
-                model= 'claude-3-5-haiku-20241022', #"claude-3-5-sonnet-20241022",
+                model= self.model, #'claude-3-5-haiku-20241022', #"claude-3-5-sonnet-20241022",
                 max_tokens= 1024, #8192,
                 temperature=0.1,
                 messages=[{
@@ -424,7 +426,7 @@ class AnthropicInFactNode:
             self.logger.debug(f"Analysis prompt: {prompt}")
 
             message = self.client.messages.create(
-                model= "claude-3-5-haiku-20241022", #"claude-3-5-sonnet-20241022",
+                model= self.model, #"claude-3-5-haiku-20241022", #"claude-3-5-sonnet-20241022",
                 max_tokens= 1024, #8192
                 temperature=0.1,
                 messages=[{
@@ -525,7 +527,7 @@ class AnthropicInFactNode:
                 self.logger.debug(f"Sending debug prompt to LLM:\n{debug_prompt}")
 
                 message = self.client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
+                    model= self.model, #"claude-3-5-sonnet-20241022",
                     max_tokens=8192,
                     temperature=0.1,
                     messages=[{
@@ -586,7 +588,7 @@ class AnthropicInFactNode:
             self.logger.debug(f"Redundancy check prompt: {prompt}")
 
             message = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model= self.model, #"claude-3-5-sonnet-20241022",
                 max_tokens=4096,
                 temperature=0.1,
                 messages=[{

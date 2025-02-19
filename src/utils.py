@@ -27,7 +27,7 @@ def save_processed_files(processed_files, node_type, results_dir):
         json.dump(list(processed_files), f)
 
 # ✅ Function to create or load InFact nodes dynamically
-def load_or_create_node(node_type, results_dir, hypothesis, api_key):
+def load_or_create_node(node_type, results_dir, hypothesis, model, api_key):
     """Load or create an InFact node for GPT, Anthropic, or DeepSeek."""
     log_level = logging.DEBUG
 
@@ -48,7 +48,7 @@ def load_or_create_node(node_type, results_dir, hypothesis, api_key):
         logging.info(f"✨ Creating new {node_type} InFact node...")
         print(f"✨ Creating new {node_type} InFact node...")
         if node_type == "anthropic":
-            node = AnthropicInFactNode(hypothesis=hypothesis, api_key=api_key, log_level=log_level)
+            node = AnthropicInFactNode(hypothesis=hypothesis, api_key=api_key,model=model, log_level=log_level)
         elif node_type == "gpt":
             node = GptInFactNode(hypothesis=hypothesis, api_key=api_key, log_level=log_level)
 
@@ -81,7 +81,7 @@ def display_latest_html_inline(node_type, results_dir):
         print(f"❌ Error displaying HTML: {e}")
 
 # ✅ Function to process new evidence files and display results
-def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key, hypothesis):
+def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key,model, hypothesis):
     """
     Manually trigger processing of new evidence files for a specific node type.
 
@@ -102,7 +102,7 @@ def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key, hypot
     results_dir.mkdir(parents=True, exist_ok=True)
     evidence_dir.mkdir(parents=True, exist_ok=True)
 
-    node, node_state_path, node_dir = load_or_create_node(node_type, results_dir, hypothesis, api_key)
+    node, node_state_path, node_dir = load_or_create_node(node_type, results_dir, hypothesis, model,api_key)
     processed_files = load_processed_files(node_type, results_dir)
 
     all_evidence_files = {str(p) for p in evidence_dir.glob("*.*")}  # Get all files
