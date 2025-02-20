@@ -58,11 +58,27 @@ class GptInFactNode:
       self.logger.info("Initialization complete")
 
     def save(self, filename: str):
-        """Save node's data to a JSON file."""
+        """Save node's data to a JSON file, preserving existing data and logging progress."""
+        
+        node_state_exists = os.path.exists(filename)
+        
+        if node_state_exists:
+            try:
+                with open(filename, 'r') as f:
+                    existing_data = json.load(f)
+                    print(f"🔄 Existing node state found in {filename}. Updating it.")
+            except json.JSONDecodeError:
+                existing_data = {}
+                print(f"⚠️ Node state file {filename} is corrupted. Resetting state.")
+        else:
+            existing_data = {}
+            print(f"✨ No existing node state found. Creating a fresh node state at {filename}.")
+
         data = {
             'hypothesis': self.hypothesis,
             'prior_log_odds': self.prior_log_odds,
             'current_posterior': self.current_posterior,
+            'confidence_intervals': self.confidence_intervals,  
             'data_points': [
                 {
                     'metadata': dp['metadata'],
@@ -77,28 +93,48 @@ class GptInFactNode:
             ]
         }
 
-        self.logger.info(f"Saving node data to {filename}")
+        # ✅ Merge new data with old (avoiding duplication)
+        existing_data.update(data)
+
         with open(filename, 'w') as f:
-            json.dump(data, f, indent=2)
+            json.dump(existing_data, f, indent=2)
+
+        print(f"✅ Node state successfully saved to {filename}.")
+        self.logger.info(f"Saving node data to {filename}")
+
 
     @classmethod
-    def load(cls, filename: str, api_key: str = None):
-        """Load node from a JSON file."""
-        with open(filename, 'r') as f:
-            data = json.load(f)
+    def load(cls, filename: str, model: str, api_key: str = None):
+        """Load node from a JSON file with logging to indicate if an existing state is found."""
+        
+        if not os.path.exists(filename):
+            print(f"🚫 No existing node state found at {filename}. Creating a new node.")
+            return cls(hypothesis="", api_key=api_key, model=model, prior_log_odds=0)  # Default values
+
+        try:
+            with open(filename, 'r') as f:
+                data = json.load(f)
+            print(f"🔄 Loading existing node state from {filename}.")
+        except json.JSONDecodeError:
+            print(f"⚠️ Error: Corrupted node state file {filename}. Creating a fresh node.")
+            return cls(hypothesis="", api_key=api_key, model=model, prior_log_odds=0)  # Default values
 
         # Create new node
         node = cls(
-            hypothesis=data['hypothesis'],
+            hypothesis=data.get('hypothesis', ""),
             api_key=api_key,
-            prior_log_odds=data['prior_log_odds']
+            model=model,
+            prior_log_odds=data.get('prior_log_odds', 0)
         )
 
         # Restore state
-        node.current_posterior = data['current_posterior']
-        node.data_points = data['data_points']
+        node.current_posterior = data.get('current_posterior', 0)
+        node.confidence_intervals = data.get('confidence_intervals', {})
+        node.data_points = data.get('data_points', [])
 
+        print(f"✅ Successfully loaded node state from {filename}.")
         node.logger.info(f"Loaded node data from {filename}")
+        
         return node
 
     def process_data(self, data_file: str) -> Tuple[float, Tuple[float, float]]:
@@ -249,17 +285,6 @@ class GptInFactNode:
             # Send to GPT API
             self.logger.info("Sending request to GPT API")
 
-            '''
-            message = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=8192,
-                temperature=0.1,
-                messages=[{
-                    "role": "user",
-                    "content": message_content
-                }]
-            )
-            '''
 
             message = self.client.chat.completions.create(
                 model= self.model, #"gpt-4o-2024-08-06", #"gpt-4o-mini-2024-07-18",
@@ -438,17 +463,7 @@ class GptInFactNode:
 
             self.logger.debug(f"Analysis prompt: {prompt}")
 
-            '''
-            message = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=8192,
-                temperature=0.1,
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
-            )
-            '''
+           
             message = self.client.chat.completions.create(
                 model= self.model, #"gpt-4o-mini-2024-07-18",
                 max_completion_tokens = 8192,
@@ -612,17 +627,7 @@ class GptInFactNode:
 
             self.logger.debug(f"Redundancy check prompt: {prompt}")
 
-            '''
-            message = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=4096,
-                temperature=0.1,
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
-            )
-            '''
+            
             message = self.client.chat.completions.create(
                 model= self.model, #"gpt-4o-mini-2024-07-18",
                 max_completion_tokens = 8192,
