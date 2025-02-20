@@ -293,7 +293,6 @@ class AnthropicInFactNode:
                 self.logger.debug(f"Processing text file of type {file_type}")
                 with open(data_file, 'r') as f:
                     content = f.read()
-                content = truncate_content(content)
                 message_content = [{"type": "text", "text": content}]
 
             # Add analysis prompt
