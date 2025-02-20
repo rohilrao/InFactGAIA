@@ -13,12 +13,31 @@ def get_processed_log_path(node_type, results_dir):
     return node_dir / f"processed_files_{node_type}.json"  # ✅ Store in the correct folder
 
 # ✅ Load processed files
+import json
+from pathlib import Path
+
 def load_processed_files(node_type, results_dir):
+    """Loads the processed files list, or logs that no existing records were found."""
+    
     processed_log_path = get_processed_log_path(node_type, results_dir)
+
     if processed_log_path.exists():
-        with open(processed_log_path, "r") as f:
-            return set(json.load(f))
+        try:
+            with open(processed_log_path, "r") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return set(data)  # ✅ Ensure correct format
+                else:
+                    print("⚠️ Unexpected format in processed files log. Resetting data.")
+                    return set()
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"⚠️ Error reading processed files log: {e}. Resetting data.")
+            return set()
+    
+    # ✅ Log when no existing processed files are found
+    print(f"🚫 No existing processed files found for {node_type}. Starting fresh.")
     return set()
+
 
 # ✅ Save processed files
 def save_processed_files(processed_files, node_type, results_dir):
