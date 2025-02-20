@@ -100,7 +100,8 @@ class AnthropicInFactNode:
         # Restore state
         node.current_posterior = data['current_posterior']
         node.data_points = data['data_points']
-
+        node.confidence_intervals = data['confidence_intervals']
+        
         node.logger.info(f"Loaded node data from {filename}")
         return node
 
