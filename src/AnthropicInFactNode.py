@@ -342,15 +342,43 @@ class AnthropicInFactNode:
 
             # Send to Anthropic API
             self.logger.info("Sending request to Anthropic API")
-            message = self.client.messages.create(
-                model= self.model,
-                max_tokens= 8192, 
-                temperature=0.1,
-                messages=[{
-                    "role": "user",
-                    "content": message_content
-                }]
-            )
+
+
+            try:
+                # First attempt without truncation
+                message = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=8192, 
+                    temperature=0.1,
+                    messages=[{"role": "user", "content": message_content}]
+                )
+            except Exception as e:
+                error_message = str(e)
+                self.logger.warning(f"Initial request failed: {error_message}")
+
+                # Detect if the error is due to rate limit (429)
+                if "429" in error_message or "rate_limit_error" in error_message:
+                    self.logger.warning("Rate limit encountered. Retrying with truncated content.")
+                    
+                    # Truncate text content only
+                    for item in message_content:
+                        if item["type"] == "text":
+                            item["text"] = truncate_content(item["text"], max_length=10000)  # Reduce further
+
+                    try:
+                        # Retry with truncated content
+                        message = self.client.messages.create(
+                            model=self.model,
+                            max_tokens=8192, 
+                            temperature=0.1,
+                            messages=[{"role": "user", "content": message_content}]
+                        )
+                    except Exception as retry_error:
+                        self.logger.error(f"Retry failed: {str(retry_error)}")
+                        return {"error": "Rate limit exceeded even after truncation", "details": str(retry_error)}
+
+                else:
+                    raise  # If it's another type of error, don't handle it silently.
 
             # Extract and parse response
             response_text = self._get_message_text(message)
