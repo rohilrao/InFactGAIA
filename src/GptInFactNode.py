@@ -19,6 +19,7 @@ class GptInFactNode:
     def __init__(self,
                 hypothesis: str,
                 api_key: str,
+                model: str,
                 prior_log_odds: float = 0.0,
                 log_level: int = logging.INFO):
     
@@ -44,7 +45,7 @@ class GptInFactNode:
 
       # Initialize API client
       self.api_key = api_key
-      self.llm_model = "gpt-4o-mini"
+      self.model = model
       self.logger.info(f"InitializingGPTInFactNode with hypothesis: {hypothesis}")
       self.client = OpenAI(api_key=api_key)
 
@@ -261,7 +262,7 @@ class GptInFactNode:
             '''
 
             message = self.client.chat.completions.create(
-                model= self.llm_model, #"gpt-4o-2024-08-06", #"gpt-4o-mini-2024-07-18",
+                model= self.model, #"gpt-4o-2024-08-06", #"gpt-4o-mini-2024-07-18",
                 max_completion_tokens = 8192,
                 messages=[
                   {"role": "user", 
@@ -449,7 +450,7 @@ class GptInFactNode:
             )
             '''
             message = self.client.chat.completions.create(
-                model= self.llm_model, #"gpt-4o-mini-2024-07-18",
+                model= self.model, #"gpt-4o-mini-2024-07-18",
                 max_completion_tokens = 8192,
                 messages=[
                   {"role": "user", 
@@ -551,7 +552,7 @@ class GptInFactNode:
                 self.logger.debug(f"Sending debug prompt to LLM:\n{debug_prompt}")
 
                 message = self.client.chat.completions.create(
-                model= self.llm_model, #"gpt-4o-mini-2024-07-18",
+                model= self.model, #"gpt-4o-mini-2024-07-18",
                 max_completion_tokens = 8192,
                 messages=[
                   {"role": "user", 
@@ -623,7 +624,7 @@ class GptInFactNode:
             )
             '''
             message = self.client.chat.completions.create(
-                model= self.llm_model, #"gpt-4o-mini-2024-07-18",
+                model= self.model, #"gpt-4o-mini-2024-07-18",
                 max_completion_tokens = 8192,
                 messages=[
                   {"role": "user", 

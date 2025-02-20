@@ -157,6 +157,13 @@ class AnthropicInFactNode:
         self.logger.info(f"Parsing data file: {data_file}")
         file_type = Path(data_file).suffix.lower()
 
+        def truncate_content(content: str, max_length: int = 15000) -> str:
+            """Truncate content to a maximum length."""
+            if len(content) > max_length:
+                self.logger.warning(f"Content length ({len(content)}) exceeds max length ({max_length}), truncating.")
+                return content[:max_length] + "\n... [truncated] ..."
+            return content
+
         try:
             if file_type == '.csv':
                 self.logger.debug("Processing CSV file")
@@ -205,6 +212,7 @@ class AnthropicInFactNode:
                 self.logger.debug(f"Processing text file of type {file_type}")
                 with open(data_file, 'r') as f:
                     content = f.read()
+                content = truncate_content(content)
                 message_content = [{"type": "text", "text": content}]
 
             # Add analysis prompt
