@@ -163,8 +163,8 @@ def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key, model
         node.save(str(node_state_path))
 
         # Save analysis results
-        analysis_path = node_dir / f"analysis_{Path(evidence_file).stem}.json"
-        node.save(str(analysis_path))
+        # analysis_path = node_dir / f"analysis_{Path(evidence_file).stem}.json"
+        # node.save(str(analysis_path))
 
         # Render output
         renderer = InFactRenderer()
