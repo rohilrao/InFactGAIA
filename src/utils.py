@@ -39,11 +39,19 @@ def load_processed_files(node_type, results_dir):
     return set()
 
 
-# ✅ Save processed files
 def save_processed_files(processed_files, node_type, results_dir):
     processed_log_path = get_processed_log_path(node_type, results_dir)
+
+    # ✅ Load existing processed files first
+    existing_files = load_processed_files(node_type, results_dir)
+
+    # ✅ Merge both sets
+    updated_files = existing_files | processed_files  # Union of both sets
+
+    # ✅ Save back to file
     with open(processed_log_path, "w") as f:
-        json.dump(list(processed_files), f)
+        json.dump(list(updated_files), f)
+
 
 # ✅ Function to create or load InFact nodes dynamically
 def load_or_create_node(node_type, results_dir, hypothesis, model, api_key):

@@ -59,6 +59,89 @@ class AnthropicInFactNode:
 
         self.logger.info("Initialization complete")
 
+
+    def save(self, filename: str):
+        """Save node's data to a JSON file, preserving existing data and logging progress."""
+        
+        node_state_exists = os.path.exists(filename)
+        
+        if node_state_exists:
+            try:
+                with open(filename, 'r') as f:
+                    existing_data = json.load(f)
+                    print(f"🔄 Existing node state found in {filename}. Updating it.")
+            except json.JSONDecodeError:
+                existing_data = {}
+                print(f"⚠️ Node state file {filename} is corrupted. Resetting state.")
+        else:
+            existing_data = {}
+            print(f"✨ No existing node state found. Creating a fresh node state at {filename}.")
+
+        data = {
+            'hypothesis': self.hypothesis,
+            'prior_log_odds': self.prior_log_odds,
+            'current_posterior': self.current_posterior,
+            'confidence_intervals': self.confidence_intervals,  
+            'data_points': [
+                {
+                    'metadata': dp['metadata'],
+                    'raw_data': dp['raw_data'],
+                    'l_plus': dp['l_plus'],
+                    'l_minus': dp['l_minus'],
+                    'posterior': dp['posterior'],
+                    'confidence_assessment': dp.get('confidence_assessment', {}),
+                    'analysis_rationale': dp.get('analysis_rationale', '')
+                }
+                for dp in self.data_points
+            ]
+        }
+
+        # ✅ Merge new data with old (avoiding duplication)
+        existing_data.update(data)
+
+        with open(filename, 'w') as f:
+            json.dump(existing_data, f, indent=2)
+
+        print(f"✅ Node state successfully saved to {filename}.")
+        self.logger.info(f"Saving node data to {filename}")
+
+
+    @classmethod
+    def load(cls, filename: str, model: str, api_key: str = None):
+        """Load node from a JSON file with logging to indicate if an existing state is found."""
+        
+        if not os.path.exists(filename):
+            print(f"🚫 No existing node state found at {filename}. Creating a new node.")
+            return cls(hypothesis="", api_key=api_key, model=model, prior_log_odds=0)  # Default values
+
+        try:
+            with open(filename, 'r') as f:
+                data = json.load(f)
+            print(f"🔄 Loading existing node state from {filename}.")
+        except json.JSONDecodeError:
+            print(f"⚠️ Error: Corrupted node state file {filename}. Creating a fresh node.")
+            return cls(hypothesis="", api_key=api_key, model=model, prior_log_odds=0)  # Default values
+
+        # Create new node
+        node = cls(
+            hypothesis=data.get('hypothesis', ""),
+            api_key=api_key,
+            model=model,
+            prior_log_odds=data.get('prior_log_odds', 0)
+        )
+
+        # Restore state
+        node.current_posterior = data.get('current_posterior', 0)
+        node.confidence_intervals = data.get('confidence_intervals', {})
+        node.data_points = data.get('data_points', [])
+
+        print(f"✅ Successfully loaded node state from {filename}.")
+        node.logger.info(f"Loaded node data from {filename}")
+        
+        return node
+
+    '''
+
     def save(self, filename: str):
         """Save node's data to a JSON file."""
         data = {
@@ -104,7 +187,7 @@ class AnthropicInFactNode:
         
         node.logger.info(f"Loaded node data from {filename}")
         return node
-
+    '''
     def process_data(self, data_file: str) -> Tuple[float, Tuple[float, float]]:
         """Process a new data file and update beliefs."""
         self.logger.info(f"Processing data file: {data_file}")
