@@ -126,9 +126,9 @@ def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key, model
     results_dir = hypo_path / node_type / "results"
     evidence_dir = hypo_path / node_type / "evidence"
 
-    print(f"📂 Hypothesis path: {hypo_path}"
-          f"\n📂 Results directory: {results_dir}
-          f"\n📂 Evidence directory: {evidence_dir}")
+    print(f"📂 Hypothesis path: {hypo_path}")
+    print(f"\n📂 Results directory: {results_dir}")
+    print(f"\n📂 Evidence directory: {evidence_dir}")
 
     # ✅ Ensure directories exist
     results_dir.mkdir(parents=True, exist_ok=True)
