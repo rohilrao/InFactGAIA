@@ -16,6 +16,11 @@ from typing import List, Tuple, Dict, Optional
 import json
 import pdfplumber
 
+
+def extract_text_from_pdf(pdf_path):
+        with pdfplumber.open(pdf_path) as pdf:
+            return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
+
 class GptInFactNode:
     def __init__(self,
                 hypothesis: str,
@@ -184,9 +189,6 @@ class GptInFactNode:
             self.logger.error(f"Error processing {data_file}: {str(e)}", exc_info=True)
             raise
 
-    def extract_text_from_pdf(pdf_path):
-        with pdfplumber.open(pdf_path) as pdf:
-            return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
 
     def _parse_data(self, data_file: str) -> Dict:
         """Parse different file types using LLM assistance."""
