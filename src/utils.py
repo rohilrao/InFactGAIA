@@ -1,5 +1,7 @@
 import os
 import json
+from pathlib import Path
+import json
 import logging
 from pathlib import Path
 from AnthropicInFactNode import AnthropicInFactNode
@@ -12,10 +14,6 @@ def get_processed_log_path(node_type, results_dir):
     node_dir = results_dir / node_type  # Node-specific results directory
     return node_dir / f"processed_files_{node_type}.json"  # ✅ Store in the correct folder
 
-# ✅ Load processed files
-import json
-from pathlib import Path
-
 def load_processed_files(node_type, results_dir):
     """Loads the processed files list, or logs that no existing records were found."""
     
@@ -26,7 +24,10 @@ def load_processed_files(node_type, results_dir):
             with open(processed_log_path, "r") as f:
                 data = json.load(f)
                 if isinstance(data, list):
-                    return set(data)  # ✅ Ensure correct format
+                    processed_files = set(data)
+                    logging.info(f"📂 Processed files read from {processed_log_path}: {len(processed_files)} files.")
+                    print(f"📂 Processed files read from {processed_log_path}: {len(processed_files)} files.")
+                    return processed_files  # ✅ Ensure correct format
                 else:
                     print("⚠️ Unexpected format in processed files log. Resetting data.")
                     return set()
@@ -35,7 +36,7 @@ def load_processed_files(node_type, results_dir):
             return set()
     
     # ✅ Log when no existing processed files are found
-    print(f"🚫 No existing processed files found for {node_type}. Starting fresh.")
+    print(f"🚫 No existing processed files found for {node_type} at {processed_log_path}. Starting fresh.")
     return set()
 
 
