@@ -14,6 +14,7 @@ from dataclasses import dataclass
 import math
 from typing import List, Tuple, Dict, Optional
 import json
+import pdfplumber
 
 class GptInFactNode:
     def __init__(self,
@@ -183,6 +184,9 @@ class GptInFactNode:
             self.logger.error(f"Error processing {data_file}: {str(e)}", exc_info=True)
             raise
 
+    def extract_text_from_pdf(pdf_path):
+        with pdfplumber.open(pdf_path) as pdf:
+            return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
 
     def _parse_data(self, data_file: str) -> Dict:
         """Parse different file types using LLM assistance."""
@@ -198,18 +202,8 @@ class GptInFactNode:
 
             elif file_type in ['.pdf', '.PDF']:
                 self.logger.debug("Processing PDF file")
-                with open(data_file, 'rb') as f:
-                    pdf_data = base64.b64encode(f.read()).decode('utf-8')
-                message_content = [
-                    {
-                        "type": "document",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "application/pdf",
-                            "data": pdf_data
-                        }
-                    }
-                ]
+                extracted_text = extract_text_from_pdf(data_file)
+                message_content = [{"type": "text", "text": extracted_text}]
 
             elif file_type in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
                 self.logger.debug(f"Processing image file of type {file_type}")
