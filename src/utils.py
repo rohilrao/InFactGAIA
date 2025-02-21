@@ -123,7 +123,7 @@ def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key, model
 
     # ✅ Dynamically construct paths
     hypo_path = base_dir / hypothesis_folder_name
-    results_dir = hypo_path / node_type / "results"
+    results_dir = hypo_path / "results" / node_type
     evidence_dir = hypo_path / "evidence"
 
     print(f"📂 Hypothesis path: {hypo_path}")
