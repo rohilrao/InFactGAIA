@@ -25,6 +25,7 @@ def load_processed_files(node_type, results_dir):
                 data = json.load(f)
                 if isinstance(data, list):
                     processed_files = set(data)
+                    processed_files = {p.replace("My Drive", "MyDrive") for p in data}  # Fix Google Drive path issue
                     logging.info(f"📂 Processed files read from {processed_log_path}: {len(processed_files)} files.")
                     print(f"📂 Processed files read from {processed_log_path}: {len(processed_files)} files.")
                     return processed_files  # ✅ Ensure correct format
