@@ -454,16 +454,18 @@ class DeepSeekInFactNode:
             Return only executable Python code with the function definition.
             Do not include the function call itself.
             """
-
+            
+            message_content = []
+            message_content.append({"type": "text", "text": prompt})
+            
             self.logger.debug(f"Analysis prompt: {prompt}")
-
-           
+            
             message = self.client.chat.completions.create(
                 model= self.model, #"gpt-4o-mini-2024-07-18",
                 max_completion_tokens = 8192,
                 messages=[
                   {"role": "user", 
-                   "content": prompt}
+                   "content": message_content}
                 ]
                 
               )
