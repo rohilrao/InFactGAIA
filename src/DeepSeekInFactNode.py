@@ -21,7 +21,7 @@ def extract_text_from_pdf(pdf_path):
         with pdfplumber.open(pdf_path) as pdf:
             return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
 
-class GptInFactNode:
+class DeepSeekInFactNode:
     def __init__(self,
                 hypothesis: str,
                 api_key: str,
