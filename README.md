@@ -1,4 +1,4 @@
-This work is courtesy of Rafael Kaufmann and the GAIA Lab project.
+This work and assosciated code is courtesy of the GAIA Lab project.
 
 # InFact: Building Trust in Science through Collaborative Evaluation
 *A Gaia Lab project*
