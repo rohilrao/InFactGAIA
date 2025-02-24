@@ -630,7 +630,6 @@ class DeepSeekInFactNode:
                   {"role": "user", 
                    "content": prompt}
                   ]
-                
                    ) 
 
             response = self._get_message_text(message)
