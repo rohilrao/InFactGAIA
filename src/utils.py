@@ -83,7 +83,7 @@ def load_or_create_node(node_type, results_dir, hypothesis, model, api_key):
             node = AnthropicInFactNode(hypothesis=hypothesis, api_key=api_key,model=model, log_level=log_level)
         elif node_type == "gpt":
             node = GptInFactNode(hypothesis=hypothesis, api_key=api_key, model=model, log_level=log_level)
-        elif node_type == "deeepseek":
+        elif node_type == "deepseek":
             node = DeepSeekInFactNode(hypothesis=hypothesis, api_key=api_key, model=model, log_level=log_level)
 
     return node, node_state_path, node_dir
