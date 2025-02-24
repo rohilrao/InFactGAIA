@@ -277,7 +277,7 @@ class DeepSeekInFactNode:
             self.logger.debug(f"Prepared prompt: {prompt}")
 
             # Send to GPT API
-            self.logger.info("Sending request to GPT API")
+            self.logger.info("Sending request to DeepSeek API")
 
 
             message = self.client.chat.completions.create(
@@ -649,6 +649,7 @@ class DeepSeekInFactNode:
           content_block = message.choices[0].message
           if hasattr(content_block, 'content') and isinstance(content_block.content, str):
               return content_block.content
+      print("Error: No content found in API response")
       return ""
 
 
