@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from AnthropicInFactNode import AnthropicInFactNode
 from GptInFactNode import GptInFactNode
+from DeepSeekInFactNode import DeepSeekInFactNode
 from InFactRenderer import InFactRenderer
 from IPython.display import HTML, display
 
@@ -73,6 +74,8 @@ def load_or_create_node(node_type, results_dir, hypothesis, model, api_key):
             node = AnthropicInFactNode.load(str(node_state_path), api_key=api_key, model = model)
         elif node_type == "gpt":
             node = GptInFactNode.load(str(node_state_path), api_key=api_key, model = model)
+        elif node_type == "deepseek":
+            node = DeepSeekInFactNode.load(str(node_state_path), api_key=api_key, model = model)
     else:
         logging.info(f"✨ Creating new {node_type} InFact node...")
         print(f"✨ Creating new {node_type} InFact node...")
@@ -80,6 +83,8 @@ def load_or_create_node(node_type, results_dir, hypothesis, model, api_key):
             node = AnthropicInFactNode(hypothesis=hypothesis, api_key=api_key,model=model, log_level=log_level)
         elif node_type == "gpt":
             node = GptInFactNode(hypothesis=hypothesis, api_key=api_key, model=model, log_level=log_level)
+        elif node_type == "deeepseek":
+            node = DeepSeekInFactNode(hypothesis=hypothesis, api_key=api_key, model=model, log_level=log_level)
 
     return node, node_state_path, node_dir
 
