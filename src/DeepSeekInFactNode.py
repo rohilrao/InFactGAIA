@@ -237,6 +237,9 @@ class DeepSeekInFactNode:
 
             # Add analysis prompt
             prompt = f"""
+            Given this data:
+            {message_content}
+
             Extract relevant data points for evaluating the hypothesis:
             "{self.hypothesis}"
 
