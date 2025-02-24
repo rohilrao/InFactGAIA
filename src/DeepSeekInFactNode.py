@@ -273,7 +273,6 @@ class DeepSeekInFactNode:
             3. Any potential issues or biases in the data
             """
 
-            message_content.append({"type": "text", "text": prompt})
             self.logger.debug(f"Prepared prompt: {prompt}")
 
             # Send to GPT API
@@ -455,8 +454,6 @@ class DeepSeekInFactNode:
             Do not include the function call itself.
             """
             
-            message_content = []
-            message_content.append({"type": "text", "text": prompt})
             
             self.logger.debug(f"Analysis prompt: {prompt}")
             
@@ -465,7 +462,7 @@ class DeepSeekInFactNode:
                 max_completion_tokens = 8192,
                 messages=[
                   {"role": "user", 
-                   "content": message_content}
+                   "content": prompt}
                 ]
                 
               )
