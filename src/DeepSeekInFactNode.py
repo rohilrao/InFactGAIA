@@ -281,7 +281,6 @@ class DeepSeekInFactNode:
             # Send to GPT API
             self.logger.info("Sending request to DeepSeek API")
 
-
             message = self.client.chat.completions.create(
                 model= self.model, #"gpt-4o-mini-2024-07-18",
                 max_completion_tokens = 8192,
