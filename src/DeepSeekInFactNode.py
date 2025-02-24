@@ -283,11 +283,11 @@ class DeepSeekInFactNode:
 
 
             message = self.client.chat.completions.create(
-                model= self.model, #"gpt-4o-2024-08-06", #"gpt-4o-mini-2024-07-18",
+                model= self.model, #"gpt-4o-mini-2024-07-18",
                 max_completion_tokens = 8192,
                 messages=[
                   {"role": "user", 
-                   "content": message_content}
+                   "content": prompt}
                 ]
                 
               )
