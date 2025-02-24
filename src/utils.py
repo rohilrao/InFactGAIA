@@ -185,6 +185,8 @@ def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key, model
         # Mark as processed
         processed_files.add(evidence_file)
 
-    save_processed_files(processed_files, node_type, results_dir)
+        save_processed_files(processed_files, node_type, results_dir)
+
+    
     logging.info(f"✅ Processing completed for {node_type}.")
     print(f"✅ Processing completed for {node_type}.")
