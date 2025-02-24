@@ -148,6 +148,7 @@ def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key, model
 
     # Get all supported files
     all_evidence_files = {str(p) for p in evidence_dir.glob("*.*") if p.suffix.lower() in supported_file_types}
+    all_evidence_files = {p.replace("My Drive", "MyDrive") for p in all_evidence_files} # Fix Google Drive path issue
 
     if not all_evidence_files:  # ✅ Handle case when no files exist
         logging.info(f"🚫 No evidence files found in {evidence_dir}. Nothing to process.")
