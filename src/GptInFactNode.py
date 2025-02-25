@@ -450,7 +450,7 @@ class GptInFactNode:
             4. Limit overconfidence by capping the absolute difference between l_plus and l_minus to {MAX_LOG_LIKELIHOOD_RATIO}.
             4. Use the usual libraries such as numpy and scipy for calculations
             5. Use print() to output intermediate results, as well as the final result before returning.
-            6. Avoid edge cases such as infinity (inf) and NaN values during calculations.
+            6. Ensure numerical stability by avoiding edge cases such as infinity (`inf`) and NaN values in likelihood and probability calculations.
 
             Return only executable Python code with the function definition.
             Do not include the function call itself.
