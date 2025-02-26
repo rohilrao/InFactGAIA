@@ -2,13 +2,33 @@ import streamlit as st
 import pymongo
 import os
 import json
+import subprocess
 import pandas as pd
 from pathlib import Path
 from utils import process_evidence, display_latest_html_result
 from FetchEvidenceUtils import download_file
 
+# Ensure MongoDB is running locally
+MONGO_DB_PATH = "/home/rrao/software/mongodb/bin/mongod"
+DB_DATA_PATH = "/home/rrao/software/mongodb_data"
+OPENSSL_PATH = "/home/rrao/software/openssl"
+
+# Set OpenSSL environment variables
+os.environ["LD_LIBRARY_PATH"] = f"{OPENSSL_PATH}/lib:{os.environ.get('LD_LIBRARY_PATH', '')}"
+os.environ["PATH"] = f"{OPENSSL_PATH}/bin:{os.environ.get('PATH', '')}"
+
+if not os.path.exists(DB_DATA_PATH):
+    os.makedirs(DB_DATA_PATH)
+
+try:
+    client = pymongo.MongoClient("mongodb://localhost:27017/")
+    client.server_info()  # Check if MongoDB is running
+except:
+    st.warning("Starting MongoDB...")
+    subprocess.Popen([MONGO_DB_PATH, "--dbpath", DB_DATA_PATH], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    st.success("MongoDB started successfully!")
+
 # Initialize MongoDB
-client = pymongo.MongoClient("mongodb://localhost:27017/")
 db = client["infact_db"]
 hypotheses_collection = db["hypotheses"]
 
