@@ -9,8 +9,8 @@ from utils import process_evidence, display_latest_html_result
 from FetchEvidenceUtils import download_file
 
 # Ensure MongoDB is running locally
-MONGO_DB_PATH = "/home/rrao/software/mongodb/bin/mongod"
-DB_DATA_PATH = "/home/rrao/software/mongodb_data"
+MONGO_DB_PATH = "/home/rrao/software/mongodb/mongodb/bin/mongod"
+DB_DATA_PATH = "../mongodb_data"
 OPENSSL_PATH = "/home/rrao/software/openssl"
 
 # Set OpenSSL environment variables
