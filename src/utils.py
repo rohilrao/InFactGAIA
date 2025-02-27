@@ -114,6 +114,25 @@ def display_latest_html_result(node_type, results_dir):
     except Exception as e:
         print(f"❌ Error displaying HTML: {e}")
 
+def get_latest_html_path(node_type, results_dir):
+    """Finds the most recent HTML result file and returns its file path."""
+    
+    node_dir = results_dir / node_type  # Node-specific results directory
+    
+    # Get all HTML files in the results directory
+    html_files = list(node_dir.glob("*.html"))  
+    
+    if not html_files:
+        print(f"🚫 No HTML result files found for {node_type}.")
+        return None  # ✅ Return None if no files found
+
+    # Get the most recently created HTML file
+    latest_html_file = max(html_files, key=os.path.getctime)
+
+    print(f"✅ Latest HTML result file path: {latest_html_file}")  # Debugging statement
+
+    return str(latest_html_file)  # ✅ Return file path instead of rendering it        
+
 # ✅ Function to process new evidence files and display results
 def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key, model, hypothesis):
     """
