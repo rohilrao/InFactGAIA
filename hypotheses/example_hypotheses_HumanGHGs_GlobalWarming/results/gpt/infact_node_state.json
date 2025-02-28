@@ -1,0 +1,223 @@
+{
+  "hypothesis": "Human-generated GHG emissions significantly increase global temperatures",
+  "prior_log_odds": 0.0,
+  "current_posterior": 5.405465108108165,
+  "data_points": [
+    {
+      "metadata": {
+        "filename": "World of Change_ Global Temperatures.html",
+        "file_type": ".html",
+        "file_size": 344612,
+        "last_modified": "2025-02-28T08:57:15.768430",
+        "source_path": "/home/rrao/projects/InFactGAIA/hypotheses/example_hypotheses_HumanGHGs_GlobalWarming/evidence/World of Change_ Global Temperatures.html"
+      },
+      "raw_data": {
+        "numerical_values": [
+          {
+            "description": "Global average temperature increase since 1880",
+            "value": 1.1,
+            "unit": "\u00b0C",
+            "uncertainty": "at least"
+          },
+          {
+            "description": "Rate of temperature increase since 1975",
+            "value": 0.15,
+            "unit": "\u00b0C/decade",
+            "range": [
+              0.15,
+              0.2
+            ]
+          },
+          {
+            "description": "Base period for anomaly calculations",
+            "value": [
+              1951,
+              1980
+            ],
+            "unit": "years"
+          },
+          {
+            "description": "Global mean surface air temperature in base period",
+            "value": 14,
+            "unit": "\u00b0C",
+            "uncertainty": "several tenths of a degree"
+          },
+          {
+            "description": "2022 ranking in warmest years",
+            "value": 5,
+            "unit": "rank",
+            "context": "Tied with another year"
+          }
+        ],
+        "metadata": {
+          "source": "NASA Goddard Institute for Space Studies (GISS)",
+          "methodology": [
+            "Uses data from 20,000+ weather stations",
+            "Includes ship- and buoy-based sea surface temperature observations",
+            "Considers Antarctic research station measurements",
+            "Accounts for urban heat island effects"
+          ],
+          "base_period": "1951-1980",
+          "key_reports": [
+            "NASA GISS Surface Temperature Analysis (GISTEMP)",
+            "IPCC special reports",
+            "NOAA National Centers for Environmental Information"
+          ]
+        },
+        "issues": [
+          {
+            "description": "Mid-20th-century temperature leveling",
+            "explanation": "Partially due to anthropogenic aerosols offsetting greenhouse gas effects"
+          },
+          {
+            "description": "Regional temperature variability",
+            "explanation": "Not all regions experience the same level of warming"
+          },
+          {
+            "description": "Possible underrepresentation of pre-1880 temperatures",
+            "explanation": "Temperature records before 1880 are less complete"
+          }
+        ],
+        "confidence_assessment": {
+          "confidence_score": 0.9,
+          "explanation": "There is a large body of peer-reviewed evidence linking human greenhouse gas emissions to increasing global temperatures. Observations from independent datasets (NASA, NOAA, Berkeley Earth, Met Office) consistently show a significant warming trend, especially in recent decades.",
+          "key_strengths": [
+            "Multiple independent datasets show consistent warming trends",
+            "Strong agreement between climate models and observed data",
+            "Comprehensive data sources incorporating land, ocean, and atmospheric measurements"
+          ],
+          "key_limitations": [
+            "Uncertainties in historical pre-1880 temperatures limit comparisons to pre-industrial climate",
+            "Regional variations add complexity to interpreting global trends",
+            "Short-term natural variability can temporarily mask long-term trends"
+          ]
+        }
+      },
+      "l_plus": -49.046271267371196,
+      "l_minus": -54.046271267371196,
+      "posterior": 5.0,
+      "confidence_assessment": {
+        "confidence_score": 0.9,
+        "explanation": "There is a large body of peer-reviewed evidence linking human greenhouse gas emissions to increasing global temperatures. Observations from independent datasets (NASA, NOAA, Berkeley Earth, Met Office) consistently show a significant warming trend, especially in recent decades.",
+        "key_strengths": [
+          "Multiple independent datasets show consistent warming trends",
+          "Strong agreement between climate models and observed data",
+          "Comprehensive data sources incorporating land, ocean, and atmospheric measurements"
+        ],
+        "key_limitations": [
+          "Uncertainties in historical pre-1880 temperatures limit comparisons to pre-industrial climate",
+          "Regional variations add complexity to interpreting global trends",
+          "Short-term natural variability can temporarily mask long-term trends"
+        ]
+      },
+      "analysis_rationale": "import numpy as np\nfrom scipy.stats import norm\n\ndef calculate_log_likelihoods(data):\n    # Extract key numerical values\n    temp_increase_since_1880 = data[\"numerical_values\"][0][\"value\"]\n    temp_increase_uncertainty = data[\"numerical_values\"][0].get(\"uncertainty\", None)\n    \n    temp_rate_since_1975 = data[\"numerical_values\"][1][\"value\"]\n    temp_rate_range = data[\"numerical_values\"][1].get(\"range\", None)\n\n    base_period_temp = data[\"numerical_values\"][3][\"value\"]\n    base_temp_uncertainty = data[\"numerical_values\"][3].get(\"uncertainty\", None)\n\n    confidence_score = data[\"confidence_assessment\"][\"confidence_score\"]\n\n    # Handling uncertainties and establishing reasonable priors\n    temp_increase_prior_sigma = 0.2 if temp_increase_uncertainty == \"at least\" else 0.1\n    temp_rate_sigma = (temp_rate_range[1] - temp_rate_range[0]) / 4 if temp_rate_range else 0.05\n    base_temp_sigma = 0.3 if base_temp_uncertainty else 0.1\n\n    # Assume hypotheses:\n    # H+: Human-generated GHG emissions significantly increase global temperatures.\n    # H-: Natural factors alone drive temperature changes.\n\n    # Define synthetic likelihoods based on expected distributions\n    # Assume under H+: Observed warming should be high\n    mu_plus_temp_increase = 1.0\n    mu_plus_temp_rate = 0.18  \n\n    # Assume under H-: Less or no significant warming\n    mu_minus_temp_increase = 0.2\n    mu_minus_temp_rate = 0.02  \n\n    # Compute log-likelihoods using normal distributions\n    l_plus = (\n        np.log(norm.pdf(temp_increase_since_1880, mu_plus_temp_increase, temp_increase_prior_sigma)) +\n        np.log(norm.pdf(temp_rate_since_1975, mu_plus_temp_rate, temp_rate_sigma))\n    )\n    \n    l_minus = (\n        np.log(norm.pdf(temp_increase_since_1880, mu_minus_temp_increase, temp_increase_prior_sigma)) +\n        np.log(norm.pdf(temp_rate_since_1975, mu_minus_temp_rate, temp_rate_sigma))\n    )\n\n    # Apply confidence weighting\n    confidence_weight = np.clip(confidence_score, 0.5, 0.95)\n    l_plus *= confidence_weight\n    l_minus *= confidence_weight\n\n    # Cap log-likelihood differences to avoid overconfidence\n    max_diff = 5.0\n    log_likelihood_diff = np.clip(l_plus - l_minus, -max_diff, max_diff)\n    \n    # Adjust likelihoods accordingly\n    l_plus = l_minus + log_likelihood_diff\n\n    # Print intermediate values\n    print(f\"Temperature increase since 1880: {temp_increase_since_1880} \u00b1 {temp_increase_prior_sigma}\")\n    print(f\"Temperature rate since 1975: {temp_rate_since_1975} \u00b1 {temp_rate_sigma}\")\n    print(f\"log P(data | H+): {l_plus:.4f}\")\n    print(f\"log P(data | H-): {l_minus:.4f}\")\n\n    # Ensure numerical stability (avoid NaN or inf)\n    if np.isnan(l_plus) or np.isinf(l_plus):\n        l_plus = -np.inf\n    if np.isnan(l_minus) or np.isinf(l_minus):\n        l_minus = -np.inf\n\n    print(f\"Final log-likelihoods: (l_plus={l_plus}, l_minus={l_minus})\")\n\n    return l_plus, l_minus"
+    },
+    {
+      "metadata": {
+        "filename": "greenhouse-gases.html",
+        "file_type": ".html",
+        "file_size": 85150,
+        "last_modified": "2025-02-28T08:56:46.818360",
+        "source_path": "/home/rrao/projects/InFactGAIA/hypotheses/example_hypotheses_HumanGHGs_GlobalWarming/evidence/greenhouse-gases.html"
+      },
+      "raw_data": {
+        "numerical_values": [
+          {
+            "description": "Increase in global greenhouse gas emissions from human activities between 1990 and 2015",
+            "value": 44,
+            "unit": "percent"
+          },
+          {
+            "description": "Increase in atmospheric carbon dioxide concentrations from 1990 to 2023",
+            "value": 42,
+            "unit": "percent"
+          },
+          {
+            "description": "Increase in total warming effect from anthropogenic greenhouse gases from 1990 to 2023",
+            "value": 51,
+            "unit": "percent"
+          },
+          {
+            "description": "Proportion of global greenhouse gas emissions attributed to carbon dioxide",
+            "value": 75,
+            "unit": "percent"
+          },
+          {
+            "description": "U.S. greenhouse gas emissions change from 1990 to 2022",
+            "value": -3,
+            "unit": "percent"
+          },
+          {
+            "description": "Highest recorded increase in U.S. greenhouse gas emissions in 2007 compared to 1990",
+            "value": 15.2,
+            "unit": "percent"
+          },
+          {
+            "description": "Methane's 100-year global warming potential",
+            "value": "27.0\u201329.8",
+            "unit": "CO2-equivalents"
+          },
+          {
+            "description": "Nitrous oxide's 100-year global warming potential",
+            "value": 273,
+            "unit": "CO2-equivalents"
+          },
+          {
+            "description": "Sulfur hexafluoride's 100-year global warming potential",
+            "value": 25200,
+            "unit": "CO2-equivalents"
+          }
+        ],
+        "metadata": {
+          "source": "United States Environmental Protection Agency (EPA)",
+          "report_title": "Climate Change Indicators: Greenhouse Gases",
+          "last_updated": "February 13, 2025",
+          "primary_data_sources": [
+            "Inventory of U.S. Greenhouse Gas Emissions and Sinks",
+            "Greenhouse Gas Reporting Program",
+            "Intergovernmental Panel on Climate Change (IPCC) Sixth Assessment Report"
+          ],
+          "methodology_notes": "Data compiled from national energy, agricultural, and industrial activity statistics; global data derived from climate models and historical records."
+        },
+        "issues": [
+          "U.S. emissions have declined slightly since 1990, yet global emissions have risen significantly, suggesting regional disparities in mitigation efforts.",
+          "Methane's global warming potential is reported as a range (27.0\u201329.8), which introduces uncertainty.",
+          "Long atmospheric lifetimes of greenhouse gases mean past emissions continue to contribute to warming, complicating attributions to recent emissions alone.",
+          "Some greenhouse gas data rely on self-reported industry emissions, which may introduce uncertainties or underreporting."
+        ],
+        "confidence_assessment": {
+          "confidence_score": 0.9,
+          "explanation": "The data supporting the hypothesis is robust, coming from high-quality sources such as the IPCC and EPA. Long-term trends show a clear correlation between increasing greenhouse gas emissions and rising global temperatures. Additionally, different greenhouse gases have well-documented global warming potentials, reinforcing the physical mechanisms of climate forcing.",
+          "key_strengths": [
+            "Data sourced from highly credible scientific organizations (EPA, IPCC).",
+            "Multiple independent datasets confirm increasing greenhouse gas concentrations and their warming effects.",
+            "Historical CO2 levels are unprecedented in the past 800,000 years, linking human activity to rising atmospheric concentrations."
+          ],
+          "key_limitations": [
+            "Causation vs. correlation remains a theoretical limitation; while strong evidence exists, uncertainties in climate feedback mechanisms remain.",
+            "Regional differences in emissions and policy interventions complicate the direct attribution of some temperature changes.",
+            "Potential underreporting or inaccuracies in emissions data, particularly from certain industrial sectors or regions."
+          ]
+        }
+      },
+      "l_plus": -0.5108256237659907,
+      "l_minus": -0.916290731874155,
+      "posterior": 5.405465108108165,
+      "confidence_assessment": {
+        "confidence_score": 0.9,
+        "explanation": "The data supporting the hypothesis is robust, coming from high-quality sources such as the IPCC and EPA. Long-term trends show a clear correlation between increasing greenhouse gas emissions and rising global temperatures. Additionally, different greenhouse gases have well-documented global warming potentials, reinforcing the physical mechanisms of climate forcing.",
+        "key_strengths": [
+          "Data sourced from highly credible scientific organizations (EPA, IPCC).",
+          "Multiple independent datasets confirm increasing greenhouse gas concentrations and their warming effects.",
+          "Historical CO2 levels are unprecedented in the past 800,000 years, linking human activity to rising atmospheric concentrations."
+        ],
+        "key_limitations": [
+          "Causation vs. correlation remains a theoretical limitation; while strong evidence exists, uncertainties in climate feedback mechanisms remain.",
+          "Regional differences in emissions and policy interventions complicate the direct attribution of some temperature changes.",
+          "Potential underreporting or inaccuracies in emissions data, particularly from certain industrial sectors or regions."
+        ]
+      },
+      "analysis_rationale": "import numpy as np\nfrom scipy.stats import norm\n\ndef calculate_log_likelihoods(data_dict):\n    # Extract relevant data\n    confidence_score = data_dict[\"confidence_assessment\"][\"confidence_score\"]\n    key_limitations = data_dict[\"confidence_assessment\"][\"key_limitations\"]\n\n    # Assign base likelihoods\n    base_likelihood_hypothesis = confidence_score  # As given, 0.9\n    base_likelihood_not_hypothesis = 1 - confidence_score  # 1 - 0.9 = 0.1\n\n    # Handle uncertainties and potential biases\n    uncertainty_penalty = 0.1 * len(key_limitations)  # Penalize if there are more uncertainties\n    adjusted_likelihood_hypothesis = max(0.05, base_likelihood_hypothesis - uncertainty_penalty)\n    adjusted_likelihood_not_hypothesis = max(0.05, base_likelihood_not_hypothesis + uncertainty_penalty)\n\n    # Normalize to avoid values summing above 1\n    total = adjusted_likelihood_hypothesis + adjusted_likelihood_not_hypothesis\n    adjusted_likelihood_hypothesis /= total\n    adjusted_likelihood_not_hypothesis /= total\n\n    # Calculate log likelihoods\n    l_plus = np.log(adjusted_likelihood_hypothesis)\n    l_minus = np.log(adjusted_likelihood_not_hypothesis)\n\n    # Cap absolute difference\n    max_diff = 5.0\n    actual_diff = l_plus - l_minus\n    if abs(actual_diff) > max_diff:\n        adjustment = (abs(actual_diff) - max_diff) / 2\n        l_plus -= adjustment * np.sign(actual_diff)\n        l_minus += adjustment * np.sign(actual_diff)\n\n    # Ensure numerical stability\n    l_plus = np.clip(l_plus, -20, 20)\n    l_minus = np.clip(l_minus, -20, 20)\n\n    # Print intermediate results\n    print(f\"Base likelihood for hypothesis: {base_likelihood_hypothesis}\")\n    print(f\"Base likelihood for not hypothesis: {base_likelihood_not_hypothesis}\")\n    print(f\"Adjusted likelihood for hypothesis: {adjusted_likelihood_hypothesis}\")\n    print(f\"Adjusted likelihood for not hypothesis: {adjusted_likelihood_not_hypothesis}\")\n    print(f\"Log likelihood for hypothesis (l_plus): {l_plus}\")\n    print(f\"Log likelihood for not hypothesis (l_minus): {l_minus}\")\n\n    return l_plus, l_minus"
+    }
+  ]
+}

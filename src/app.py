@@ -45,8 +45,8 @@ def preload_evidence():
     hypothesis_text = "Human-generated GHG emissions significantly increase global temperatures"
     
     evidence_files = [
-        "/home/rrao/projects/InFactGAIA/hypotheses/example_hypotheses_HumanGHGs_GlobalWarming/evidence/Causes of climate change - European Commission.html"#,
-        #"/home/rrao/projects/InFactGAIA/hypotheses/example_hypotheses_HumanGHGs_GlobalWarming/evidence/World of Change_ Global Temperatures.html"
+        "/home/rrao/projects/InFactGAIA/hypotheses/example_hypotheses_HumanGHGs_GlobalWarming/evidence/greenhouse-gases.html",
+        "/home/rrao/projects/InFactGAIA/hypotheses/example_hypotheses_HumanGHGs_GlobalWarming/evidence/World of Change_ Global Temperatures.html"
     ]
 
     # Check if the document exists and contains the hypothesis field
@@ -87,7 +87,7 @@ st.subheader("Hypothesis Management")
 identifier = st.text_input("Hypothesis Identifier:", "example_hypotheses_HumanGHGs_GlobalWarming")
 hypothesis = st.text_area("Enter Hypothesis:", existing_hypotheses.get(identifier, "Human-generated GHG emissions significantly increase global temperatures"))
 node_type = st.selectbox("Select Node Type:", ["GPT", "Anthropic", "DeepSeek"])
-model_options = {"GPT": ["gpt-4o-2024-08-06", "chatgpt-4o-latest"], "Anthropic": ["claude-3-5-sonnet-20241022"], "DeepSeek": ["deepseek-chat"]}
+model_options = {"GPT": ["chatgpt-4o-latest"], "Anthropic": ["claude-3-5-sonnet-20241022"], "DeepSeek": ["deepseek-chat"]}
 model = st.selectbox("Select AI Model:", model_options[node_type])
 node_type_mapping = {"GPT": "gpt", "Anthropic": "anthropic", "DeepSeek": "deepseek"}
 node_type = node_type_mapping[node_type]
@@ -99,7 +99,7 @@ if existing_entry and existing_entry.get("identifier") != identifier:
 elif existing_entry and existing_entry.get("hypothesis") != hypothesis:
     st.error("This identifier is already linked to a different hypothesis!")
 else:
-    st.warning("Identifier already exists! If you modify the hypothesis, it will update the existing record.")
+    st.warning("Identifier already exists! You can add new evidence or process existing evidence.")
 
 if st.button("Save Hypothesis"):
     if not identifier.strip():

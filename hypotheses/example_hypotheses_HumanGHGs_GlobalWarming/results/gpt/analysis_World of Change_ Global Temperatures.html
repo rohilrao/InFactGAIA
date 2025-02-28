@@ -1,0 +1,337 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InFact Analysis: Human-generated GHG emissions significantly increase global temperatures</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            line-height: 1.5;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            color: #1a1a1a;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .hypothesis {
+            font-size: 1.2rem;
+            color: #4a5568;
+            margin: 1rem 0;
+            padding: 1rem;
+            background: #f7fafc;
+            border-radius: 6px;
+        }
+
+        .final-assessment {
+            text-align: center;
+            padding: 2rem;
+            background: #ebf8ff;
+        }
+
+        .probability {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #2b6cb0;
+        }
+
+        .uncertainty {
+            font-size: 1.2rem;
+            color: #4a5568;
+            margin-top: 0.5rem;
+        }
+
+        .evidence-point {
+            border-left: 4px solid #4299e1;
+            padding-left: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .evidence-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .stat-card {
+            background: #f7fafc;
+            padding: 1rem;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2b6cb0;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: #4a5568;
+            margin-top: 0.25rem;
+        }
+
+        .chart-container {
+            height: 400px;
+            margin: 2rem 0;
+        }
+
+        .confidence-high { color: #047857; }
+        .confidence-medium { color: #b45309; }
+        .confidence-low { color: #dc2626; }
+
+        details {
+            margin-top: 1rem;
+        }
+
+        summary {
+            cursor: pointer;
+            color: #2b6cb0;
+            font-weight: 500;
+        }
+
+        pre {
+            background: #f7fafc;
+            padding: 1rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Evidence Analysis</h1>
+        <div class="hypothesis">Human-generated GHG emissions significantly increase global temperatures</div>
+    </header>
+
+    <main>
+        <section class="card final-assessment">
+            <h2>Current Assessment</h2>
+            <div class="probability">
+                99.3%
+            </div>
+            <div class="uncertainty">
+                (97.5%, 100.0%)
+            </div>
+            <div class="interpretation">
+                Virtually Certain
+                
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Belief Evolution</h2>
+            <div class="chart-container">
+                <canvas id="beliefChart"></canvas>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Evidence Analysis</h2>
+            
+            <div class="evidence-point">
+                <h3>Evidence 1: World of Change_ Global Temperatures.html</h3>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">50.0%</div>
+                        <div class="stat-label">Prior Probability</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">148.4×</div>
+                        <div class="stat-label">Likelihood Ratio</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">99.3%</div>
+                        <div class="stat-label">Posterior Probability</div>
+                    </div>
+                </div>
+
+                <div class="evidence-grid">
+                    <div>
+                        <h4>Confidence Assessment</h4>
+                        <div class="confidence-score
+                            confidence-high
+                            ">
+                            90% Confidence
+                        </div>
+
+                        
+                        <h5>Key Strengths</h5>
+                        <ul>
+                            
+                            <li>Multiple independent datasets show consistent warming trends</li>
+                            
+                            <li>Strong agreement between climate models and observed data</li>
+                            
+                            <li>Comprehensive data sources incorporating land, ocean, and atmospheric measurements</li>
+                            
+                        </ul>
+                        
+
+                        
+                        <h5>Key Limitations</h5>
+                        <ul>
+                            
+                            <li>Uncertainties in historical pre-1880 temperatures limit comparisons to pre-industrial climate</li>
+                            
+                            <li>Regional variations add complexity to interpreting global trends</li>
+                            
+                            <li>Short-term natural variability can temporarily mask long-term trends</li>
+                            
+                        </ul>
+                        
+                    </div>
+                </div>
+
+                <details>
+                    <summary>Analysis Details</summary>
+                    <div class="rationale">
+                        
+                        <pre><code>import numpy as np
+from scipy.stats import norm
+
+def calculate_log_likelihoods(data):
+    # Extract key numerical values
+    temp_increase_since_1880 = data["numerical_values"][0]["value"]
+    temp_increase_uncertainty = data["numerical_values"][0].get("uncertainty", None)
+    
+    temp_rate_since_1975 = data["numerical_values"][1]["value"]
+    temp_rate_range = data["numerical_values"][1].get("range", None)
+
+    base_period_temp = data["numerical_values"][3]["value"]
+    base_temp_uncertainty = data["numerical_values"][3].get("uncertainty", None)
+
+    confidence_score = data["confidence_assessment"]["confidence_score"]
+
+    # Handling uncertainties and establishing reasonable priors
+    temp_increase_prior_sigma = 0.2 if temp_increase_uncertainty == "at least" else 0.1
+    temp_rate_sigma = (temp_rate_range[1] - temp_rate_range[0]) / 4 if temp_rate_range else 0.05
+    base_temp_sigma = 0.3 if base_temp_uncertainty else 0.1
+
+    # Assume hypotheses:
+    # H+: Human-generated GHG emissions significantly increase global temperatures.
+    # H-: Natural factors alone drive temperature changes.
+
+    # Define synthetic likelihoods based on expected distributions
+    # Assume under H+: Observed warming should be high
+    mu_plus_temp_increase = 1.0
+    mu_plus_temp_rate = 0.18  
+
+    # Assume under H-: Less or no significant warming
+    mu_minus_temp_increase = 0.2
+    mu_minus_temp_rate = 0.02  
+
+    # Compute log-likelihoods using normal distributions
+    l_plus = (
+        np.log(norm.pdf(temp_increase_since_1880, mu_plus_temp_increase, temp_increase_prior_sigma)) +
+        np.log(norm.pdf(temp_rate_since_1975, mu_plus_temp_rate, temp_rate_sigma))
+    )
+    
+    l_minus = (
+        np.log(norm.pdf(temp_increase_since_1880, mu_minus_temp_increase, temp_increase_prior_sigma)) +
+        np.log(norm.pdf(temp_rate_since_1975, mu_minus_temp_rate, temp_rate_sigma))
+    )
+
+    # Apply confidence weighting
+    confidence_weight = np.clip(confidence_score, 0.5, 0.95)
+    l_plus *= confidence_weight
+    l_minus *= confidence_weight
+
+    # Cap log-likelihood differences to avoid overconfidence
+    max_diff = 5.0
+    log_likelihood_diff = np.clip(l_plus - l_minus, -max_diff, max_diff)
+    
+    # Adjust likelihoods accordingly
+    l_plus = l_minus + log_likelihood_diff
+
+    # Print intermediate values
+    print(f"Temperature increase since 1880: {temp_increase_since_1880} ± {temp_increase_prior_sigma}")
+    print(f"Temperature rate since 1975: {temp_rate_since_1975} ± {temp_rate_sigma}")
+    print(f"log P(data | H+): {l_plus:.4f}")
+    print(f"log P(data | H-): {l_minus:.4f}")
+
+    # Ensure numerical stability (avoid NaN or inf)
+    if np.isnan(l_plus) or np.isinf(l_plus):
+        l_plus = -np.inf
+    if np.isnan(l_minus) or np.isinf(l_minus):
+        l_minus = -np.inf
+
+    print(f"Final log-likelihoods: (l_plus={l_plus}, l_minus={l_minus})")
+
+    return l_plus, l_minus</code></pre>
+                        
+                    </div>
+                </details>
+            </div>
+            
+        </section>
+    </main>
+
+    <script>
+        const ctx = document.getElementById('beliefChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Prior'].concat(["World of Change_ Global Temperatures.html"]),
+                datasets: [{
+                    label: 'Belief Probability',
+                    data: [0.5].concat([0.9933071490757152]),
+                    borderColor: '#2b6cb0',
+                    backgroundColor: 'rgba(43, 108, 176, 0.1)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1,
+                        ticks: {
+                            callback: function(value) {
+                                return (value * 100) + '%';
+                            }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return (context.raw * 100).toFixed(1) + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
