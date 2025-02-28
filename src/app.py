@@ -178,7 +178,12 @@ def load_or_create_node(node_type, hypothesis, model, api_key):
 
     return node
 
+import streamlit as st
+import sys
+import io
+
 class StreamToLogger(io.StringIO):
+    """Redirects print statements to Streamlit UI."""
     def __init__(self, placeholder):
         super().__init__()
         self.placeholder = placeholder
@@ -186,10 +191,10 @@ class StreamToLogger(io.StringIO):
 
     def write(self, message):
         self.log += message
-        self.placeholder.text_area("Logs:", self.log, height=400)  # Use text_area for persistent display
+        self.placeholder.text(self.log)  # Update the Streamlit UI log output
 
     def flush(self):
-        pass  # Ensures logs are displayed properly
+        pass  # No need to flush for Streamlit output
 
 def process_evidence(node_type, hypothesis_identifier, base_dir, api_key, model, hypothesis, log_output=None):
     """
@@ -262,19 +267,19 @@ if st.button("Process Evidence"):
         results_dir = Path("./hypotheses") / hypothesis_folder_name / "results"
         os.makedirs(results_dir, exist_ok=True)
 
-        # Redirect stdout and stderr to display logs in UI
+        log_placeholder = st.empty()  # Create a placeholder for logs in UI
         output_buffer = StreamToLogger(log_placeholder)
         sys.stdout, sys.stderr = output_buffer, output_buffer  
 
         try:
             process_evidence(node_type, hypothesis_folder_name, Path("./hypotheses"), api_key, model, hypothesis, log_output=output_buffer)
         except Exception as e:
-            st.error(f"Error processing evidence: {e}")
+            st.error(f"❌ Error processing evidence: {e}")
+            print(f"❌ Exception occurred: {e}")
 
         finally:
             # Restore normal stdout and stderr behavior
             sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
-
 
 # ✅ Display Results
 st.subheader("Results")
