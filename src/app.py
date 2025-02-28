@@ -277,7 +277,7 @@ def process_evidence(node_type, hypothesis_identifier, base_dir, api_key, model,
                 db["node_states"].update_one({"node_type": node_type}, {"$set": {"state_file_id": state_file_id}}, upsert=True)
 
             except Exception as e:
-                print(f"❌ Error processing {file_name}: {e}")
+                print(f"Minor error processing {file_name}: {e}")
 
 
         if new_files:
