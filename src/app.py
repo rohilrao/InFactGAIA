@@ -236,12 +236,14 @@ def process_evidence(node_type, hypothesis_identifier, base_dir, api_key, model,
 
                 print(f"🔄 Processing file: {file_name} with {node_type}...")
 
-                # ✅ Create a temporary file to store evidence
+                # ✅ Create a temporary file with the correct extension
                 with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
                     tmp_file.write(file_content)
                     tmp_file_path = tmp_file.name  # Get temp file path
 
-                # ✅ Pass temp file path to `process_data`
+                print(f"📂 Temporary file saved at: {tmp_file_path}")
+
+                # ✅ Pass the correct file path to `node.process_data`
                 node.process_data(tmp_file_path)
 
                 # ✅ Cleanup: Remove the temp file after processing
