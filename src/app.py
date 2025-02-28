@@ -23,6 +23,7 @@ from AnthropicInFactNode import AnthropicInFactNode
 from GptInFactNode import GptInFactNode
 from DeepSeekInFactNode import DeepSeekInFactNode
 from InFactRenderer import InFactRenderer
+import tempfile  # ✅ Required for creating temporary files
 
 print("✅ Successfully imported required libraries")
 
