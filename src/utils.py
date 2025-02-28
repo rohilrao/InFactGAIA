@@ -133,6 +133,8 @@ def get_latest_html_path(node_type, results_dir):
 
     return str(latest_html_file)  # ✅ Return file path instead of rendering it        
 
+
+'''
 # ✅ Function to process new evidence files and display results
 def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key, model, hypothesis):
     """
@@ -210,3 +212,6 @@ def process_evidence(node_type, hypothesis_folder_name, base_dir, api_key, model
     
     logging.info(f"✅ Processing completed for {node_type}.")
     print(f"✅ Processing completed for {node_type}.")
+''' 
+
+
