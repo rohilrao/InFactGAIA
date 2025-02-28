@@ -178,6 +178,19 @@ def load_or_create_node(node_type, hypothesis, model, api_key):
 
     return node
 
+class StreamToLogger(io.StringIO):
+    def __init__(self, placeholder):
+        super().__init__()
+        self.placeholder = placeholder
+        self.log = ""
+
+    def write(self, message):
+        self.log += message
+        self.placeholder.text_area("Logs:", self.log, height=400)  # Use text_area for persistent display
+
+    def flush(self):
+        pass  # Ensures logs are displayed properly
+
 def process_evidence(node_type, hypothesis_identifier, base_dir, api_key, model, hypothesis, log_output=None):
     """
     Processes evidence directly from MongoDB GridFS instead of local files.
