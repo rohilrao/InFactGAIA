@@ -247,6 +247,25 @@ def process_evidence(node_type, hypothesis_identifier, base_dir, api_key, model,
                 # ✅ Pass the correct file path to `node.process_data`
                 node.process_data(tmp_file_path)
 
+                # ✅ Render analysis output to an HTML file
+                renderer = InFactRenderer()
+                output_file = results_dir / f"analysis_{Path(file_name).stem}.html"
+                renderer.render_analysis(node, str(output_file))
+
+                # ✅ Read and store the analysis result in MongoDB GridFS
+                with open(output_file, "r", encoding="utf-8") as f:
+                    analysis_content = f.read()
+
+                processed_file_id = fs.put(analysis_content.encode(), filename="analysis.html", content_type="text/html")
+
+                # ✅ Update MongoDB to store latest analysis result
+                hypotheses_collection.update_one(
+                    {"identifier": hypothesis_identifier},
+                    {"$set": {"latest_analysis_result": processed_file_id}}
+                )
+
+                print(f"✅ Analysis result stored in MongoDB with file_id: {processed_file_id}")
+
                 # ✅ Cleanup: Remove the temp file after processing
                 os.remove(tmp_file_path)
 
@@ -259,6 +278,7 @@ def process_evidence(node_type, hypothesis_identifier, base_dir, api_key, model,
 
             except Exception as e:
                 print(f"❌ Error processing {file_name}: {e}")
+
 
         if new_files:
             print(f"✅ Processed {len(new_files)} new evidence files.")
@@ -296,18 +316,21 @@ if st.button("Process Evidence"):
             # Restore normal stdout and stderr behavior
             sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
 
+
 # ✅ Display Results
 st.subheader("Results")
 document = hypotheses_collection.find_one({"identifier": identifier})
 
 if document and document.get("latest_analysis_result"):
     file_id = document["latest_analysis_result"]
-    file_content = fs.get(file_id).read().decode()
 
-    st.write(f"Latest Analysis Results:")
-    st.download_button(label="Download Full Analysis", data=file_content, file_name="analysis.html", mime="text/html")
-    st.components.v1.html(file_content, height=1200, scrolling=True)
+    # ✅ Check if the file exists in GridFS before reading
+    if fs.exists(file_id):
+        file_content = fs.get(file_id).read().decode()
+        st.write("Latest Analysis Results:")
+        st.download_button(label="Download Full Analysis", data=file_content, file_name="analysis.html", mime="text/html")
+        st.components.v1.html(file_content, height=1200, scrolling=True)
+    else:
+        st.error("⚠️ The analysis file was not found in GridFS.")
 else:
     st.info("No processed analysis results available yet.")
-
-
