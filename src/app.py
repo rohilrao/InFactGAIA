@@ -13,6 +13,8 @@ from FetchEvidenceUtils import download_file
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
+print("✅ Successfully imported required libraries")
+
 # ✅ Securely Load MongoDB URI from Streamlit Secrets
 MONGO_URI = st.secrets["MONGO_URI"]
 client = MongoClient(MONGO_URI, server_api=ServerApi('1'))

@@ -16,6 +16,7 @@ import threading
 import streamlit as st
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+print("✅ Successfully imported required libraries!")
 
 MONGO_URI = st.secrets["MONGO_URI"]  # Securely load from Streamlit Secrets
 client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
