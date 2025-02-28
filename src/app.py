@@ -178,34 +178,33 @@ def load_or_create_node(node_type, hypothesis, model, api_key):
 
     return node
 
-def process_evidence(node_type, hypothesis_identifier, base_dir, api_key, model, hypothesis):
+def process_evidence(node_type, hypothesis_identifier, base_dir, api_key, model, hypothesis, log_output=None):
     """
     Processes evidence directly from MongoDB GridFS instead of local files.
-    Captures stdout/stderr for display in UI.
+    Supports logging redirection for Streamlit integration.
     """
-    # String buffer to capture output
-    output_buffer = io.StringIO()
-    
-    # Redirect stdout and stderr to our buffer
-    sys.stdout = output_buffer
-    sys.stderr = output_buffer
-    
-    try:
-        db = client["infact_db"]
-        hypotheses_collection = db["hypotheses"]
-        fs = GridFS(db)
+    db = client["infact_db"]
+    hypotheses_collection = db["hypotheses"]
+    fs = GridFS(db)
 
+    # Redirect logs if log_output is provided (e.g., in Streamlit)
+    original_stdout, original_stderr = sys.stdout, sys.stderr
+    if log_output:
+        sys.stdout, sys.stderr = log_output, log_output
+
+    try:
+        print("🚀 Processing started...\n")
+        
         # Retrieve evidence files from GridFS
         document = hypotheses_collection.find_one({"identifier": hypothesis_identifier})
         if not document or "evidence" not in document or not document["evidence"]:
             print(f"🚫 No evidence files found for {hypothesis_identifier}.")
-            return None
+            return
 
         print(f"📂 Found {len(document['evidence'])} evidence files in GridFS for processing.")
 
-        # ✅ Fix: Only expect `node`, not three values
+        # ✅ Fix: Only expect node, not three values
         node = load_or_create_node(node_type, hypothesis, model, api_key)
-
         processed_files = load_processed_files(node_type)
 
         new_files = []
@@ -216,15 +215,14 @@ def process_evidence(node_type, hypothesis_identifier, base_dir, api_key, model,
                 file_content = file_obj.read()
                 file_name = file_obj.filename
 
-                # Process file **directly from memory** instead of disk
                 print(f"🔄 Processing file: {file_name} with {node_type}...")
                 node.process_data(io.BytesIO(file_content))  # Pass as file-like object
                 new_files.append(file_name)
 
                 # ✅ Fix: Save node state to MongoDB instead of a local file
-                node_state_json = json.dumps(node.__dict__)  # Convert node state to JSON
-                file_id = fs.put(node_state_json.encode(), filename=f"{node_type}_state.json", content_type="application/json")
-                db["node_states"].update_one({"node_type": node_type}, {"$set": {"state_file_id": file_id}}, upsert=True)
+                node_state_json = json.dumps(node.dict)  # Convert node state to JSON
+                state_file_id = fs.put(node_state_json.encode(), filename=f"{node_type}_state.json", content_type="application/json")
+                db["node_states"].update_one({"node_type": node_type}, {"$set": {"state_file_id": state_file_id}}, upsert=True)
 
             except Exception as e:
                 print(f"❌ Error processing {file_name}: {e}")
@@ -234,15 +232,36 @@ def process_evidence(node_type, hypothesis_identifier, base_dir, api_key, model,
         else:
             print(f"🚫 No new evidence to process.")
 
-        logging.info(f"✅ Processing completed for {node_type}.")
-        
-        # Get the captured output
-        output_text = output_buffer.getvalue()
-        return output_text
-        
+        print(f"✅ Processing completed for {node_type}.")
+
+    except Exception as e:
+        print(f"❌ Error during processing: {e}")
+
     finally:
         # Restore normal stdout and stderr behavior
-        sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+        sys.stdout, sys.stderr = original_stdout, original_stderr
+
+if st.button("Process Evidence"): 
+    if not identifier.strip() or not api_key.strip():
+        st.error("⚠️ Please enter a Hypothesis Identifier and API Key!")
+    else:
+        hypothesis_folder_name = identifier
+        results_dir = Path("./hypotheses") / hypothesis_folder_name / "results"
+        os.makedirs(results_dir, exist_ok=True)
+
+        # Redirect stdout and stderr to display logs in UI
+        output_buffer = StreamToLogger(log_placeholder)
+        sys.stdout, sys.stderr = output_buffer, output_buffer  
+
+        try:
+            process_evidence(node_type, hypothesis_folder_name, Path("./hypotheses"), api_key, model, hypothesis, log_output=output_buffer)
+        except Exception as e:
+            st.error(f"Error processing evidence: {e}")
+
+        finally:
+            # Restore normal stdout and stderr behavior
+            sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+
 
 # ✅ Display Results
 st.subheader("Results")
