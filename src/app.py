@@ -44,22 +44,34 @@ def preload_evidence():
         BASE_DIR / "hypotheses/example_hypotheses_HumanGHGs_GlobalWarming/evidence/World_of_Change_Global_Temperatures.html"
     ]
 
-    # Check if the document exists in MongoDB
+    # 🔹 Check if the document exists
     document = hypotheses_collection.find_one({"identifier": identifier}, {"_id": 0, "evidence": 1, "hypothesis": 1})
 
+    # 🔹 If not found, create a new document with default hypothesis
     if not document:
+        print(f"⚠️ Hypothesis '{identifier}' not found. Creating default entry.")
+        document = {"evidence": [], "hypothesis": hypothesis_text}
         hypotheses_collection.insert_one({"identifier": identifier, "hypothesis": hypothesis_text, "evidence": []})
 
-    existing_filenames = {fs.get(f_id).filename for f_id in document.get("evidence", []) if fs.exists(f_id)}
+    # 🔹 Reload document to ensure it's available
+    document = hypotheses_collection.find_one({"identifier": identifier}, {"_id": 0, "evidence": 1, "hypothesis": 1})
 
+    # 🔹 Ensure we only proceed if the document is not None
+    if document:
+        existing_filenames = {fs.get(f_id).filename for f_id in document.get("evidence", []) if fs.exists(f_id)}
+    else:
+        print("❌ Error: Unable to retrieve the document after insertion!")
+        return  # Exit the function to prevent errors
+
+    # 🔹 Upload files if they don't already exist
     for file_path in evidence_files:
-        file_name = file_path.name  # Get only the filename
+        file_name = file_path.name
         if file_name not in existing_filenames:
-            if file_path.exists():  # Ensure file is present before opening
+            if file_path.exists():
                 with open(file_path, "rb") as f:
                     file_id = fs.put(f, filename=file_name, content_type="application/octet-stream")
                     hypotheses_collection.update_one({"identifier": identifier}, {"$push": {"evidence": file_id}}, upsert=True)
-                print(f"✅ Successfully stored {file_name} from local repo")
+                print(f"✅ Successfully stored {file_name}")
             else:
                 print(f"❌ File not found: {file_path}")
 
