@@ -232,9 +232,21 @@ def process_evidence(node_type, hypothesis_identifier, base_dir, api_key, model,
                 file_obj = fs.get(file_id)
                 file_content = file_obj.read()
                 file_name = file_obj.filename
+                file_extension = os.path.splitext(file_name)[1].lower()
 
                 print(f"🔄 Processing file: {file_name} with {node_type}...")
-                node.process_data(io.BytesIO(file_content))  # Pass as file-like object
+
+                # ✅ Create a temporary file to store evidence
+                with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
+                    tmp_file.write(file_content)
+                    tmp_file_path = tmp_file.name  # Get temp file path
+
+                # ✅ Pass temp file path to `process_data`
+                node.process_data(tmp_file_path)
+
+                # ✅ Cleanup: Remove the temp file after processing
+                os.remove(tmp_file_path)
+
                 new_files.append(file_name)
 
                 # ✅ Fix: Save node state to MongoDB instead of a local file
