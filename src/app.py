@@ -14,7 +14,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Title
-st.markdown('<p class="big-title">InFact: Building Trust in Science through Collaborative Evaluation</p>', unsafe_allow_html=True)
+st.markdown('<p class="big-title">InFact Demo: Building Trust in Science through Collaborative Evaluation</p>', unsafe_allow_html=True)
 st.markdown('<p class="subtitle">*A Gaia Lab project*</p>', unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
