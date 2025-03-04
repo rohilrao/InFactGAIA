@@ -34,7 +34,7 @@ if hypotheses:
         unprocessed_files = sum(1 for file in total_files if file.status == "unprocessed")
 
         # 📌 Display Hypothesis ID
-        st.markdown(f"### 🆔 Hypothesis ID: `{hypothesis_id}`")
+        st.markdown(f"### Hypothesis ID: `{hypothesis_id}`")
         
         # 📌 Display Hypothesis Text
         st.write(f"**Hypothesis Text:**\n\n{hypothesis_text}")

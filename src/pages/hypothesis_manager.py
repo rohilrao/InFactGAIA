@@ -18,7 +18,7 @@ db = client["hypothesis_management"]
 fs = gridfs.GridFS(db)
 hypothesis_collection = db["hypotheses"]
 
-st.title("📂 Hypothesis Explorer")
+st.title("📂 Hypothesis File Manager")
 
 # 🌟 Enter hypothesis ID and Confirm
 hypothesis_id_input = st.text_input("Enter Hypothesis ID:")
