@@ -202,7 +202,7 @@ def process_evidence(node_type, hypothesis_id, api_key, model, hypothesis_text, 
     finally:
         # Restore normal stdout and stderr behavior
         sys.stdout, sys.stderr = original_stdout, original_stderr
-        
+
 # 🔐 MongoDB Connection
 @st.cache_resource
 def get_db_client():
@@ -289,11 +289,14 @@ if hypothesis_id:
 
         if processed_files:
             for file in processed_files:
-                file_id = file._id
-                filename = file.filename
-                node_state_id = file.get("node_state_file_id", None)
-                last_processed = file.get("last_processed_at", None)
-                analysis_file_id = file.get("analysis_file_id", None)
+                file_id = file._id  # ✅ Works
+                filename = file.filename  # ✅ Works
+
+                # ✅ Accessing attributes directly
+                node_state_id = getattr(file, "node_state_file_id", None)
+                last_processed = getattr(file, "last_processed_at", None)
+                analysis_file_id = getattr(file, "analysis_file_id", None)
+
 
                 st.write(f"### **📂 File: {filename}**")
 
