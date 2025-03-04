@@ -8,7 +8,7 @@ from bson.objectid import ObjectId
 @st.cache_resource
 def get_db_client():
     """Creates and caches a MongoDB client connection."""
-    MONGO_URI = st.secrets["MONGO"]["MONGO_URI"]  # Load from Streamlit secrets
+    MONGO_URI = st.secrets["MONGO_URI"]  # Load from Streamlit secrets
     return MongoClient(MONGO_URI, server_api="1")
 
 # Initialize MongoDB
