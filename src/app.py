@@ -75,10 +75,10 @@ if hypothesis_id:
             with col1:
                 st.write(f"📄 **{filename}** - `{status}`")
             with col2:
-                st.download_button("⬇️ Download", file.read(), filename)
+                st.download_button("⬇️ Download", file.read(), filename, key=f"download_{file_id}")  # Unique key added
             if status == "unprocessed":
                 with col3:
-                    if st.button("🗑️ Delete", key=str(file_id)):
+                    if st.button("🗑️ Delete", key=f"delete_{file_id}"):  # Unique key for delete button
                         fs.delete(ObjectId(file_id))
                         st.warning(f"Deleted {filename}")
                         st.rerun()
