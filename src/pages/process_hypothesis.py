@@ -99,7 +99,7 @@ def process_evidence(node_type, hypothesis_id, api_key, model, hypothesis_text, 
         print(f"📂 Found {len(unprocessed_files)} unprocessed files in GridFS.")
 
         # ✅ Load or create the node
-        node = load_or_create_node(node_type, hypothesis_text, model, api_key)
+        node = load_or_create_node(node_type, hypothesis_text, model, api_key, hypothesis_id)
 
         processed_files = []
 
