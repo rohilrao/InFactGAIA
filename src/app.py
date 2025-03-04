@@ -12,31 +12,50 @@ def get_db_client():
     return MongoClient(MONGO_URI, server_api=ServerApi("1"))
 
 client = get_db_client()
-db = client["file_management"]
+db = client["hypothesis_management"]
 fs = gridfs.GridFS(db)
+hypothesis_collection = db["hypotheses"]
 
-st.title("📂 File Explorer for MongoDB Atlas")
+st.title("📂 Hypothesis Explorer")
 
-# 🌟 Enter User ID and Confirm
-user_id_input = st.text_input("Enter User ID")
-load_files = st.button("🔍 Load Files")
+# 🌟 Enter hypothesis ID and Confirm
+hypothesis_id_input = st.text_input("Enter Hypothesis ID:")
+load_hypothesis = st.button("🔍 Load Hypothesis")
 
-if load_files and user_id_input:
-    st.session_state["user_id"] = user_id_input  # Store user ID in session state
+if load_hypothesis and hypothesis_id_input:
+    st.session_state["hypothesis_id"] = hypothesis_id_input  # Store hypothesis ID in session state
 
-# Get stored user ID
-user_id = st.session_state.get("user_id", None)
+# Get stored hypothesis ID
+hypothesis_id = st.session_state.get("hypothesis_id", None)
 
-if user_id:
-    st.subheader(f"📂 Files for User ID: {user_id}")
+if hypothesis_id:
+    st.subheader(f"📑 Hypothesis for ID: {hypothesis_id}")
+
+    # Check if hypothesis ID exists
+    hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
+
+    if hypothesis_entry:
+        st.info(f"🔍 **Hypothesis Text:**\n\n{hypothesis_entry['text']}")
+    else:
+        # Allow user to enter a hypothesis text if ID is new
+        new_hypothesis_text = st.text_area("Enter Hypothesis Text (Cannot be edited after saving):")
+        if st.button("💾 Save Hypothesis"):
+            if new_hypothesis_text.strip():
+                hypothesis_collection.insert_one({"_id": hypothesis_id, "text": new_hypothesis_text})
+                st.success("✅ Hypothesis saved successfully! (Now it cannot be edited)")
+                st.experimental_rerun()
+            else:
+                st.warning("⚠️ Hypothesis text cannot be empty!")
 
     # 📤 File Upload Section
+    st.subheader(f"📂 Files for Hypothesis ID: {hypothesis_id}")
     uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg"])
+
     if uploaded_file:
         file_id = fs.put(
             uploaded_file.read(),
             filename=uploaded_file.name,
-            user_id=user_id,
+            hypothesis_id=hypothesis_id,
             upload_date=str(datetime.date.today()),
             status="unprocessed"
         )
@@ -44,7 +63,7 @@ if user_id:
         st.experimental_rerun()  # Refresh to display updated files
 
     # 📂 Fetch and Display Uploaded Files
-    files = list(fs.find({"user_id": user_id}))
+    files = list(fs.find({"hypothesis_id": hypothesis_id}))
 
     if files:
         for file in files:
@@ -64,5 +83,4 @@ if user_id:
                         st.warning(f"Deleted {filename}")
                         st.experimental_rerun()
     else:
-        st.write("⚠️ No files found for this user.")
-
+        st.write("⚠️ No files found for this hypothesis.")
