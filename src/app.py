@@ -81,6 +81,6 @@ if hypothesis_id:
                     if st.button("🗑️ Delete", key=str(file_id)):
                         fs.delete(ObjectId(file_id))
                         st.warning(f"Deleted {filename}")
-                        st.experimental_rerun()
+                        st.rerun()
     else:
         st.write("⚠️ No files found for this hypothesis.")
