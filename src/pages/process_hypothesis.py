@@ -1,7 +1,172 @@
 import streamlit as st
+import json
+import sys
+import io
+import os
+import tempfile
+from pathlib import Path
 from pymongo import MongoClient
 import gridfs
+from bson.objectid import ObjectId
 from pymongo.server_api import ServerApi
+import datetime
+import tempfile
+import json
+import os
+import sys
+from pathlib import Path
+from pymongo import MongoClient
+import gridfs
+from bson.objectid import ObjectId
+import json
+from bson.objectid import ObjectId
+
+def load_or_create_node(node_type, hypothesis, model, api_key, hypothesis_id):
+    """
+    Load or create an InFact node state from MongoDB GridFS.
+    - If an existing node state exists for the hypothesis, load it.
+    - Otherwise, find the most recently processed file for the same hypothesis and use its node state.
+    - If no node state exists, create a new node.
+    """
+    node_state = None
+
+    # ✅ Check if there is already a node state for this hypothesis
+    existing_node_state = db["fs.files"].find_one(
+        {"hypothesis_id": hypothesis_id, "node_state_file_id": {"$exists": True}},
+        sort=[("last_processed_at", -1)]  # Sort by most recent processing
+    )
+
+    if existing_node_state and "node_state_file_id" in existing_node_state:
+        node_state_file_id = existing_node_state["node_state_file_id"]
+
+        if fs.exists(ObjectId(node_state_file_id)):
+            print(f"🔄 Loading existing node state from file ID: {node_state_file_id}")
+            file_obj = fs.get(ObjectId(node_state_file_id))
+            node_state = json.loads(file_obj.read().decode())  # Read JSON state
+
+    # ✅ If no existing node state was found, create a new one
+    if not node_state:
+        print(f"✨ Creating new {node_type} InFact node for hypothesis ID: {hypothesis_id}...")
+        node_state = {}  # Empty state for new node
+
+    # ✅ Initialize the correct type of InFact node
+    if node_type.lower() == "anthropic":
+        node = AnthropicInFactNode(hypothesis=hypothesis, api_key=api_key, model=model)
+    elif node_type.lower() == "gpt":
+        node = GptInFactNode(hypothesis=hypothesis, api_key=api_key, model=model)
+    elif node_type.lower() == "deepseek":
+        node = DeepSeekInFactNode(hypothesis=hypothesis, api_key=api_key, model=model)
+    else:
+        raise ValueError(f"Unknown node type: {node_type}")
+
+    return node
+
+def process_evidence(node_type, hypothesis_id, api_key, model, hypothesis_text, log_output=None):
+    """
+    Processes all unprocessed evidence files for a given hypothesis.
+    Works with MongoDB GridFS, ensuring files are handled via file paths.
+    """
+    hypotheses_collection = db["hypotheses"]
+    files_collection = db["fs.files"]
+
+    # Redirect logs if log_output is provided (e.g., in Streamlit)
+    original_stdout, original_stderr = sys.stdout, sys.stderr
+    if log_output:
+        sys.stdout, sys.stderr = log_output, log_output
+
+    try:
+        print("🚀 Processing started...\n")
+
+        # ✅ Fetch unprocessed files for the hypothesis
+        unprocessed_files = list(files_collection.find({"hypothesis_id": hypothesis_id, "status": "unprocessed"}))
+
+        if not unprocessed_files:
+            print(f"🚫 No unprocessed files found for hypothesis ID: {hypothesis_id}.")
+            return
+
+        print(f"📂 Found {len(unprocessed_files)} unprocessed files in GridFS.")
+
+        # ✅ Load or create the node
+        node = load_or_create_node(node_type, hypothesis_text, model, api_key)
+
+        processed_files = []
+
+        for file_meta in unprocessed_files:
+            try:
+                file_id = file_meta["_id"]
+                filename = file_meta["filename"]
+
+                print(f"🔄 Processing file: {filename}...")
+
+                # ✅ Fetch file content from GridFS
+                file_obj = fs.get(file_id)
+                file_content = file_obj.read()
+
+                file_extension = os.path.splitext(filename)[1].lower()
+
+                # ✅ Create a temporary file with correct extension
+                with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
+                    tmp_file.write(file_content)
+                    tmp_file_path = tmp_file.name  # Get temp file path
+
+                print(f"📂 Temporary file saved at: {tmp_file_path}")
+
+                # ✅ Process file using node (file path required)
+                node.process_data(tmp_file_path)
+
+                # ✅ Save the node state for this specific file
+                node_state_json = json.dumps(node.dict)  # Convert node state to JSON
+                state_file_id = fs.put(node_state_json.encode(), filename=f"{node_type}_state_{file_id}.json", content_type="application/json")
+
+                # ✅ Render analysis output as HTML
+                renderer = InFactRenderer()
+                output_file = Path(f"analysis_{Path(filename).stem}.html")
+                renderer.render_analysis(node, str(output_file))
+
+                # ✅ Read and store analysis in MongoDB GridFS
+                with open(output_file, "r", encoding="utf-8") as f:
+                    analysis_content = f.read()
+
+                processed_file_id = fs.put(analysis_content.encode(), filename="analysis.html", content_type="text/html")
+
+                # ✅ Attach the analysis and node state to the processed file
+                files_collection.update_one(
+                    {"_id": file_id},
+                    {
+                        "$set": {
+                            "status": "processed",
+                            "node_state_file_id": state_file_id,
+                            "last_processed_at": datetime.datetime.utcnow(),
+                            "analysis_file_id": processed_file_id,
+                        }
+                    }
+                )
+
+                print(f"✅ Analysis result stored in MongoDB with file_id: {processed_file_id}")
+
+                # ✅ Cleanup temp files
+                os.remove(tmp_file_path)
+
+                processed_files.append(filename)
+
+            except Exception as e:
+                print(f"⚠️ Error processing {filename}: {e}")
+                # ✅ File status remains 'unprocessed' if there's an error
+
+        if processed_files:
+            print(f"✅ Successfully processed {len(processed_files)} evidence files.")
+        else:
+            print(f"🚫 No new evidence was processed.")
+
+        print("✅ Processing completed!")
+
+    except Exception as e:
+        print(f"❌ Error during processing: {e}")
+
+    finally:
+        # Restore normal stdout and stderr behavior
+        sys.stdout, sys.stderr = original_stdout, original_stderr
+
 
 # 🔐 MongoDB Connection
 @st.cache_resource
@@ -40,10 +205,10 @@ if hypothesis_id:
 
         if unprocessed_files:
             st.write(f"📂 **Unprocessed Files:** {len(unprocessed_files)}")
-
             for file in unprocessed_files:
-                st.write(f"- {file.filename}")  # Display unprocessed file names
-
+                file_id = file._id
+                filename = file.filename
+                st.write(f"- **File:** {filename}")
         else:
             st.warning("⚠️ No unprocessed files found. Please navigate to the **Hypothesis Manager** to upload new files.")
 
@@ -57,8 +222,72 @@ if hypothesis_id:
             "DeepSeek": ["deepseek-chat"]
         }
         model = st.selectbox("Select AI Model:", model_options[node_type])
+        api_key = st.text_input("Enter API Key:", type="password")
 
-        api_key = st.text_input("Enter API Key:", type="password")  # Masked input
+        # 🚀 Process Evidence Files
+        if unprocessed_files:
+            if st.button("🚀 Process Evidence Files"):
+                log_placeholder = st.empty()  # Create placeholder for logs
+                output_buffer = StreamToLogger(log_placeholder)
+                sys.stdout, sys.stderr = output_buffer, output_buffer  # Redirect logs to UI
+
+                try:
+                    process_evidence(
+                        node_type=node_type,
+                        hypothesis_id=hypothesis_id,
+                        api_key=api_key,
+                        model=model,
+                        hypothesis_text=hypothesis_entry["text"],
+                        log_output=output_buffer
+                    )
+                except Exception as e:
+                    st.error(f"❌ Error processing evidence: {e}")
+                finally:
+                    sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+        else:
+            st.warning("⚠️ No unprocessed files available for processing.")
+
+        # ✅ Display Processed Analysis Results
+        st.subheader("📊 Processed Files & Results")
+
+        processed_files = list(fs.find({"hypothesis_id": hypothesis_id, "status": "processed"}))
+
+        if processed_files:
+            for file in processed_files:
+                file_id = file._id
+                filename = file.filename
+                node_state_id = file.get("node_state_file_id", None)
+                last_processed = file.get("last_processed_at", None)
+                analysis_file_id = file.get("analysis_file_id", None)
+
+                st.write(f"### **📂 File: {filename}**")
+
+                if last_processed:
+                    st.write(f"🕒 **Last Processed:** {last_processed}")
+
+                if node_state_id:
+                    if fs.exists(node_state_id):
+                        st.download_button(
+                            label="⬇️ Download Node State",
+                            data=fs.get(node_state_id).read(),
+                            file_name=f"{filename}_node_state.json",
+                            mime="application/json"
+                        )
+
+                if analysis_file_id:
+                    if fs.exists(analysis_file_id):
+                        file_content = fs.get(analysis_file_id).read().decode()
+                        st.download_button(
+                            label="⬇️ Download Analysis Report",
+                            data=file_content,
+                            file_name=f"{filename}_analysis.html",
+                            mime="text/html"
+                        )
+                        st.components.v1.html(file_content, height=600, scrolling=True)
+
+                st.markdown("---")
+        else:
+            st.info("No processed files available yet.")
 
     else:
         st.warning("❌ No hypothesis found with this ID.")
