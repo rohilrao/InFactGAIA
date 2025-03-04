@@ -113,50 +113,74 @@ def process_evidence(node_type, hypothesis_id, api_key, model, hypothesis_text, 
                 # ✅ Fetch file content from GridFS
                 file_obj = fs.get(file_id)
                 file_content = file_obj.read()
-
                 file_extension = os.path.splitext(filename)[1].lower()
 
-                # ✅ Create a temporary file with correct extension
+                # ✅ Create a temporary file for the evidence
                 with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
+                    tmp_file_path = tmp_file.name
                     tmp_file.write(file_content)
-                    tmp_file_path = tmp_file.name  # Get temp file path
 
-                print(f"📂 Temporary file saved at: {tmp_file_path}")
+                print(f"📂 Temporary evidence file saved at: {tmp_file_path}")
 
                 # ✅ Process file using node (file path required)
                 node.process_data(tmp_file_path)
 
-                # ✅ Save the node state for this specific file
-                node_state_json = json.dumps(node.dict)  # Convert node state to JSON
-                state_file_id = fs.put(node_state_json.encode(), filename=f"{node_type}_state_{file_id}.json", content_type="application/json")
+                # ✅ Create a temporary JSON file for node state
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as tmp_node_file:
+                    temp_node_state_path = tmp_node_file.name
 
-                # ✅ Render analysis output as HTML
+                # ✅ Save node state to the temporary file using node's save() method
+                node.save(temp_node_state_path)
+
+                # ✅ Read the saved JSON content
+                with open(temp_node_state_path, "r", encoding="utf-8") as f:
+                    node_state_content = f.read()
+
+                # ✅ Upload the node state to MongoDB GridFS
+                state_file_id = fs.put(node_state_content.encode(), filename=f"{node_type}_state_{file_id}.json", content_type="application/json")
+
+                # ✅ Cleanup node state temp file
+                os.remove(temp_node_state_path)
+
+                # ✅ Create a temporary file for analysis output
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_analysis_file:
+                    temp_analysis_path = tmp_analysis_file.name
+
+                # ✅ Render analysis output to the temporary file
                 renderer = InFactRenderer()
-                output_file = Path(f"analysis_{Path(filename).stem}.html")
-                renderer.render_analysis(node, str(output_file))
+                renderer.render_analysis(node, temp_analysis_path)
 
-                # ✅ Read and store analysis in MongoDB GridFS
-                with open(output_file, "r", encoding="utf-8") as f:
+                # ✅ Read the analysis content
+                with open(temp_analysis_path, "r", encoding="utf-8") as f:
                     analysis_content = f.read()
 
-                processed_file_id = fs.put(analysis_content.encode(), filename="analysis.html", content_type="text/html")
-
-                # ✅ Attach the analysis and node state to the processed file
-                files_collection.update_one(
-                    {"_id": file_id},
-                    {
-                        "$set": {
-                            "status": "processed",
-                            "node_state_file_id": state_file_id,
-                            "last_processed_at": datetime.datetime.utcnow(),
-                            "analysis_file_id": processed_file_id,
-                        }
-                    }
+                # ✅ Store analysis in MongoDB GridFS
+                processed_file_id = fs.put(
+                    analysis_content.encode(),
+                    filename=f"analysis_{Path(filename).stem}.html",
+                    content_type="text/html"
                 )
 
-                print(f"✅ Analysis result stored in MongoDB with file_id: {processed_file_id}")
+                # ✅ Cleanup analysis temp file
+                os.remove(temp_analysis_path)
 
-                # ✅ Cleanup temp files
+                # ✅ Ensure `processed_file_id` and `state_file_id` are valid before updating DB
+                if processed_file_id and state_file_id:
+                    files_collection.update_one(
+                        {"_id": file_id},
+                        {
+                            "$set": {
+                                "status": "processed",
+                                "node_state_file_id": state_file_id,
+                                "last_processed_at": datetime.datetime.utcnow(),
+                                "analysis_file_id": processed_file_id,
+                            }
+                        }
+                    )
+
+                    print(f"✅ Analysis result stored in MongoDB with file_id: {processed_file_id}")
+
+                # ✅ Cleanup temporary evidence file
                 os.remove(tmp_file_path)
 
                 processed_files.append(filename)
@@ -178,8 +202,7 @@ def process_evidence(node_type, hypothesis_id, api_key, model, hypothesis_text, 
     finally:
         # Restore normal stdout and stderr behavior
         sys.stdout, sys.stderr = original_stdout, original_stderr
-
-
+        
 # 🔐 MongoDB Connection
 @st.cache_resource
 def get_db_client():
