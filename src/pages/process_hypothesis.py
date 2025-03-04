@@ -10,16 +10,28 @@ import gridfs
 from bson.objectid import ObjectId
 from pymongo.server_api import ServerApi
 import datetime
-import tempfile
-import json
-import os
+from AnthropicInFactNode import AnthropicInFactNode
+from GptInFactNode import GptInFactNode
+from DeepSeekInFactNode import DeepSeekInFactNode
+from InFactRenderer import InFactRenderer
 import sys
-from pathlib import Path
-from pymongo import MongoClient
-import gridfs
-from bson.objectid import ObjectId
-import json
-from bson.objectid import ObjectId
+import io
+
+class StreamToLogger(io.StringIO):
+    """Redirects print statements to Streamlit UI."""
+    def __init__(self, placeholder):
+        super().__init__()
+        self.placeholder = placeholder
+        self.log = ""
+
+    def write(self, message):
+        self.log += message
+        self.placeholder.text(self.log)  # Update the Streamlit UI log output
+
+    def flush(self):
+        pass  # No need to flush for Streamlit output
+
+
 
 def load_or_create_node(node_type, hypothesis, model, api_key, hypothesis_id):
     """
@@ -228,7 +240,7 @@ if hypothesis_id:
         if unprocessed_files:
             if st.button("🚀 Process Evidence Files"):
                 log_placeholder = st.empty()  # Create placeholder for logs
-                output_buffer = StreamToLogger(log_placeholder)
+                output_buffer =StreamToLogger(log_placeholder)
                 sys.stdout, sys.stderr = output_buffer, output_buffer  # Redirect logs to UI
 
                 try:
