@@ -43,7 +43,7 @@ if hypothesis_id:
             if new_hypothesis_text.strip():
                 hypothesis_collection.insert_one({"_id": hypothesis_id, "text": new_hypothesis_text})
                 st.success("✅ Hypothesis saved successfully! (Now it cannot be edited)")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.warning("⚠️ Hypothesis text cannot be empty!")
 
