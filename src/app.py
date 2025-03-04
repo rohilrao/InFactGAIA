@@ -1,5 +1,6 @@
 import streamlit as st
 from pymongo import MongoClient
+from pymongo.server_api import ServerApi
 import gridfs
 import datetime
 from bson.objectid import ObjectId
@@ -9,7 +10,8 @@ from bson.objectid import ObjectId
 def get_db_client():
     """Creates and caches a MongoDB client connection."""
     MONGO_URI = st.secrets["MONGO_URI"]  # Load from Streamlit secrets
-    return MongoClient(MONGO_URI, server_api="1")
+    return MongoClient(MONGO_URI, server_api=ServerApi('1'))
+
 
 # Initialize MongoDB
 client = get_db_client()
