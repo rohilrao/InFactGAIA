@@ -52,15 +52,22 @@ if hypothesis_id:
     uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg"])
 
     if uploaded_file:
-        file_id = fs.put(
-            uploaded_file.read(),
-            filename=uploaded_file.name,
-            hypothesis_id=hypothesis_id,
-            upload_date=str(datetime.date.today()),
-            status="unprocessed"
-        )
-        st.success(f"✅ Uploaded: {uploaded_file.name}")
-        st.experimental_rerun()  # Refresh to display updated files
+        # Check for duplicates
+        existing_file = fs.find_one({"hypothesis_id": hypothesis_id, "filename": uploaded_file.name})
+
+        if existing_file:
+            st.warning(f"⚠️ A file named **{uploaded_file.name}** already exists. Duplicate uploads are not allowed.")
+        else:
+            # Upload the new file if it's not a duplicate
+            file_id = fs.put(
+                uploaded_file.read(),
+                filename=uploaded_file.name,
+                hypothesis_id=hypothesis_id,
+                upload_date=str(datetime.date.today()),
+                status="unprocessed"
+            )
+            st.success(f"✅ Uploaded: {uploaded_file.name}")
+            st.rerun()  # Refresh to display updated files
 
     # 📂 Fetch and Display Uploaded Files
     files = list(fs.find({"hypothesis_id": hypothesis_id}))
