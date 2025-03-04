@@ -57,11 +57,12 @@ if user_id:
                 st.write(f"📄 **{filename}** - `{status}`")
             with col2:
                 st.download_button("⬇️ Download", file.read(), filename)
-            with col3:
-                if st.button("🗑️ Delete", key=str(file_id)):
-                    fs.delete(ObjectId(file_id))
-                    st.warning(f"Deleted {filename}")
-                    st.experimental_rerun()
+            if status == "unprocessed":
+                with col3:
+                    if st.button("🗑️ Delete", key=str(file_id)):
+                        fs.delete(ObjectId(file_id))
+                        st.warning(f"Deleted {filename}")
+                        st.experimental_rerun()
     else:
         st.write("⚠️ No files found for this user.")
 
