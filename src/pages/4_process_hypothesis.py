@@ -341,7 +341,10 @@ if hypothesis_id:
         # ✅ Display Processed Analysis Results
         st.subheader("📊 Processed Files & Results")
 
-        processed_files = list(fs.find({"hypothesis_id": hypothesis_id, "status": "processed"}))
+        # ✅ Fetch processed files sorted by the most recent processing date
+        processed_files = list(fs.find(
+            {"hypothesis_id": hypothesis_id, "status": "processed"}
+        ).sort("last_processed_at", -1))  # Sort by last_processed_at (Descending)
 
         if processed_files:
             for file in processed_files:
@@ -352,7 +355,6 @@ if hypothesis_id:
                 node_state_id = getattr(file, "node_state_file_id", None)
                 last_processed = getattr(file, "last_processed_at", None)
                 analysis_file_id = getattr(file, "analysis_file_id", None)
-
 
                 st.write(f"### **📂 File: {filename}**")
 
@@ -379,7 +381,7 @@ if hypothesis_id:
                         )
                         st.components.v1.html(file_content, height=600, scrolling=True)
 
-                st.markdown("---")
+                st.markdown("---")  # ✅ Add a horizontal rule between files
         else:
             st.info("No processed files available yet.")
 
