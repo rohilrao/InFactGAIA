@@ -128,30 +128,14 @@ if loaded_hypothesis_id:
 
                 # Step 5: Chat Interface (Auto-expanded after "Chat Now")
                 with st.expander("💬 Chat with Node", expanded=st.session_state["sections_expanded"]["chat"]):
-                    # ✅ Display chat history with right-aligned user messages
+                    # ✅ Display chat history with original UI colors
                     for role, text in st.session_state["chat_history"]:
                         if role == "user":
-                            st.markdown(
-                                f"""
-                                <div style="display: flex; justify-content: flex-end;">
-                                    <div style="background-color: #DCF8C6; padding: 10px; border-radius: 10px; max-width: 60%; text-align: right;">
-                                        {text}
-                                    </div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True,
-                            )
+                            with st.chat_message(role, avatar="👤"):  # Right-aligned
+                                st.markdown(text)
                         else:
-                            st.markdown(
-                                f"""
-                                <div style="display: flex; justify-content: flex-start;">
-                                    <div style="background-color: #E8E8E8; padding: 10px; border-radius: 10px; max-width: 60%; text-align: left;">
-                                        {text}
-                                    </div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True,
-                            )
+                            with st.chat_message(role, avatar="🤖"):  # Left-aligned
+                                st.markdown(text)
 
                     # ✅ User input (Enter sends message)
                     user_input = st.chat_input("Ask a question about the node state:")
