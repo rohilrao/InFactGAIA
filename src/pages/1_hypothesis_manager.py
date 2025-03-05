@@ -17,11 +17,9 @@ fs = gridfs.GridFS(db)
 hypothesis_collection = db["hypotheses"]
 
 # ✅ Reset session state when navigating away
-if "previous_page" not in st.session_state:
-    st.session_state["previous_page"] = "file_manager"
-elif st.session_state["previous_page"] != "file_manager":
-    st.session_state.clear()
-st.session_state["previous_page"] = "file_manager"
+if "page_loaded" not in st.session_state:
+    st.session_state.clear()  # Clear only once when first loading the page
+st.session_state["page_loaded"] = True  # Set flag to prevent clearing during interaction
 
 st.title("📂 Hypothesis File Manager")
 
