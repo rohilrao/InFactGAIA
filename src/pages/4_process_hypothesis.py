@@ -36,42 +36,62 @@ class StreamToLogger(io.StringIO):
 def load_or_create_node(node_type, hypothesis, model, api_key, hypothesis_id):
     """
     Load or create an InFact node state from MongoDB GridFS.
-    - If an existing node state exists for the hypothesis, load it.
+    - If an existing node state exists for the hypothesis, load it using `node.load()`.
     - Otherwise, find the most recently processed file for the same hypothesis and use its node state.
     - If no node state exists, create a new node.
     """
     node_state = None
 
-    # ✅ Check if there is already a node state for this hypothesis
+    # ✅ Step 1: Check if an existing node state is stored in GridFS
     existing_node_state = db["fs.files"].find_one(
         {"hypothesis_id": hypothesis_id, "node_state_file_id": {"$exists": True}},
-        sort=[("last_processed_at", -1)]  # Sort by most recent processing
+        sort=[("last_processed_at", -1)]
     )
 
     if existing_node_state and "node_state_file_id" in existing_node_state:
         node_state_file_id = existing_node_state["node_state_file_id"]
+        file_obj = fs.get(ObjectId(node_state_file_id))
 
-        if fs.exists(ObjectId(node_state_file_id)):
-            print(f"🔄 Loading existing node state from file ID: {node_state_file_id}")
-            file_obj = fs.get(ObjectId(node_state_file_id))
-            node_state = json.loads(file_obj.read().decode())  # Read JSON state
+        if file_obj:
+            print(f"🔄 Loading existing node state from GridFS (file ID: {node_state_file_id})...")
+            try:
+                # ✅ Create a temporary file
+                temp_dir = tempfile.gettempdir()
+                temp_node_state_path = os.path.join(temp_dir, f"{node_type}_state_{hypothesis_id}.json")
 
-    # ✅ If no existing node state was found, create a new one
-    if not node_state:
-        print(f"✨ Creating new {node_type} InFact node for hypothesis ID: {hypothesis_id}...")
-        node_state = {}  # Empty state for new node
+                # ✅ Save GridFS file content to the temp file
+                with open(temp_node_state_path, "wb") as f:
+                    f.write(file_obj.read())
 
-    # ✅ Initialize the correct type of InFact node
-    if node_type.lower() == "anthropic":
-        node = AnthropicInFactNode(hypothesis=hypothesis, api_key=api_key, model=model)
-    elif node_type.lower() == "gpt":
-        node = GptInFactNode(hypothesis=hypothesis, api_key=api_key, model=model)
-    elif node_type.lower() == "deepseek":
-        node = DeepSeekInFactNode(hypothesis=hypothesis, api_key=api_key, model=model)
+                # ✅ Load node from the temporary file path
+                if node_type.lower() == "anthropic":
+                    node = AnthropicInFactNode.load(temp_node_state_path, api_key=api_key, model=model)
+                elif node_type.lower() == "gpt":
+                    node = GptInFactNode.load(temp_node_state_path, api_key=api_key, model=model)
+                elif node_type.lower() == "deepseek":
+                    node = DeepSeekInFactNode.load(temp_node_state_path, api_key=api_key, model=model)
+                else:
+                    raise ValueError(f"Unknown node type: {node_type}")
+
+                return node  # ✅ Return loaded node here
+
+            except Exception as e:
+                print(f"⚠️ Error loading node state: {e}. Resetting state.")
+
     else:
-        raise ValueError(f"Unknown node type: {node_type}")
+        print(f"🚫 No existing node state found for hypothesis ID: {hypothesis_id}.")
+        # ✅ Step 2: If no valid node state is found, create a new node
+        print(f"✨ Creating new {node_type} InFact node for hypothesis ID: {hypothesis_id}...")
+        if node_type.lower() == "anthropic":
+            node = AnthropicInFactNode(hypothesis=hypothesis, api_key=api_key, model=model)
+        elif node_type.lower() == "gpt":
+            node = GptInFactNode(hypothesis=hypothesis, api_key=api_key, model=model)
+        elif node_type.lower() == "deepseek":
+            node = DeepSeekInFactNode(hypothesis=hypothesis, api_key=api_key, model=model)
+        else:
+            raise ValueError(f"Unknown node type: {node_type}")
 
-    return node
+    return node  # ✅ Return newly created node only if no existing node was found
 
 def process_evidence(node_type, hypothesis_id, api_key, model, hypothesis_text, log_output=None):
     """
@@ -121,14 +141,34 @@ def process_evidence(node_type, hypothesis_id, api_key, model, hypothesis_text, 
 
                 print(f"📂 Temporary evidence file created: {temp_evidence_path}")
 
+                # ✅ Load the most recent processed file's node state (if available)
+                latest_processed_file = db["fs.files"].find_one(
+                    {"hypothesis_id": hypothesis_id, "status": "processed"},
+                    sort=[("last_processed_at", -1)]  # Sort by most recent processing
+                )
+
+                if latest_processed_file and "node_state_file_id" in latest_processed_file:
+                    latest_node_state_id = latest_processed_file["node_state_file_id"]
+
+                    if fs.exists(ObjectId(latest_node_state_id)):
+                        print(f"🔄 Loading existing node state from {latest_node_state_id}")
+                        file_obj = fs.get(ObjectId(latest_node_state_id))
+
+                        # ✅ Save the existing node state as a temp file
+                        temp_node_state_path = os.path.join(temp_dir, f"{node_type}_state_{filename}.json")
+                        with open(temp_node_state_path, "wb") as temp_state_file:
+                            temp_state_file.write(file_obj.read())  # ✅ Save GridFS node state to file
+                else:
+                    print("⚠️ No existing node state found. A new one will be created.")
+                    temp_node_state_path = os.path.join(temp_dir, f"{node_type}_state_{filename}.json")
+
                 # ✅ Process file using node (file path required)
                 node.process_data(temp_evidence_path)
 
-                # ✅ Save node state with the original filename
-                temp_node_state_path = os.path.join(temp_dir, f"{node_type}_state_{filename}.json")
+                # ✅ Save node state to the **loaded state file** instead of creating a new one
                 node.save(temp_node_state_path)
 
-                # ✅ Read and upload node state to MongoDB GridFS
+                # ✅ Read and upload the updated node state to MongoDB GridFS
                 with open(temp_node_state_path, "r", encoding="utf-8") as f:
                     node_state_content = f.read()
 
@@ -138,48 +178,53 @@ def process_evidence(node_type, hypothesis_id, api_key, model, hypothesis_text, 
                     content_type="application/json"
                 )
 
-                # ✅ Define analysis output file path with original filename
-                temp_analysis_path = os.path.join(temp_dir, f"analysis_{filename}.html")
-
-                # ✅ Render analysis output to the analysis file
-                renderer = InFactRenderer()
-                renderer.render_analysis(node, temp_analysis_path)
-
-                # ✅ Read and upload analysis to MongoDB GridFS
-                with open(temp_analysis_path, "r", encoding="utf-8") as f:
-                    analysis_content = f.read()
-
-                processed_file_id = fs.put(
-                    analysis_content.encode(),
-                    filename=f"analysis_{filename}.html",
-                    content_type="text/html"
-                )
-
-                # ✅ Ensure `processed_file_id` and `state_file_id` exist before DB update
-                if processed_file_id and state_file_id:
-                    files_collection.update_one(
-                        {"_id": file_id},
-                        {
-                            "$set": {
-                                "status": "processed",
-                                "node_state_file_id": state_file_id,
-                                "last_processed_at": datetime.datetime.utcnow(),
-                                "analysis_file_id": processed_file_id,
-                            }
-                        }
-                    )
-                    print(f"✅ Analysis stored in MongoDB with file_id: {processed_file_id}")
-
-                # ✅ Cleanup temporary files after processing
-                os.remove(temp_evidence_path)
-                os.remove(temp_node_state_path)
-                os.remove(temp_analysis_path)
-
-                processed_files.append(filename)
+                print(f"✅ Updated node state stored with file ID: {state_file_id}")
 
             except Exception as e:
                 print(f"⚠️ Error processing {filename}: {e}")
-                # ✅ File status remains 'unprocessed' if there's an error
+                # ✅ File status remains 'unprocessed' if there's an error  
+                
+
+            # ✅ Define analysis output file path with original filename
+            temp_analysis_path = os.path.join(temp_dir, f"analysis_{filename}.html")
+
+            # ✅ Render analysis output to the analysis file
+            renderer = InFactRenderer()
+            renderer.render_analysis(node, temp_analysis_path)
+
+            # ✅ Read and upload analysis to MongoDB GridFS
+            with open(temp_analysis_path, "r", encoding="utf-8") as f:
+                analysis_content = f.read()
+
+            processed_file_id = fs.put(
+                analysis_content.encode(),
+                filename=f"analysis_{filename}.html",
+                content_type="text/html"
+            )
+
+            # ✅ Ensure `processed_file_id` and `state_file_id` exist before DB update
+            if processed_file_id and state_file_id:
+                files_collection.update_one(
+                    {"_id": file_id},
+                    {
+                        "$set": {
+                            "status": "processed",
+                            "node_state_file_id": state_file_id,
+                            "last_processed_at": datetime.datetime.utcnow(),
+                            "analysis_file_id": processed_file_id,
+                        }
+                    }
+                )
+                print(f"✅ Analysis stored in MongoDB with file_id: {processed_file_id}")
+
+            # ✅ Cleanup temporary files after processing
+            os.remove(temp_evidence_path)
+            os.remove(temp_node_state_path)
+            os.remove(temp_analysis_path)
+
+            processed_files.append(filename)
+
+           
 
         if processed_files:
             print(f"✅ Successfully processed {len(processed_files)} evidence files.")
@@ -245,10 +290,28 @@ if hypothesis_id:
 
         node_type = st.selectbox("Select Node Type:", ["GPT", "Anthropic", "DeepSeek"])
         model_options = {
-            "GPT": ["chatgpt-4o-latest"],
-            "Anthropic": ["claude-3-5-sonnet-20241022"],
-            "DeepSeek": ["deepseek-chat"]
+            "GPT": [
+                "gpt-4o",          # Latest and most advanced
+                "gpt-4-turbo",      # Cost-effective, optimized for speed
+                "gpt-4",            # Standard GPT-4 model
+                "gpt-3.5-turbo",    # Faster and cheaper, great for general use
+                "gpt-3.5"           # Standard GPT-3.5 model
+            ],
+            "Anthropic": [
+                "claude-3-5-sonnet-20241022",  # Latest Claude 3.5 Sonnet (2024 update)
+                "claude-3-opus",               # Opus variant - most advanced
+                "claude-3-sonnet",             # Balanced option
+                "claude-3-haiku",              # Smallest model, optimized for speed
+                "claude-2.1",                  # Older version but still powerful
+            ],
+            "DeepSeek": [
+                "deepseek-chat",     # General chat-based model
+                "deepseek-coder",    # Optimized for code-related tasks
+                "deepseek-llm",      # Large language model variant
+                "deepseek-lite"      # Lighter version for efficiency
+            ]
         }
+
         model = st.selectbox("Select AI Model:", model_options[node_type])
         api_key = st.text_input("Enter API Key:", type="password")
 
