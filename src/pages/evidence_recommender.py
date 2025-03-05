@@ -6,6 +6,68 @@ import xml.etree.ElementTree as ET
 from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 
+
+# 📌 **Evidence Fetching Functions**
+def search_google(api_key, query, top_n=5):
+    """
+    Fetches search results from SerpAPI (Google) based on query.
+    """
+    url = f"{BASE_URL_GOOGLE}?engine=google&q={query}&api_key={api_key}"
+    response = requests.get(url)
+
+    if response.status_code != 200:
+        st.error("Google API request failed.")
+        return []
+
+    data = response.json()
+    urls = [(result["title"], result["link"]) for result in data.get("organic_results", [])]
+    return urls[:top_n]
+
+def search_semantic_papers(query, limit=5):
+    """
+    Fetches research papers from Semantic Scholar.
+    """
+    url = f"{BASE_URL_SEMANTIC}/paper/search"
+    params = {"query": query, "fields": "title,url", "limit": limit}
+    
+    response = requests.get(url, params=params, timeout=10)
+    
+    if response.status_code != 200:
+        st.error("Semantic Scholar API request failed.")
+        return []
+
+    papers = response.json().get("data", [])
+    return [(paper.get("title", "N/A"), paper.get("url", "N/A")) for paper in papers]
+
+def search_arxiv_papers(query, limit=5):
+    """
+    Fetches research papers from ArXiv.
+    """
+    params = {
+        "search_query": f"all:{query}",
+        "start": 0,
+        "max_results": limit,
+        "sortBy": "relevance",
+        "sortOrder": "descending"
+    }
+
+    try:
+        response = requests.get(BASE_URL_ARXIV, params=params, timeout=10)
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+
+        results = []
+        for entry in root.findall("{http://www.w3.org/2005/Atom}entry"):
+            title = entry.find("{http://www.w3.org/2005/Atom}title").text.strip()
+            url = entry.find("{http://www.w3.org/2005/Atom}id").text
+            results.append((title, url))
+        
+        return results
+    except requests.exceptions.RequestException:
+        st.error("ArXiv API request failed.")
+        return []
+
+
 # 🔐 MongoDB Connection
 @st.cache_resource
 def get_db_client():
@@ -88,63 +150,3 @@ if loaded_hypothesis_id:
 
     else:
         st.error("No hypothesis found for the given ID.")
-
-# 📌 **Evidence Fetching Functions**
-def search_google(api_key, query, top_n=5):
-    """
-    Fetches search results from SerpAPI (Google) based on query.
-    """
-    url = f"{BASE_URL_GOOGLE}?engine=google&q={query}&api_key={api_key}"
-    response = requests.get(url)
-
-    if response.status_code != 200:
-        st.error("Google API request failed.")
-        return []
-
-    data = response.json()
-    urls = [(result["title"], result["link"]) for result in data.get("organic_results", [])]
-    return urls[:top_n]
-
-def search_semantic_papers(query, limit=5):
-    """
-    Fetches research papers from Semantic Scholar.
-    """
-    url = f"{BASE_URL_SEMANTIC}/paper/search"
-    params = {"query": query, "fields": "title,url", "limit": limit}
-    
-    response = requests.get(url, params=params, timeout=10)
-    
-    if response.status_code != 200:
-        st.error("Semantic Scholar API request failed.")
-        return []
-
-    papers = response.json().get("data", [])
-    return [(paper.get("title", "N/A"), paper.get("url", "N/A")) for paper in papers]
-
-def search_arxiv_papers(query, limit=5):
-    """
-    Fetches research papers from ArXiv.
-    """
-    params = {
-        "search_query": f"all:{query}",
-        "start": 0,
-        "max_results": limit,
-        "sortBy": "relevance",
-        "sortOrder": "descending"
-    }
-
-    try:
-        response = requests.get(BASE_URL_ARXIV, params=params, timeout=10)
-        response.raise_for_status()
-        root = ET.fromstring(response.content)
-
-        results = []
-        for entry in root.findall("{http://www.w3.org/2005/Atom}entry"):
-            title = entry.find("{http://www.w3.org/2005/Atom}title").text.strip()
-            url = entry.find("{http://www.w3.org/2005/Atom}id").text
-            results.append((title, url))
-        
-        return results
-    except requests.exceptions.RequestException:
-        st.error("ArXiv API request failed.")
-        return []
