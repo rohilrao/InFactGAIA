@@ -6,36 +6,6 @@ from bson.objectid import ObjectId
 from pymongo.server_api import ServerApi
 import openai  # Or Anthropic API, DeepSeek API, etc.
 
-
-
-# 🔹 Chat Function (Same as before)
-def chat_with_node(api_key, provider, model, node_state_content, user_input):
-    """
-    Queries the LLM (GPT, Claude, or DeepSeek) with the node state and user's question.
-    Restricts responses to the node state contents only.
-    """
-    system_prompt = f"""
-    You are an AI assistant that interacts only with the provided node state.
-    You must answer questions **only based on this JSON data** and refuse any off-topic conversations.
-    Node State:
-    {json.dumps(node_state_content, indent=2)}
-    """
-
-    if provider == "GPT":
-        from openai import OpenAI  # ✅ Ensure using OpenAI's latest SDK
-
-        client = OpenAI(api_key=api_key)
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_input}
-            ]
-        )
-        return response.choices[0].message.content
-
-    return "🛠️ AI model integration for this provider is under development."
-
 # 🔐 MongoDB Connection
 @st.cache_resource
 def get_db_client():
@@ -49,12 +19,14 @@ fs = gridfs.GridFS(db)
 # 📌 UI - Chat with Node
 st.title("💬 Chat with Node")
 
-# Initialize session state for chat history
+# ✅ Initialize session state variables
 if "chat_history" not in st.session_state:
     st.session_state["chat_history"] = []
+if "sections_expanded" not in st.session_state:
+    st.session_state["sections_expanded"] = {"hypothesis": True, "file": True, "model": True, "chat": False}
 
 # Step 1: User enters Hypothesis ID (Collapsible)
-with st.expander("📌 Enter Hypothesis ID", expanded=True):
+with st.expander("📌 Enter Hypothesis ID", expanded=st.session_state["sections_expanded"]["hypothesis"]):
     hypothesis_id = st.text_input("Enter Hypothesis ID:")
     if st.button("🔍 Load Processed Files"):
         if not hypothesis_id.strip():
@@ -71,7 +43,7 @@ if loaded_hypothesis_id:
 
     if processed_files:
         # Step 2: Select a Processed File (Collapsible)
-        with st.expander("📂 Select a Processed File", expanded=True):
+        with st.expander("📂 Select a Processed File", expanded=st.session_state["sections_expanded"]["file"]):
             selected_file_id = st.selectbox("Select a file:", list(file_options.keys()), format_func=lambda x: file_options[x])
             
             if st.button("📥 Load Node State"):
@@ -92,7 +64,7 @@ if loaded_hypothesis_id:
                 node_state_content = json.loads(fs.get(ObjectId(node_state_id)).read().decode())
 
                 # Step 4: AI Model Selection (Collapsible)
-                with st.expander("🤖 AI Model Configuration", expanded=True):
+                with st.expander("🤖 AI Model Configuration", expanded=st.session_state["sections_expanded"]["model"]):
                     provider = st.selectbox("Select Provider:", ["GPT", "Anthropic", "DeepSeek"])
                     model_options = {
                         "GPT": ["gpt-4o", "gpt-3.5-turbo"],
@@ -122,11 +94,12 @@ if loaded_hypothesis_id:
                     if chat_now_button:
                         st.session_state["chat_started"] = True  # Store chat state
                         st.session_state["chat_history"] = []  # Reset chat history when chat starts
+                        # 🔥 Collapse all sections except chat
+                        st.session_state["sections_expanded"] = {"hypothesis": False, "file": False, "model": False, "chat": True}
+                        st.rerun()
 
-                # Step 5: Chat Interface (Visible only after clicking "Chat Now")
-                if st.session_state.get("chat_started", False):
-                    
-
+                # Step 5: Chat Interface (Auto-expanded after "Chat Now")
+                with st.expander("💬 Chat with Node", expanded=st.session_state["sections_expanded"]["chat"]):
                     # ✅ Display chat history
                     for role, text in st.session_state["chat_history"]:
                         with st.chat_message(role):
@@ -154,3 +127,30 @@ if loaded_hypothesis_id:
     else:
         st.warning("⚠️ No processed files found for this Hypothesis ID.")
 
+# 🔹 Chat Function (Same as before)
+def chat_with_node(api_key, provider, model, node_state_content, user_input):
+    """
+    Queries the LLM (GPT, Claude, or DeepSeek) with the node state and user's question.
+    Restricts responses to the node state contents only.
+    """
+    system_prompt = f"""
+    You are an AI assistant that interacts only with the provided node state.
+    You must answer questions **only based on this JSON data** and refuse any off-topic conversations.
+    Node State:
+    {json.dumps(node_state_content, indent=2)}
+    """
+
+    if provider == "GPT":
+        from openai import OpenAI  # ✅ Ensure using OpenAI's latest SDK
+
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_input}
+            ]
+        )
+        return response.choices[0].message.content
+
+    return "🛠️ AI model integration for this provider is under development."
