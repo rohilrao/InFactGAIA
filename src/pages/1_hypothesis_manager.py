@@ -33,7 +33,7 @@ if load_hypothesis and hypothesis_id_input:
 hypothesis_id = st.session_state.get("hypothesis_id", None)
 
 if hypothesis_id:
-    st.subheader(f"🔬 Hypothesis ID: `{hypothesis_id}`")
+    st.subheader(f"Hypothesis ID: `{hypothesis_id}`")
 
     # 🔎 Check if hypothesis ID exists
     hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
@@ -82,7 +82,7 @@ if hypothesis_id:
     files = list(fs.find({"hypothesis_id": hypothesis_id}))
 
     if files:
-        st.subheader("📜 Existing Files")
+        st.subheader("Existing Files")
         for file in files:
             file_id = file._id
             filename = file.filename
