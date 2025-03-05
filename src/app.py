@@ -14,8 +14,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Title
-st.markdown('<p class="big-title">InFact Demo: Building Trust in Science through Collaborative Evaluation</p>', unsafe_allow_html=True)
-st.markdown('<p class="subtitle">*A Gaia Lab project*</p>', unsafe_allow_html=True)
+st.title("InFact Demo: Building Trust in Science through Collaborative Evaluation")
+st.subheader("A Gaia Lab project")
+
+# Section: The Gaia Network
+st.markdown('<p class="section-header">The Gaia Network</p>', unsafe_allow_html=True)
+
+st.markdown("""
+InFact is also envisioned as a **demonstration of the capabilities of the** [**Gaia Network Protocol**](https://gaia-lab.de), the **Gaia Lab's main project**.  
+Visit our website to learn more! 🌍
+""")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -90,10 +98,4 @@ InFact is more than just a technology; it's a **vision** for making **scientific
 By empowering both **scientists and the public** to collaboratively evaluate evidence, we aim to foster **a deeper understanding of science** and its role in shaping our world.
 """)
 
-# Section: The Gaia Network
-st.markdown('<p class="section-header">The Gaia Network</p>', unsafe_allow_html=True)
 
-st.markdown("""
-InFact is also envisioned as a **demonstration of the capabilities of the** [**Gaia Network Protocol**](https://gaia-lab.de), the **Gaia Lab's main project**.  
-Visit our website to learn more! 🌍
-""")
