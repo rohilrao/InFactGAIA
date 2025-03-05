@@ -16,10 +16,12 @@ db = client["hypothesis_management"]
 fs = gridfs.GridFS(db)
 hypothesis_collection = db["hypotheses"]
 
-# ✅ Reset session state when navigating away
-if "page_loaded" not in st.session_state:
-    st.session_state.clear()  # Clear only once when first loading the page
-st.session_state["page_loaded"] = True  # Set flag to prevent clearing during interaction
+# ✅ Reset hypothesis state when navigating away
+current_page = "hypothesis_manager"
+if "previous_page" in st.session_state and st.session_state["previous_page"] != current_page:
+    st.session_state.pop("hypothesis_id", None)  # Clear stored hypothesis ID
+    st.session_state.pop("pending_upload", None)  # Clear pending uploads
+st.session_state["previous_page"] = current_page  # Update session state
 
 st.title("📂 Hypothesis File Manager")
 
