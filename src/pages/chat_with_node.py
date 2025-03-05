@@ -124,7 +124,7 @@ if loaded_hypothesis_id:
                         st.session_state["chat_history"] = []  # Reset chat history when chat starts
                         # 🔥 Collapse all sections except chat
                         st.session_state["sections_expanded"] = {"hypothesis": False, "file": False, "model": False, "chat": True}
-                        st.experimental_rerun()
+                        st.rerun()
 
                 # Step 5: Chat Interface (Auto-expanded after "Chat Now")
                 with st.expander("💬 Chat with Node", expanded=st.session_state["sections_expanded"]["chat"]):
@@ -151,7 +151,7 @@ if loaded_hypothesis_id:
                         st.session_state["chat_history"].append(("assistant", response))
 
                         # ✅ Refresh chat UI
-                        st.experimental_rerun()
+                        st.rerun()
 
             else:
                 st.warning("⚠️ No stored node state found for this file.")
