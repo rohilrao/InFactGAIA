@@ -16,30 +16,41 @@ client = get_db_client()
 db = client["hypothesis_management"]
 fs = gridfs.GridFS(db)
 
-# 📌 UI - Chat with Node State
+# 📌 UI - Chat with Node
 st.title("💬 Chat with Node")
 
 # Step 1: User enters Hypothesis ID
 hypothesis_id = st.text_input("Enter Hypothesis ID:")
+if st.button("🔍 Load Processed Files"):
+    st.session_state["loaded_hypothesis_id"] = hypothesis_id  # Store ID in session
 
-# Step 2: Fetch processed files
-if hypothesis_id:
-    processed_files = list(fs.find({"hypothesis_id": hypothesis_id, "status": "processed"}))
-    file_options = {str(f["_id"]): f["filename"] for f in processed_files}
+# Get stored Hypothesis ID after button click
+loaded_hypothesis_id = st.session_state.get("loaded_hypothesis_id", None)
+
+if loaded_hypothesis_id:
+    processed_files = list(fs.find({"hypothesis_id": loaded_hypothesis_id, "status": "processed"}))
+    file_options = {str(f._id): f.filename for f in processed_files}  # ✅ FIXED
 
     if processed_files:
-        selected_file_id = st.selectbox("Select a processed file:", list(file_options.keys()), format_func=lambda x: file_options[x])
+        st.subheader("📂 Select a Processed File")
+        selected_file_id = st.selectbox("Select a file:", list(file_options.keys()), format_func=lambda x: file_options[x])
+
+        if st.button("📥 Load Node State"):
+            st.session_state["selected_file_id"] = selected_file_id  # Store file ID in session
 
         # Step 3: Load Node State
-        if selected_file_id:
-            file_meta = next(f for f in processed_files if str(f["_id"]) == selected_file_id)
-            node_state_id = file_meta.get("node_state_file_id")
+        selected_file_id = st.session_state.get("selected_file_id", None)
 
-            if node_state_id and fs.exists(ObjectId(node_state_id)):
+        if selected_file_id:
+            file_meta = next(f for f in processed_files if str(f._id) == selected_file_id)
+            node_state_id = getattr(file_meta, "node_state_file_id", None)  # ✅ FIXED
+
+            # ✅ Corrected way to check if `node_state_id` exists in GridFS
+            if node_state_id and fs.find_one({"_id": ObjectId(node_state_id)}):
                 node_state_content = json.loads(fs.get(ObjectId(node_state_id)).read().decode())
 
                 # Step 4: AI Model Selection
-                st.subheader("🤖 Select AI Model")
+                st.subheader("🤖 AI Model Configuration")
                 provider = st.selectbox("Select Provider:", ["GPT", "Anthropic", "DeepSeek"])
                 model_options = {
                     "GPT": ["gpt-4o", "gpt-3.5-turbo"],
@@ -54,13 +65,12 @@ if hypothesis_id:
                     st.subheader("💬 Chat with Node")
                     user_input = st.text_area("Ask a question about the node state:")
 
-                    if st.button("Send"):
+                    if st.button("✉️ Send Question"):
                         if user_input.strip():
-                            # Step 6: Call LLM with node state context
                             response = chat_with_node(api_key, provider, model, node_state_content, user_input)
                             st.write(f"🤖 **Node:** {response}")
                         else:
-                            st.warning("Please enter a question.")
+                            st.warning("⚠️ Please enter a question.")
 
             else:
                 st.warning("⚠️ No stored node state found for this file.")
@@ -72,7 +82,7 @@ if hypothesis_id:
 def chat_with_node(api_key, provider, model, node_state_content, user_input):
     """
     Queries the LLM (GPT, Claude, or DeepSeek) with the node state and user's question.
-    Restricts responses to the node state contents.
+    Restricts responses to the node state contents only.
     """
     system_prompt = f"""
     You are an AI assistant that interacts only with the provided node state.
