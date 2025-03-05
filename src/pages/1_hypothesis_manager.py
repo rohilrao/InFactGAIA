@@ -16,6 +16,13 @@ db = client["hypothesis_management"]
 fs = gridfs.GridFS(db)
 hypothesis_collection = db["hypotheses"]
 
+# ✅ Reset session state when navigating away
+if "previous_page" not in st.session_state:
+    st.session_state["previous_page"] = "file_manager"
+elif st.session_state["previous_page"] != "file_manager":
+    st.session_state.clear()
+st.session_state["previous_page"] = "file_manager"
+
 st.title("📂 Hypothesis File Manager")
 
 # 🌟 Hypothesis ID Input
@@ -59,6 +66,10 @@ if hypothesis_id:
     # ✅ Step 1: Store uploaded file in session state before committing to MongoDB
     uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg", "html"])
 
+    # ✅ If the user removes the uploaded file (presses ❌), clear session state
+    if "pending_upload" in st.session_state and not uploaded_file:
+        del st.session_state["pending_upload"]
+
     if uploaded_file:
         # ✅ Store file details temporarily before committing
         st.session_state["pending_upload"] = {
@@ -76,6 +87,7 @@ if hypothesis_id:
         
         if existing_file:
             st.warning(f"⚠️ A file named **{file_name}** already exists under this hypothesis.")
+            del st.session_state["pending_upload"]  # ✅ Remove pending upload if duplicate found
         else:
             if st.button("Confirm Upload"):
                 file_id = fs.put(
@@ -100,10 +112,11 @@ if hypothesis_id:
             status = file.status
 
             # ✅ Color-code status
-            if status == "processed":
-                status_display = f'<span style="color: green; font-weight: bold;">Processed</span>'
-            else:
-                status_display = f'<span style="color: red; font-weight: bold;">Unprocessed</span>'
+            status_display = (
+                '<span style="color: green; font-weight: bold;">Processed</span>'
+                if status == "processed" else
+                '<span style="color: red; font-weight: bold;">Unprocessed</span>'
+            )
 
             col1, col2, col3 = st.columns([3, 1, 1])
             with col1:
