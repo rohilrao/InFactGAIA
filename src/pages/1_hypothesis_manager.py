@@ -33,7 +33,7 @@ if load_hypothesis and hypothesis_id_input:
 hypothesis_id = st.session_state.get("hypothesis_id", None)
 
 if hypothesis_id:
-    st.subheader(f"🔬 Hypothesis ID: `{hypothesis_id}`")
+    st.subheader(f"Current Hypothesis ID: `{hypothesis_id}`")
 
     # 🔎 Check if hypothesis ID exists
     hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
@@ -77,7 +77,7 @@ if hypothesis_id:
         if existing_file:
             st.warning(f"⚠️ A file named **{file_name}** already exists under this hypothesis.")
         else:
-            if st.button("📤 Confirm Upload"):
+            if st.button("Confirm Upload"):
                 file_id = fs.put(
                     st.session_state["pending_upload"]["content"],  # ✅ Read file content from session state
                     filename=file_name,
@@ -93,15 +93,21 @@ if hypothesis_id:
     files = list(fs.find({"hypothesis_id": hypothesis_id}))
 
     if files:
-        st.subheader("📜 Existing Files")
+        st.subheader("Existing Files")
         for file in files:
             file_id = file._id
             filename = file.filename
             status = file.status
 
+            # ✅ Color-code status
+            if status == "processed":
+                status_display = f'<span style="color: green; font-weight: bold;">Processed</span>'
+            else:
+                status_display = f'<span style="color: red; font-weight: bold;">Unprocessed</span>'
+
             col1, col2, col3 = st.columns([3, 1, 1])
             with col1:
-                st.write(f"📄 **{filename}** - `{status}`")
+                st.markdown(f"📄 **{filename}** - {status_display}", unsafe_allow_html=True)  # ✅ Apply color styling
             with col2:
                 with fs.get(file_id) as grid_out:
                     file_content = grid_out.read()
@@ -112,5 +118,6 @@ if hypothesis_id:
                         fs.delete(ObjectId(file_id))
                         st.warning(f"Deleted {filename}")
                         st.rerun()
+
     else:
         st.info("⚠️ No files found for this hypothesis.")
