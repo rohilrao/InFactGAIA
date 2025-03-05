@@ -19,6 +19,10 @@ fs = gridfs.GridFS(db)
 # 📌 UI - Chat with Node
 st.title("💬 Chat with Node")
 
+# Initialize session state for chat history
+if "chat_history" not in st.session_state:
+    st.session_state["chat_history"] = []
+
 # Step 1: User enters Hypothesis ID (Collapsible)
 with st.expander("📌 Enter Hypothesis ID", expanded=True):
     hypothesis_id = st.text_input("Enter Hypothesis ID:")
@@ -87,15 +91,14 @@ if loaded_hypothesis_id:
 
                     if chat_now_button:
                         st.session_state["chat_started"] = True  # Store chat state
-                        st.session_state["chat_history"] = []  # Initialize chat history
+                        st.session_state["chat_history"] = []  # Reset chat history when chat starts
 
                 # Step 5: Chat Interface (Visible only after clicking "Chat Now")
                 if st.session_state.get("chat_started", False):
                     st.subheader("💬 Chat with Node")
 
                     # ✅ Display chat history
-                    for message in st.session_state["chat_history"]:
-                        role, text = message
+                    for role, text in st.session_state["chat_history"]:
                         with st.chat_message(role):
                             st.markdown(text)
 
