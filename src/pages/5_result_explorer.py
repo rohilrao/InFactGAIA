@@ -29,7 +29,7 @@ def query_hypothesis(hypothesis_id):
         return None
 
 # Streamlit app layout
-st.title("📊 Result Explorer")
+st.title("Result Explorer")
 
 # Input for Hypothesis ID
 hypothesis_id = st.text_input("Enter Hypothesis ID:")
@@ -53,7 +53,7 @@ if loaded_hypothesis_id:
         files = list(fs.find({"hypothesis_id": loaded_hypothesis_id}))
         file_count = len(files)
 
-        st.write(f"📂 **Number of Associated Files:** {file_count}")
+        st.write(f"📂 **Number of Associated Evidence Files:** {file_count}")
 
         # 🔍 Fetch results (processed files) & download analysis
         st.subheader("Results")
@@ -64,7 +64,7 @@ if loaded_hypothesis_id:
                 filename = file.filename
                 analysis_file_id = getattr(file, "analysis_file_id", None)
 
-                st.write(f"📊 **{filename}**")
+                st.write(f"**{filename}**")
 
                 # ✅ Check if the file has an associated analysis file
                 if analysis_file_id and fs.exists(ObjectId(analysis_file_id)):
