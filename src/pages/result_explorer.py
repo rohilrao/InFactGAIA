@@ -35,7 +35,7 @@ st.title("📊 Result Explorer")
 hypothesis_id = st.text_input("Enter Hypothesis ID:")
 
 # Button to load results
-if st.button("🔍 Load Results"):
+if st.button("Load Results"):
     st.session_state["loaded_hypothesis_id"] = hypothesis_id  # Store ID in session
 
 # Get stored Hypothesis ID after button click
@@ -45,21 +45,18 @@ if loaded_hypothesis_id:
     data = query_hypothesis(loaded_hypothesis_id)
 
     if data:
-        st.subheader("📑 Hypothesis Details")
+        #st.subheader("📑 Hypothesis Details")
         st.write(f"**Hypothesis ID:** `{loaded_hypothesis_id}`")
         st.write(f"**Hypothesis Text:** {data.get('text', 'No text available')}")
 
         # 🔍 Fetch associated files from GridFS
-        st.subheader("📂 Associated Files")
         files = list(fs.find({"hypothesis_id": loaded_hypothesis_id}))
-        if files:
-            for file in files:
-                st.write(f"📄 **{file.filename}** - `{file.status}`")
-        else:
-            st.info("⚠️ No associated files found.")
+        file_count = len(files)
+
+        st.write(f"📂 **Number of Associated Files:** {file_count}")
 
         # 🔍 Fetch results (processed files) & download analysis
-        st.subheader("📊 Results")
+        st.subheader("Results")
         results = list(fs.find({"hypothesis_id": loaded_hypothesis_id, "status": "processed"}))
         if results:
             for file in results:
