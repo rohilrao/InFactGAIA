@@ -51,7 +51,7 @@ if hypothesis_id:
 
     # 📤 File Upload Section
     st.subheader(f"📂 Files for Hypothesis ID: {hypothesis_id}")
-    uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg"])
+    uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg", "html"])
 
     if uploaded_file:
         # Check for duplicates
