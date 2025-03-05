@@ -146,7 +146,7 @@ if loaded_hypothesis_id:
                         st.session_state["chat_history"].append(("assistant", response))
 
                         # ✅ Refresh chat UI
-                        st.experimental_rerun()
+                        st.rerun()
 
             else:
                 st.warning("⚠️ No stored node state found for this file.")
