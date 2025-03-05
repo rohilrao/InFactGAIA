@@ -2,31 +2,42 @@ import streamlit as st
 
 st.set_page_config(page_title="InFactGAIA", page_icon="📂", layout="wide")
 
-# Custom CSS for improved readability & spacing
+# Custom CSS for improved readability in **dark mode**
 st.markdown("""
     <style>
-        .big-title { font-size: 32px; font-weight: bold; margin-bottom: 5px; }
-        .subtitle { font-size: 22px; font-style: italic; color: #555; }
-        .blockquote { 
-            font-size: 18px; 
-            font-style: italic; 
-            color: #333; 
-            border-left: 4px solid #1f77b4; 
-            padding-left: 15px; 
-            margin: 20px 0;
-        }
+        /* Title & Headers */
+        .big-title { font-size: 32px; font-weight: bold; margin-bottom: 5px; color: #ffffff; }
+        .subtitle { font-size: 22px; font-style: italic; color: #cccccc; }
         .section-header { 
             font-size: 24px; 
             font-weight: bold; 
             margin-top: 40px; 
             padding-bottom: 5px; 
-            border-bottom: 2px solid #ddd;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2); 
+            color: #ffffff;
         }
+
+        /* Quote Styling for Dark Mode */
+        .blockquote { 
+            font-size: 18px; 
+            font-style: italic; 
+            color: #f1f1f1;  /* Lighter text for contrast */
+            border-left: 4px solid #1f77b4; 
+            padding-left: 15px; 
+            margin: 20px 0;
+            background-color: rgba(255, 255, 255, 0.1);  /* Subtle contrast for dark mode */
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .blockquote a { color: #1f77b4; text-decoration: none; }
+
+        /* Content Box (for sections with extra info) */
         .content-box {
-            background-color: #f9f9f9; 
+            background-color: rgba(255, 255, 255, 0.05); /* Slightly lighter dark mode */
             padding: 15px; 
             border-radius: 5px; 
             margin-bottom: 20px;
+            color: #dddddd;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -43,7 +54,7 @@ InFact is also envisioned as a **demonstration of the capabilities of the**
 Visit our website to learn more!
 """)
 
-# 📌 **Blockquote with Proper Styling**
+# 📌 **Blockquote with Proper Styling (Dark Mode Optimized)**
 st.markdown("""
     <p class="blockquote">
     "What we should do is create an institution that collects and evaluates scientific evidence and gives out confidence values based on evidence."
