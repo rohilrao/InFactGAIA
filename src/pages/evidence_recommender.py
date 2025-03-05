@@ -60,6 +60,7 @@ def search_arxiv_papers(query, limit=5):
         st.error("ArXiv API request failed.")
         return []
 
+
 # 🔐 MongoDB Connection
 @st.cache_resource
 def get_db_client():
@@ -75,16 +76,19 @@ BASE_URL_SEMANTIC = "https://api.semanticscholar.org/graph/v1"
 BASE_URL_ARXIV = "http://export.arxiv.org/api/query"
 BASE_URL_GOOGLE = "https://serpapi.com/search.json"
 
-# 📌 UI - Evidence Recommender
-st.title("Evidence Recommender")
-
-# Step 1: Enter Hypothesis ID
+# 📌 **Session State for Auto-Collapse**
 if "hypothesis_loaded" not in st.session_state:
     st.session_state["hypothesis_loaded"] = False
 if "sources_selected" not in st.session_state:
     st.session_state["sources_selected"] = True  # Default: expanded
+if "search_triggered" not in st.session_state:
+    st.session_state["search_triggered"] = False  # Tracks when "Find Evidence" is clicked
 
-with st.expander("Enter Hypothesis ID", expanded=not st.session_state["hypothesis_loaded"]):
+# 📌 **UI - Evidence Recommender**
+st.title("Evidence Recommender")
+
+# Step 1: **Enter Hypothesis ID**
+with st.expander("Enter Hypothesis ID", expanded=not st.session_state["hypothesis_loaded"] and not st.session_state["search_triggered"]):
     hypothesis_id = st.text_input("Hypothesis ID:")
     if st.button("Load Hypothesis"):
         if not hypothesis_id.strip():
@@ -102,8 +106,8 @@ with st.expander("Enter Hypothesis ID", expanded=not st.session_state["hypothesi
 if st.session_state["hypothesis_loaded"]:
     st.success(f"**Loaded Hypothesis:** {st.session_state['loaded_hypothesis_text']}")
 
-    # Step 2: Select Sources
-    with st.expander("Select Sources for Evidence Search", expanded=st.session_state["sources_selected"]):
+    # Step 2: **Select Sources**
+    with st.expander("Select Sources for Evidence Search", expanded=st.session_state["sources_selected"] and not st.session_state["search_triggered"]):
         google_enabled = st.checkbox("Google Search")
         semantic_enabled = st.checkbox("Semantic Scholar")
         arxiv_enabled = st.checkbox("ArXiv")
@@ -114,36 +118,37 @@ if st.session_state["hypothesis_loaded"]:
     else:
         google_api_key = None
 
-    # 🚀 Fetch Evidence
+    # 🚀 **Fetch Evidence**
     if st.button("Find Evidence"):
-        st.session_state["sources_selected"] = False  # ✅ Auto-collapse after clicking
+        st.session_state["search_triggered"] = True  # ✅ Auto-collapse after clicking
+        st.session_state["sources_selected"] = False  # ✅ Collapse sources selection
+
         with st.spinner("Searching for relevant evidence..."):
             recommended_evidence = []
 
-            # ✅ Google Search
+            # ✅ **Google Search**
             if google_enabled and google_api_key:
                 st.write("Searching Google...")
                 google_results = search_google(google_api_key, st.session_state["loaded_hypothesis_text"], top_n=5)
                 recommended_evidence.extend(google_results)
 
-            # ✅ Semantic Scholar
+            # ✅ **Semantic Scholar**
             if semantic_enabled:
                 st.write("Searching Semantic Scholar...")
                 semantic_results = search_semantic_papers(st.session_state["loaded_hypothesis_text"], limit=5)
                 recommended_evidence.extend(semantic_results)
 
-            # ✅ ArXiv
+            # ✅ **ArXiv**
             if arxiv_enabled:
                 st.write("Searching ArXiv...")
                 arxiv_results = search_arxiv_papers(st.session_state["loaded_hypothesis_text"], limit=5)
                 recommended_evidence.extend(arxiv_results)
 
-            # ✅ Display Results
+            # ✅ **Display Results**
             if recommended_evidence:
-                st.subheader("Recommended Evidence Files")
-                for title, url in recommended_evidence:
-                    st.markdown(f"**[{title}]({url})**")
+                with st.expander("Recommended Evidence", expanded=True):
+                    for title, url in recommended_evidence:
+                        st.markdown(f"**[{title}]({url})**")
             else:
                 st.warning("No relevant evidence found. Try different sources or refine your hypothesis.")
-
 
