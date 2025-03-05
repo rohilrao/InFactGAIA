@@ -27,13 +27,13 @@ hypothesis_id_input = st.text_input("Enter Hypothesis ID:")
 load_hypothesis = st.button("Load Hypothesis")
 
 if load_hypothesis and hypothesis_id_input:
-    st.session_state["hypothesis_id"] = hypothesis_id_input  # Store hypothesis ID in session state
+    st.session_state["hypothesis_id"] = hypothesis_id_input  # Store hypothesis ID in session
 
 # Get stored hypothesis ID
 hypothesis_id = st.session_state.get("hypothesis_id", None)
 
 if hypothesis_id:
-    st.subheader(f"Hypothesis ID: `{hypothesis_id}`")
+    st.subheader(f"🔬 Hypothesis ID: `{hypothesis_id}`")
 
     # 🔎 Check if hypothesis ID exists
     hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
@@ -55,34 +55,45 @@ if hypothesis_id:
 
     # 📤 File Upload Section
     st.subheader(f"📂 Upload Files for Hypothesis ID: `{hypothesis_id}`")
+
+    # ✅ Step 1: Store uploaded file in session state before committing to MongoDB
     uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg", "html"])
 
     if uploaded_file:
-        # ✅ Improved Duplicate Check - Only for this Hypothesis ID
-        existing_file = fs.find_one({
-            "hypothesis_id": hypothesis_id,
-            "filename": uploaded_file.name
-        })
+        # ✅ Store file details temporarily before committing
+        st.session_state["pending_upload"] = {
+            "filename": uploaded_file.name,
+            "content": uploaded_file.read()
+        }
+        st.success(f"✅ Ready to upload: {uploaded_file.name}")
 
+    # ✅ Step 2: Confirm Upload (Avoids false duplicate detection)
+    if "pending_upload" in st.session_state:
+        file_name = st.session_state["pending_upload"]["filename"]
+        
+        # ✅ Check if this file already exists under the given hypothesis
+        existing_file = fs.find_one({"hypothesis_id": hypothesis_id, "filename": file_name})
+        
         if existing_file:
-            st.warning(f"⚠️ A file named **{uploaded_file.name}** already exists under this hypothesis.")
+            st.warning(f"⚠️ A file named **{file_name}** already exists under this hypothesis.")
         else:
-            # ✅ Upload file only if not duplicate
-            file_id = fs.put(
-                uploaded_file.read(),
-                filename=uploaded_file.name,
-                hypothesis_id=hypothesis_id,  # ✅ Ensures association with this hypothesis
-                upload_date=str(datetime.date.today()),
-                status="unprocessed"
-            )
-            st.success(f"✅ Uploaded: {uploaded_file.name}")
-            st.rerun()  # Refresh UI after upload
+            if st.button("📤 Confirm Upload"):
+                file_id = fs.put(
+                    st.session_state["pending_upload"]["content"],  # ✅ Read file content from session state
+                    filename=file_name,
+                    hypothesis_id=hypothesis_id,  # ✅ Ensures association with this hypothesis
+                    upload_date=str(datetime.date.today()),
+                    status="unprocessed"
+                )
+                del st.session_state["pending_upload"]  # ✅ Clear session state after successful upload
+                st.success(f"✅ Uploaded: {file_name}")
+                st.rerun()  # Refresh UI after upload
 
     # 📂 Fetch and Display Uploaded Files (Only if Files Exist)
     files = list(fs.find({"hypothesis_id": hypothesis_id}))
 
     if files:
-        st.subheader("Existing Files")
+        st.subheader("📜 Existing Files")
         for file in files:
             file_id = file._id
             filename = file.filename
