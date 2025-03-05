@@ -131,11 +131,27 @@ if loaded_hypothesis_id:
                     # ✅ Display chat history with right-aligned user messages
                     for role, text in st.session_state["chat_history"]:
                         if role == "user":
-                            with st.chat_message(role, avatar="👤"):  # Right-aligned
-                                st.markdown(f"<div style='text-align: right;'>{text}</div>", unsafe_allow_html=True)
+                            st.markdown(
+                                f"""
+                                <div style="display: flex; justify-content: flex-end;">
+                                    <div style="background-color: #DCF8C6; padding: 10px; border-radius: 10px; max-width: 60%; text-align: right;">
+                                        {text}
+                                    </div>
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
                         else:
-                            with st.chat_message(role, avatar="🤖"):  # Left-aligned
-                                st.markdown(f"<div style='text-align: left;'>{text}</div>", unsafe_allow_html=True)
+                            st.markdown(
+                                f"""
+                                <div style="display: flex; justify-content: flex-start;">
+                                    <div style="background-color: #E8E8E8; padding: 10px; border-radius: 10px; max-width: 60%; text-align: left;">
+                                        {text}
+                                    </div>
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
 
                     # ✅ User input (Enter sends message)
                     user_input = st.chat_input("Ask a question about the node state:")
