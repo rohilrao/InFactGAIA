@@ -58,20 +58,28 @@ if loaded_hypothesis_id:
         else:
             st.info("⚠️ No associated files found.")
 
-        # 🔍 Fetch results (processed files)
+        # 🔍 Fetch results (processed files) & download analysis
         st.subheader("📊 Results")
         results = list(fs.find({"hypothesis_id": loaded_hypothesis_id, "status": "processed"}))
         if results:
             for file in results:
                 file_id = file._id
                 filename = file.filename
+                analysis_file_id = getattr(file, "analysis_file_id", None)
 
                 st.write(f"📊 **{filename}**")
-                st.download_button(
-                    label="⬇️ Download Result",
-                    data=fs.get(file_id).read(),
-                    file_name=filename,
-                    mime="text/html"
-                )
+
+                # ✅ Check if the file has an associated analysis file
+                if analysis_file_id and fs.exists(ObjectId(analysis_file_id)):
+                    analysis_content = fs.get(ObjectId(analysis_file_id)).read()
+
+                    st.download_button(
+                        label="⬇️ Download Analysis Report",
+                        data=analysis_content,
+                        file_name=f"analysis_{filename}.html",
+                        mime="text/html"
+                    )
+                else:
+                    st.warning(f"⚠️ No analysis report found for {filename}.")
         else:
             st.info("⚠️ No processed results available.")
