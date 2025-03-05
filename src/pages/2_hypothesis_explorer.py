@@ -15,13 +15,13 @@ fs = gridfs.GridFS(db)  # For file storage
 hypothesis_collection = db["hypotheses"]
 
 # 📌 Hypothesis Explorer Page
-st.title("📜 Hypothesis Explorer")
+st.title("Hypothesis Explorer")
 
 # 📡 Fetch all stored hypotheses
 hypotheses = list(hypothesis_collection.find({}))
 
 if hypotheses:
-    st.write(f"📊 **Total Hypotheses Stored:** {len(hypotheses)}")
+    st.write(f"**Total Hypotheses Currently Stored:** {len(hypotheses)}")
 
     for hypothesis in hypotheses:
         hypothesis_id = hypothesis["_id"]
@@ -33,16 +33,13 @@ if hypotheses:
         total_files.rewind()  # Reset cursor
         unprocessed_files = sum(1 for file in total_files if file.status == "unprocessed")
 
-        # 📌 Display Hypothesis ID
-        st.markdown(f"### Hypothesis ID: `{hypothesis_id}`")
-        
-        # 📌 Display Hypothesis Text
-        st.write(f"**Hypothesis Text:**\n\n{hypothesis_text}")
+        # 📌 Collapsible Hypothesis Section
+        with st.expander(f"**Hypothesis ID: `{hypothesis_id}`**", expanded=False):
+            # 📌 Display Hypothesis Text
+            st.write(f"**Hypothesis Text:**\n\n{hypothesis_text}")
 
-        # 📊 File Status Summary
-        st.write(f"📂 **Files Attached:** {processed_files + unprocessed_files} (✅ Processed: {processed_files} | ⏳ Unprocessed: {unprocessed_files})")
-
-        st.markdown("---")  # Add a horizontal divider for clarity
+            # 📊 File Status Summary
+            st.write(f"📂 **Files Attached:** {processed_files + unprocessed_files} (✅ Processed: {processed_files} | ⏳ Unprocessed: {unprocessed_files})")
 
 else:
     st.warning("⚠️ No hypotheses found in the database.")
