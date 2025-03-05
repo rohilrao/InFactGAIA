@@ -6,6 +6,35 @@ from bson.objectid import ObjectId
 from pymongo.server_api import ServerApi
 import openai  # Or Anthropic API, DeepSeek API, etc.
 
+
+def chat_with_node(api_key, provider, model, node_state_content, user_input):
+    """
+    Queries the LLM (GPT, Claude, or DeepSeek) with the node state and user's question.
+    Restricts responses to the node state contents only.
+    """
+    system_prompt = f"""
+    You are an AI assistant that interacts only with the provided node state.
+    You must answer questions **only based on this JSON data** and refuse any off-topic conversations.
+    Node State:
+    {json.dumps(node_state_content, indent=2)}
+    """
+
+    # OpenAI API (Modify for DeepSeek/Anthropic if needed)
+    if provider == "GPT":
+        openai.api_key = api_key
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_input}
+            ]
+        )
+        return response["choices"][0]["message"]["content"]
+    
+    # Placeholder for other APIs (DeepSeek, Anthropic)
+    return "🛠️ AI model integration for this provider is under development."
+
+
 # 🔐 MongoDB Connection
 @st.cache_resource
 def get_db_client():
@@ -78,30 +107,3 @@ if loaded_hypothesis_id:
     else:
         st.warning("⚠️ No processed files found for this Hypothesis ID.")
 
-
-def chat_with_node(api_key, provider, model, node_state_content, user_input):
-    """
-    Queries the LLM (GPT, Claude, or DeepSeek) with the node state and user's question.
-    Restricts responses to the node state contents only.
-    """
-    system_prompt = f"""
-    You are an AI assistant that interacts only with the provided node state.
-    You must answer questions **only based on this JSON data** and refuse any off-topic conversations.
-    Node State:
-    {json.dumps(node_state_content, indent=2)}
-    """
-
-    # OpenAI API (Modify for DeepSeek/Anthropic if needed)
-    if provider == "GPT":
-        openai.api_key = api_key
-        response = openai.ChatCompletion.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_input}
-            ]
-        )
-        return response["choices"][0]["message"]["content"]
-    
-    # Placeholder for other APIs (DeepSeek, Anthropic)
-    return "🛠️ AI model integration for this provider is under development."
