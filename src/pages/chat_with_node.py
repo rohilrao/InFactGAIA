@@ -87,18 +87,33 @@ if loaded_hypothesis_id:
 
                     if chat_now_button:
                         st.session_state["chat_started"] = True  # Store chat state
+                        st.session_state["chat_history"] = []  # Initialize chat history
 
                 # Step 5: Chat Interface (Visible only after clicking "Chat Now")
                 if st.session_state.get("chat_started", False):
                     st.subheader("💬 Chat with Node")
-                    user_input = st.text_area("Ask a question about the node state:")
 
-                    if st.button("✉️ Send Question"):
-                        if user_input.strip():
-                            response = chat_with_node(api_key, provider, model, node_state_content, user_input)
-                            st.write(f"🤖 **Node:** {response}")
-                        else:
-                            st.warning("⚠️ Please enter a question.")
+                    # ✅ Display chat history
+                    for message in st.session_state["chat_history"]:
+                        role, text = message
+                        with st.chat_message(role):
+                            st.markdown(text)
+
+                    # ✅ User input (Enter sends message)
+                    user_input = st.chat_input("Ask a question about the node state:")
+                    
+                    if user_input:
+                        # ✅ Add user question to chat history
+                        st.session_state["chat_history"].append(("user", user_input))
+
+                        # ✅ Query LLM
+                        response = chat_with_node(api_key, provider, model, node_state_content, user_input)
+
+                        # ✅ Add AI response to chat history
+                        st.session_state["chat_history"].append(("assistant", response))
+
+                        # ✅ Refresh chat UI
+                        st.experimental_rerun()
 
             else:
                 st.warning("⚠️ No stored node state found for this file.")
