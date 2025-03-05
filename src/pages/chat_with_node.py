@@ -6,7 +6,7 @@ from bson.objectid import ObjectId
 from pymongo.server_api import ServerApi
 import openai  # Or Anthropic API, DeepSeek API, etc.
 
-# 🔹 Chat Function (Same as before)
+# 🔹 **Define Chat Function FIRST to Avoid NameError**
 def chat_with_node(api_key, provider, model, node_state_content, user_input):
     """
     Queries the LLM (GPT, Claude, or DeepSeek) with the node state and user's question.
@@ -33,7 +33,6 @@ def chat_with_node(api_key, provider, model, node_state_content, user_input):
         return response.choices[0].message.content
 
     return "🛠️ AI model integration for this provider is under development."
-
 
 # 🔐 MongoDB Connection
 @st.cache_resource
@@ -125,14 +124,18 @@ if loaded_hypothesis_id:
                         st.session_state["chat_history"] = []  # Reset chat history when chat starts
                         # 🔥 Collapse all sections except chat
                         st.session_state["sections_expanded"] = {"hypothesis": False, "file": False, "model": False, "chat": True}
-                        st.rerun()
+                        st.experimental_rerun()
 
                 # Step 5: Chat Interface (Auto-expanded after "Chat Now")
                 with st.expander("💬 Chat with Node", expanded=st.session_state["sections_expanded"]["chat"]):
-                    # ✅ Display chat history
+                    # ✅ Display chat history with right-aligned user messages
                     for role, text in st.session_state["chat_history"]:
-                        with st.chat_message(role):
-                            st.markdown(text)
+                        if role == "user":
+                            with st.chat_message(role, avatar="👤"):  # Right-aligned
+                                st.markdown(f"<div style='text-align: right;'>{text}</div>", unsafe_allow_html=True)
+                        else:
+                            with st.chat_message(role, avatar="🤖"):  # Left-aligned
+                                st.markdown(f"<div style='text-align: left;'>{text}</div>", unsafe_allow_html=True)
 
                     # ✅ User input (Enter sends message)
                     user_input = st.chat_input("Ask a question about the node state:")
@@ -148,11 +151,10 @@ if loaded_hypothesis_id:
                         st.session_state["chat_history"].append(("assistant", response))
 
                         # ✅ Refresh chat UI
-                        st.rerun()
+                        st.experimental_rerun()
 
             else:
                 st.warning("⚠️ No stored node state found for this file.")
 
     else:
         st.warning("⚠️ No processed files found for this Hypothesis ID.")
-
