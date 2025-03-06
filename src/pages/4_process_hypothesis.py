@@ -290,8 +290,7 @@ if hypothesis_id:
 
         node_type = st.selectbox("Select Node Type:", ["GPT", "Anthropic", "DeepSeek"])
         model_options = {
-            "GPT": [
-                "gpt-4o",          # Latest and most advanced
+            "GPT": [        # Latest and most advanced
                 "chatgpt-4o-latest",      # Cost-effective, optimized for speed       
             ],
             "Anthropic": [

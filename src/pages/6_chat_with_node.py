@@ -60,7 +60,9 @@ with st.expander("📌 Enter Hypothesis ID", expanded=st.session_state["sections
         if not hypothesis_id.strip():
             st.warning("⚠️ Please enter a valid Hypothesis ID.")
         else:
-            st.session_state["loaded_hypothesis_id"] = hypothesis_id  # Store ID in session
+            st.session_state["loaded_hypothesis_id"] = hypothesis_id  # ✅ Store ID
+            st.session_state.pop("selected_file_id", None)  # ✅ Reset file selection
+            st.session_state["chat_history"] = []  # ✅ Reset chat history
 
 # Get stored Hypothesis ID after button click
 loaded_hypothesis_id = st.session_state.get("loaded_hypothesis_id", None)
@@ -84,8 +86,13 @@ if loaded_hypothesis_id:
         selected_file_id = st.session_state.get("selected_file_id", None)
 
         if selected_file_id:
-            file_meta = next(f for f in processed_files if str(f._id) == selected_file_id)
-            node_state_id = getattr(file_meta, "node_state_file_id", None)
+            file_meta = next((f for f in processed_files if str(f._id) == selected_file_id), None)  # ✅ Prevents StopIteration
+
+            if file_meta is None:
+                st.warning("⚠️ The previously selected file is no longer available. Please select a new one.")
+                st.session_state.pop("selected_file_id", None)  # ✅ Reset selection
+            else:
+                node_state_id = getattr(file_meta, "node_state_file_id", None)
 
             # ✅ Check if `node_state_id` exists in GridFS
             if node_state_id and fs.find_one({"_id": ObjectId(node_state_id)}):

@@ -81,10 +81,10 @@ if hypothesis_id:
     # ✅ Step 2: Confirm Upload (Avoids false duplicate detection)
     if "pending_upload" in st.session_state:
         file_name = st.session_state["pending_upload"]["filename"]
-        
+
         # ✅ Check if this file already exists under the given hypothesis
         existing_file = fs.find_one({"hypothesis_id": hypothesis_id, "filename": file_name})
-        
+
         if existing_file:
             st.warning(f"⚠️ A file named **{file_name}** already exists under this hypothesis.")
             del st.session_state["pending_upload"]  # ✅ Remove pending upload if duplicate found
@@ -97,9 +97,15 @@ if hypothesis_id:
                     upload_date=str(datetime.date.today()),
                     status="unprocessed"
                 )
-                del st.session_state["pending_upload"]  # ✅ Clear session state after successful upload
-                st.success(f"✅ Uploaded: {file_name}")
-                st.rerun()  # Refresh UI after upload
+
+                # ✅ Clear session state **before** rerun to avoid duplicate check error
+                del st.session_state["pending_upload"]
+                st.session_state["last_uploaded_file"] = file_name  # Store last uploaded file
+                st.session_state["last_uploaded_time"] = datetime.datetime.utcnow()  # Timestamp
+                
+                # ✅ Perform an immediate rerun
+                st.rerun()
+
 
     # 📂 Fetch and Display Uploaded Files (Only if Files Exist)
     files = list(fs.find({"hypothesis_id": hypothesis_id}))
