@@ -286,29 +286,20 @@ if hypothesis_id:
             st.warning("⚠️ No unprocessed files found. Please navigate to the **Hypothesis Manager** to upload new files.")
 
         # ⚙️ Node Type, Model Selection, and API Key Input
-        st.subheader("⚙️ Processing Configuration")
+        st.subheader("Processing Configuration")
 
         node_type = st.selectbox("Select Node Type:", ["GPT", "Anthropic", "DeepSeek"])
         model_options = {
             "GPT": [
                 "gpt-4o",          # Latest and most advanced
-                "gpt-4-turbo",      # Cost-effective, optimized for speed
-                "gpt-4",            # Standard GPT-4 model
-                "gpt-3.5-turbo",    # Faster and cheaper, great for general use
-                "gpt-3.5"           # Standard GPT-3.5 model
+                "chatgpt-4o-latest",      # Cost-effective, optimized for speed       
             ],
             "Anthropic": [
                 "claude-3-5-sonnet-20241022",  # Latest Claude 3.5 Sonnet (2024 update)
-                "claude-3-opus",               # Opus variant - most advanced
-                "claude-3-sonnet",             # Balanced option
-                "claude-3-haiku",              # Smallest model, optimized for speed
-                "claude-2.1",                  # Older version but still powerful
+                "claude-3-5-haiku-20241022"
             ],
             "DeepSeek": [
                 "deepseek-chat",     # General chat-based model
-                "deepseek-coder",    # Optimized for code-related tasks
-                "deepseek-llm",      # Large language model variant
-                "deepseek-lite"      # Lighter version for efficiency
             ]
         }
 
@@ -339,7 +330,7 @@ if hypothesis_id:
             st.warning("⚠️ No unprocessed files available for processing.")
 
         # ✅ Display Processed Analysis Results
-        st.subheader("📊 Processed Files & Results")
+        st.subheader("Processed Files & Results")
 
         # ✅ Fetch processed files sorted by the most recent processing date
         processed_files = list(fs.find(
