@@ -41,59 +41,113 @@ def save_parsed_data_to_file(file_id, parsed_data):
 
 # Sample Jinja2 template for displaying the extracted data
 TEMPLATE = """
-<div style="border: 1px solid #ddd; padding: 15px; border-radius: 8px; background-color: #f9f9f9;">
-    <h4>Parsed Data for {{ filename }}</h4>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        margin: 0;
+        padding: 0;
+    }
+    .container {
+        width: 90%;
+        max-width: 700px;
+        margin: 20px auto;
+        padding: 20px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    h3 {
+        color: #333;
+        text-align: center;
+    }
+    h4 {
+        color: #0056b3;
+    }
+    .confidence-score {
+        font-weight: bold;
+    }
+    .confidence-high { color: green; }
+    .confidence-medium { color: orange; }
+    .confidence-low { color: red; }
+    pre {
+        background-color: #eef;
+        padding: 10px;
+        border-radius: 5px;
+        white-space: pre-wrap;
+    }
+    .issues, .confidence-box {
+        padding: 15px;
+        border-radius: 8px;
+    }
+    .confidence-box { background: #eef5ff; }
+    .issues { background: #ffecec; }
+</style>
+
+<div class="container">
+    <h3>Parsed Data for {{ filename }}</h3>
 
     {% if data.confidence_assessment %}
-        <h5>Confidence Score: {{ data.confidence_assessment.confidence_score }}</h5>
-        <p><strong>Explanation:</strong> {{ data.confidence_assessment.explanation }}</p>
+        <div class="confidence-box">
+            <h4>Confidence Assessment</h4>
+            <p><strong>Score:</strong> 
+                <span class="confidence-score 
+                    {% if data.confidence_assessment.confidence_score >= 0.75 %} confidence-high
+                    {% elif data.confidence_assessment.confidence_score >= 0.5 %} confidence-medium
+                    {% else %} confidence-low
+                    {% endif %}">
+                    {{ (data.confidence_assessment.confidence_score * 100)|round(2) }}%
+                </span>
+            </p>
+            <p><strong>Explanation:</strong> {{ data.confidence_assessment.explanation }}</p>
 
-        {% if data.confidence_assessment.key_strengths %}
-            <h5>✅ Key Strengths</h5>
-            <ul>
-                {% for strength in data.confidence_assessment.key_strengths %}
-                <li>{{ strength }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
+            {% if data.confidence_assessment.key_strengths %}
+                <h4>Key Strengths</h4>
+                <ul>
+                    {% for strength in data.confidence_assessment.key_strengths %}
+                    <li>{{ strength }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
 
-        {% if data.confidence_assessment.key_limitations %}
-            <h5>⚠️ Key Limitations</h5>
-            <ul>
-                {% for limitation in data.confidence_assessment.key_limitations %}
-                <li>{{ limitation }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
+            {% if data.confidence_assessment.key_limitations %}
+                <h4>Key Limitations</h4>
+                <ul>
+                    {% for limitation in data.confidence_assessment.key_limitations %}
+                    <li>{{ limitation }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
     {% endif %}
 
     {% if data.numerical_values %}
-        <h5>📊 Numerical Values</h5>
+        <h4>Numerical Values</h4>
         <pre>{{ data.numerical_values | join(", ") }}</pre>
     {% endif %}
 
     {% if data.metadata %}
-        <h5>📝 Metadata</h5>
-        <pre>{{ data.metadata }}</pre>
+        <h4>Metadata</h4>
+        <pre>{{ data.metadata | tojson(indent=2) }}</pre>
     {% endif %}
 
     {% if data.issues %}
-        <h5>⚠️ Issues</h5>
-        <ul>
-            {% for issue in data.issues %}
-            <li>{{ issue }}</li>
-            {% endfor %}
-        </ul>
+        <div class="issues">
+            <h4>Issues</h4>
+            <ul>
+                {% for issue in data.issues %}
+                <li>{{ issue }}</li>
+                {% endfor %}
+            </ul>
+        </div>
     {% endif %}
 </div>
 """
-
 def render_parsed_data(parsed_data, filename):
     """Renders the extracted JSON into an HTML template using Jinja2."""
     template = Template(TEMPLATE)
     rendered_html = template.render(data=parsed_data, filename=filename)
     st.markdown(rendered_html, unsafe_allow_html=True)
-
 # ------------------------------------------------
 # 🔐 MongoDB Connection
 # ------------------------------------------------
