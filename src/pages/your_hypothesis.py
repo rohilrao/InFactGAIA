@@ -218,120 +218,142 @@ elif st.session_state.process_step == 2:
 
 
 elif st.session_state.process_step == 3:
-    st.header("Step 3: Reformulate & Generate Summary")
+    st.header("Step 3: Hypothesis Refinement & Summary")
 
     hypothesis_id = st.session_state.get("hypothesis_id")
     if not hypothesis_id:
         st.warning("No Hypothesis ID found. Please go back to Step 2.")
-    else:
-        # Retrieve hypothesis from DB
-        hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
-        if not hypothesis_entry:
-            st.warning("Hypothesis not found in DB. Please go back and create one.")
-        else:
-            st.subheader("Part 1: Reformulate as Yes/No Question")
-            st.write("**Current Hypothesis Text:** ", hypothesis_entry["text"])
+        st.stop()
+
+    # Retrieve hypothesis from DB
+    hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
+    if not hypothesis_entry:
+        st.warning("Hypothesis not found in DB. Please go back and create one.")
+        st.stop()
+
+    # Display the current hypothesis in minimal form
+    st.write("#### Current Hypothesis:")
+    st.write(f"**{hypothesis_entry['text']}**")
+
+    # Keep original text on hand for rewriting (if not already set)
+    original_text = hypothesis_entry.get("original_text", hypothesis_entry["text"])
+
+    # ─────────────────────────────────────────────────────────────────
+    # Expander 1: Reformulate as Yes/No
+    # ─────────────────────────────────────────────────────────────────
+    with st.expander("1. Reformulate Hypothesis (Yes/No)", expanded=False):
+        st.write(
+            "Click the button below to reformulate your hypothesis into a short, "
+            "clear Yes-No question."
+        )
+        if st.button("Reformulate Now"):
+            prompt_reformulate = (
+                f"Given this hypothesis:\n\n'{original_text}'\n\n"
+                "Rewrite it as a clear, concise Yes-No question. "
+                "Keep your response brief—ONLY return the reformulated question, nothing else."
+            )
             
-            # Store the original text if not already stored
-            original_text = hypothesis_entry.get("original_text", hypothesis_entry["text"])
+            # Call LLM
+            yes_no_formulation = call_llm(
+                provider=st.session_state["provider"],
+                model=st.session_state["model"],
+                api_key=st.session_state["api_key"],
+                prompt_text=prompt_reformulate
+            ).strip()
             
-            # FIRST LLM CALL - Reformulate to yes/no
-            if st.button("Reformulate as Yes/No Question"):
-                prompt_reformulate = (
-                    f"Given this hypothesis:\n\n'{original_text}'\n\n"
-                    "Rewrite it as a clear, concise Yes-No question. "
-                    "Keep your response brief - ONLY return the reformulated question, nothing else."
+            # Update DB
+            hypothesis_collection.update_one(
+                {"_id": hypothesis_id},
+                {"$set": {
+                    "original_text": original_text,  # store original if not set
+                    "text": yes_no_formulation       # store newly refined text
+                }}
+            )
+            st.success("Your hypothesis was reformulated as a Yes/No question!")
+            st.write("**Reformulated Hypothesis:**", yes_no_formulation)
+            
+            # Force a rerun to refresh display
+            st.experimental_rerun()
+
+    # ─────────────────────────────────────────────────────────────────
+    # Expander 2: Generate Summary
+    # Only shown if "original_text" is present => user has done at least one reformulation
+    # ─────────────────────────────────────────────────────────────────
+    if hypothesis_entry.get("original_text"):
+        with st.expander("2. Generate a Detailed Summary", expanded=False):
+            st.write("Create a concise, structured summary of the yes/no hypothesis.")
+            
+            existing_summary = hypothesis_entry.get("auto_summary")
+            if existing_summary:
+                st.write("**Existing Summary:**")
+                st.write(existing_summary)
+
+            # Button to trigger summary generation
+            if st.button("Generate or Update Summary"):
+                prompt_summary = (
+                    f"Given this yes/no hypothesis question:\n\n'{hypothesis_entry['text']}'\n\n"
+                    "Please provide:\n"
+                    "1. **Summarize existing knowledge** (short crisp points, with sources and links if possible).\n"
+                    "2. **Highlight key controversies** (if any).\n"
+                    "3. **Discuss relevant data** under two headings:\n"
+                    "   - ✅ Evidence in Favor\n"
+                    "   - ❌ Potentially Refuting Evidence\n\n"
+                    "Keep it succinct, well-structured, and visually clear.\n\n"
+                    "**Expected Output Format:**\n\n"
+                    "### Existing Knowledge:\n"
+                    "- 🔹 [Key fact 1] (Source)\n"
+                    "- 🔹 [Key fact 2] (Source)\n"
+                    "- 🔹 [Key fact 3] (Source)\n\n"
+                    "### Controversies:\n"
+                    "- ❗ [Main controversy 1]\n"
+                    "- ❗ [Main controversy 2]\n\n"
+                    "### Relevant Data:\n\n"
+                    "#### ✅ Evidence in Favor:\n"
+                    "- [Supporting evidence 1] (Study/Source)\n"
+                    "- [Supporting evidence 2] (Study/Source)\n\n"
+                    "#### ❌ Potentially Refuting Evidence:\n"
+                    "- [Counter evidence 1] (Study/Source)\n"
+                    "- [Counter evidence 2] (Study/Source)\n"
                 )
                 
-                # Call LLM for reformulation
-                yes_no_formulation = call_llm(
+                # Call LLM for summary
+                llm_response = call_llm(
                     provider=st.session_state["provider"],
                     model=st.session_state["model"],
                     api_key=st.session_state["api_key"],
-                    prompt_text=prompt_reformulate
-                ).strip()
-                
-                # Update DB - save original and update text
+                    prompt_text=prompt_summary
+                )
+
+                # Update DB
                 hypothesis_collection.update_one(
                     {"_id": hypothesis_id},
-                    {"$set": {
-                        "original_text": original_text,
-                        "text": yes_no_formulation
-                    }}
+                    {"$set": {"auto_summary": llm_response}}
                 )
                 
-                st.success("✅ Hypothesis reformulated as Yes/No question!")
-                st.write("**Reformulated Hypothesis:**", yes_no_formulation)
-                st.rerun()  # Refresh to show updated state
-            
-            # PART 2 - Generate Summary (only shown after reformulation)
-            if hypothesis_entry.get("original_text"):  # Only show if reformulation has been done
-                st.subheader("Part 2: Generate Summary")
-                st.write("**Yes/No Hypothesis:** ", hypothesis_entry["text"])
-                
-                # If there's already a summary, show it
-                if hypothesis_entry.get("auto_summary"):
-                    st.write("**Existing LLM Summary:**")
-                    st.write(hypothesis_entry["auto_summary"])
-                
-                # SECOND LLM CALL - Generate detailed summary
-                if st.button("Generate Detailed Summary"):
-                    # Build the prompt for summary
-                    prompt_summary = (
-                        f"Given this yes/no hypothesis question:\n\n'{hypothesis_entry['text']}'\n\n"
-                        "Please provide:\n"
-                        "1. **Summarize existing knowledge** (short crisp points, with sources and clickable links if possible).\n"
-                        "2. **Highlight key controversies** (if any).\n"
-                        "3. **Discuss relevant data** under two subheadings:\n"
-                        "   - ✅ Evidence in Favor\n"
-                        "   - ❌ Potentially Refuting Evidence\n\n"
-                        "Ensure the response is minimal, well-structured, and visually clear.\n\n"
-                        "**Expected Output Format:**\n\n"
-                        "### Existing Knowledge:\n"
-                        "- 🔹 [Key fact 1] (Source)\n"
-                        "- 🔹 [Key fact 2] (Source)\n"
-                        "- 🔹 [Key fact 3] (Source)\n\n"
-                        "### Controversies:\n"
-                        "- ❗ [Main controversy 1]\n"
-                        "- ❗ [Main controversy 2]\n\n"
-                        "### Relevant Data:\n\n"
-                        "#### ✅ Evidence in Favor:\n"
-                        "- [Supporting evidence 1] (Study/Source)\n"
-                        "- [Supporting evidence 2] (Study/Source)\n\n"
-                        "#### ❌ Potentially Refuting Evidence:\n"
-                        "- [Counter evidence 1] (Study/Source)\n"
-                        "- [Counter evidence 2] (Study/Source)\n"
-                    )
-                    
-                    # Call the LLM for summary
-                    llm_response = call_llm(
-                        provider=st.session_state["provider"],
-                        model=st.session_state["model"],
-                        api_key=st.session_state["api_key"],
-                        prompt_text=prompt_summary
-                    )
-                    
-                    # Store in DB, replace any existing summary
-                    hypothesis_collection.update_one(
-                        {"_id": hypothesis_id},
-                        {"$set": {"auto_summary": llm_response}}
-                    )
-                    
-                    st.success("✔️ Summary generated and saved!")
-                    st.write("**LLM Summary:**")
-                    st.write(llm_response)
+                st.success("Summary generated and saved!")
+                st.write("**New or Updated Summary:**")
+                st.write(llm_response)
+    else:
+        st.caption(
+            "A Yes/No reformulation is needed first. Please expand 'Reformulate Hypothesis' above."
+        )
 
-
-    # Navigation
+    # ─────────────────────────────────────────────────────────────────
+    # Navigation at the Bottom
+    # ─────────────────────────────────────────────────────────────────
+    st.write("---")  # Just a horizontal rule to separate content from nav
     col1, col2 = st.columns([1, 1])
+
     with col1:
         if st.button("← Back to Step 2"):
             st.session_state.process_step = 2
-            st.rerun()
+            st.experimental_rerun()
+
     with col2:
         if st.button("Next → to File Upload"):
             st.session_state.process_step = 4
-            st.rerun()
+            st.experimental_rerun()
+
 
 # ----------------------------
 # STEP 4: File Manager
