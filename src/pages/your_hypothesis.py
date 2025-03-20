@@ -245,7 +245,7 @@ elif st.session_state.process_step == 3:
         with st.spinner("🔄 Reformulating hypothesis..."):
             prompt_reformulate = (
                 f"Given this hypothesis:\n\n'{original_text}'\n\n"
-                "Rewrite it as a clear, concise Yes-No question. "
+                "Rewrite it as a clear, concise Yes-No question. The answer to the formulated question should be either 'Yes' or 'No'."
                 "Keep your response brief—ONLY return the reformulated question, nothing else."
             )
             
@@ -275,7 +275,7 @@ elif st.session_state.process_step == 3:
     # ─────────────────────────────────────────────────────────────────
     # Automatically Generate Summary with Stepwise Progress Indication
     # ─────────────────────────────────────────────────────────────────
-    if "auto_summary" not in hypothesis_entry:
+    if "auto_summary" not in hypothesis_entry or hypothesis_entry["auto_summary"] is None:
         with st.spinner("🔄 Identifying current state of the field..."):
             prompt_summary = (
                 f"Given this yes/no hypothesis question:\n\n'{hypothesis_entry['text']}'\n\n"
