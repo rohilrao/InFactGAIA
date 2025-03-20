@@ -489,113 +489,102 @@ elif st.session_state.process_step == 3:
 # ----------------------------
 # STEP 4: File Manager
 # ----------------------------
-elif st.session_state.process_step == 4:
+ elif st.session_state.process_step == 4:
     st.header("Step 4: Upload Files for Your Hypothesis")
 
     hypothesis_id = st.session_state.get("hypothesis_id", None)
     if not hypothesis_id:
         st.warning("No Hypothesis ID found in session. Please go back to Step 2.")
-    else:
-        st.subheader(f"Hypothesis ID: `{hypothesis_id}`")
+        st.stop()
 
-        # ========== FILE UPLOAD SECTION ========= #
-        uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg", "html", "csv"])
+    st.subheader(f"Hypothesis ID: `{hypothesis_id}`")
 
-        # ✅ If user removes file from the uploader, clear session state
-        if "pending_upload" in st.session_state and not uploaded_file:
-            del st.session_state["pending_upload"]
+    # ========== FILE UPLOAD SECTION ========= #
+    uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg", "html", "csv"])
 
-        if uploaded_file:
-            # ✅ Store file details temporarily
-            st.session_state["pending_upload"] = {
-                "filename": uploaded_file.name,
-                "content": uploaded_file.read()
-            }
-            st.success(f"✅ Ready to upload: {uploaded_file.name}")
+    if uploaded_file:
+        file_name = uploaded_file.name
+        file_content = uploaded_file.read()
 
-        if "pending_upload" in st.session_state:
-            file_name = st.session_state["pending_upload"]["filename"]
-            existing_file = fs.find_one({"hypothesis_id": hypothesis_id, "filename": file_name})
+        # ✅ Step 1: Pre-upload Duplicate Check (BEFORE saving to DB)
+        existing_file = fs.find_one({"hypothesis_id": hypothesis_id, "filename": file_name})
+        if existing_file:
+            st.warning(f"⚠️ A file named **{file_name}** already exists under this hypothesis. Please upload a different file.")
+        else:
+            # ✅ Step 2: Store file in GridFS
+            file_id = fs.put(
+                file_content,
+                filename=file_name,
+                hypothesis_id=hypothesis_id,
+                upload_date=str(datetime.date.today()),
+                status="unprocessed"
+            )
 
-            if existing_file:
-                st.warning(f"⚠️ A file named **{file_name}** already exists under this hypothesis.")
-                del st.session_state["pending_upload"]
-            else:
-                # ✅ Save file to GridFS
-                file_id = fs.put(
-                    st.session_state["pending_upload"]["content"],
-                    filename=file_name,
-                    hypothesis_id=hypothesis_id,
-                    upload_date=str(datetime.date.today()),
-                    status="unprocessed"
-                )
-                del st.session_state["pending_upload"]
-                st.session_state["last_uploaded_time"] = datetime.datetime.utcnow()
-                st.success(f"✅ Uploaded: {file_name}")
-                st.rerun()
+            # ✅ Store the latest uploaded file's ID in session (for displaying parsed data)
+            st.session_state["latest_uploaded_file_id"] = file_id
+            st.session_state["latest_uploaded_filename"] = file_name
+            st.success(f"✅ Uploaded: {file_name}")
+            st.rerun()
 
-        # 📂 Fetch & Display existing files
-        files = list(fs.find({"hypothesis_id": hypothesis_id}))
-        if files:
-            st.subheader("Existing Files")
+    # 📂 Fetch & Display existing files
+    files = list(fs.find({"hypothesis_id": hypothesis_id}))
+    if files:
+        st.subheader("Existing Files")
 
-            for file in files:
-                file_id = file._id  # Unique ID from GridFS
-                filename = file.filename
-                file_doc = db.fs.files.find_one({"_id": file_id})  # Get metadata from fs.files
-                status = file_doc.get("status", "unprocessed")  # Fetch processing status
+        for file in files:
+            file_id = file._id
+            filename = file.filename
+            file_doc = db.fs.files.find_one({"_id": file_id})
+            status = file_doc.get("status", "unprocessed")
 
-                # ✅ Retrieve and save file temporarily
-                temp_dir = tempfile.gettempdir()  
-                temp_file_path = os.path.join(temp_dir, filename)
+            col1, col2, col3 = st.columns([3, 1, 1])
+            with col1:
+                st.markdown(f"📄 **{filename}** - {'✅ Processed' if status == 'processed' else '⚠️ Unprocessed'}")
 
-                with open(temp_file_path, "wb") as f:
-                    f.write(fs.get(file_id).read())
+            with col2:
+                with fs.get(file_id) as grid_out:
+                    file_content = grid_out.read()
+                st.download_button("⬇️ Download", file_content, filename, key=f"download_{file_id}")
 
-                col1, col2, col3 = st.columns([3, 1, 1])
-                with col1:
-                    st.markdown(f"📄 **{filename}** - {'✅ Processed' if status == 'processed' else '⚠️ Unprocessed'}")
+            if status == "unprocessed":
+                with col3:
+                    if st.button("🗑️ Delete", key=f"delete_{file_id}"):
+                        fs.delete(file_id)
+                        st.warning(f"Deleted {filename}")
+                        st.rerun()
 
-                with col2:
-                    with fs.get(file_id) as grid_out:
-                        file_content = grid_out.read()
-                    st.download_button("⬇️ Download", file_content, filename, key=f"download_{file_id}")
+    # ✅ Step 3: Parse the Latest Uploaded File (ONLY the most recent one)
+    if "latest_uploaded_file_id" in st.session_state:
+        file_id = st.session_state["latest_uploaded_file_id"]
+        filename = st.session_state["latest_uploaded_filename"]
 
-                if status == "unprocessed":
-                    with col3:
-                        if st.button("🗑️ Delete", key=f"delete_{file_id}"):
-                            fs.delete(file_id)
-                            st.warning(f"Deleted {filename}")
-                            st.rerun()
+        # ✅ Reconstruct file from GridFS
+        temp_dir = tempfile.gettempdir()
+        temp_file_path = os.path.join(temp_dir, filename)
 
-                # ✅ Parse and store file data if unprocessed
-                if status == "unprocessed":
-                    with st.spinner(f"🔄 Parsing {filename}..."):
-                        try:
-                            hypothesis_text = st.session_state.get("hypothesis_text", "")
-                            provider = st.session_state.get("provider")
-                            model = st.session_state.get("model")
-                            api_key = st.session_state.get("api_key")
+        with open(temp_file_path, "wb") as f:
+            f.write(fs.get(file_id).read())
 
-                            # ✅ Pass the temporary file path to `parse_data()`
-                            parsed_data = parse_data(temp_file_path, hypothesis_text, provider, model, api_key)
-                            st.session_state[f"parsed_data_{file_id}"] = parsed_data
+        st.write(f"📂 **Temp file created for parsing:** `{temp_file_path}`")
 
-                            # ✅ Save parsed data in MongoDB under the file entry
-                            save_parsed_data_to_file(file_id, parsed_data)
+        # ✅ Parse the file
+        with st.spinner(f"🔄 Parsing {filename}..."):
+            try:
+                hypothesis_text = st.session_state.get("hypothesis_text", "")
+                provider = st.session_state.get("provider")
+                model = st.session_state.get("model")
+                api_key = st.session_state.get("api_key")
 
-                        except Exception as e:
-                            st.error(f"❌ Error parsing file {filename}: {str(e)}")
-                            parsed_data = None
+                parsed_data = parse_data(temp_file_path, hypothesis_text, provider, model, api_key)
+                st.session_state[f"parsed_data_{file_id}"] = parsed_data  # Store parsed data for this file
+            except Exception as e:
+                st.error(f"❌ Error parsing file {filename}: {str(e)}")
+                parsed_data = None
 
-                # ✅ Retrieve parsed data from the file entry in MongoDB
-                stored_parsed_data = file_doc.get("parsed_data", None)
-
-                if stored_parsed_data:
-                    render_parsed_data(stored_parsed_data, filename)
-                else:
-                    st.info(f"⚠️ No parsed data found for {filename}.")
-                st.write("---") # Separator between files
+        # ✅ Show parsed data for only the latest uploaded file
+        if parsed_data:
+            st.subheader(f"🔍 Parsed Data for {filename}")
+            st.json(parsed_data, expanded=False)
 
     # Navigation
     col1, col2 = st.columns([1, 1])
