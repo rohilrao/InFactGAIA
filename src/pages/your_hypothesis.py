@@ -12,8 +12,12 @@ import base64
 import pandas as pd
 import streamlit as st
 from pathlib import Path
-from src.utils import parse_data
+import os
+import tempfile
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))  # Adds "src" to path
 
+from utils import parse_data 
 
 # ------------------------------------------------
 # 🔐 MongoDB Connection
