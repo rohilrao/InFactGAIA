@@ -12,7 +12,8 @@ import base64
 import pandas as pd
 import streamlit as st
 from pathlib import Path
-from ..utils import parse_data
+from src.utils import parse_data
+
 
 # ------------------------------------------------
 # 🔐 MongoDB Connection
