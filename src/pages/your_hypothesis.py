@@ -85,7 +85,7 @@ if st.session_state.process_step == 1:
             st.session_state["model"] = model
             st.session_state["api_key"] = api_key
             st.session_state.process_step = 2
-            st.experimental_rerun()
+            st.rerun()
 
 # ----------------------------
 # STEP 2: Hypothesis Setup
@@ -104,7 +104,7 @@ elif st.session_state.process_step == 2:
     if st.button("Load / Create Hypothesis"):
         if hypothesis_id_input:
             st.session_state["hypothesis_id"] = hypothesis_id_input
-            st.experimental_rerun()
+            st.rerun()
 
     # If we have a stored hypothesis ID in session
     hypothesis_id = st.session_state.get("hypothesis_id", None)
@@ -126,7 +126,7 @@ elif st.session_state.process_step == 2:
                         "auto_summary": None    # We'll fill in Step 3
                     })
                     st.success("✅ Hypothesis saved successfully!")
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.warning("⚠️ Hypothesis text cannot be empty!")
 
@@ -135,13 +135,13 @@ elif st.session_state.process_step == 2:
     with col1:
         if st.button("← Back"):
             st.session_state.process_step = 1
-            st.experimental_rerun()
+            st.rerun()
     with col2:
         if hypothesis_id:
             # Only allow Next if we have a valid hypothesis
             if st.button("Next →", key="to_step_3"):
                 st.session_state.process_step = 3
-                st.experimental_rerun()
+                st.rerun()
 
 # ----------------------------
 # STEP 3: Generate Summary
@@ -205,11 +205,11 @@ elif st.session_state.process_step == 3:
     with col1:
         if st.button("← Back to Step 2"):
             st.session_state.process_step = 2
-            st.experimental_rerun()
+            st.rerun()
     with col2:
         if st.button("Next → to File Upload"):
             st.session_state.process_step = 4
-            st.experimental_rerun()
+            st.rerun()
 
 # ----------------------------
 # STEP 4: File Manager
@@ -259,7 +259,7 @@ elif st.session_state.process_step == 4:
                     st.session_state["last_uploaded_file"] = file_name
                     st.session_state["last_uploaded_time"] = datetime.datetime.utcnow()
                     st.success(f"Uploaded: {file_name}")
-                    st.experimental_rerun()
+                    st.rerun()
 
         # 📂 Fetch & Display existing files
         files = list(fs.find({"hypothesis_id": hypothesis_id}))
@@ -287,7 +287,7 @@ elif st.session_state.process_step == 4:
                         if st.button("🗑️ Delete", key=f"delete_{file_id}"):
                             fs.delete(ObjectId(file_id))
                             st.warning(f"Deleted {filename}")
-                            st.experimental_rerun()
+                            st.rerun()
         else:
             st.info("⚠️ No files found for this hypothesis.")
 
@@ -296,10 +296,10 @@ elif st.session_state.process_step == 4:
     with col1:
         if st.button("← Back to Step 3"):
             st.session_state.process_step = 3
-            st.experimental_rerun()
+            st.rerun()
     with col2:
         if st.button("Finish"):
             st.success("All steps completed!")
             # You could reset the wizard or navigate away:
             # st.session_state.process_step = 1
-            # st.experimental_rerun()
+            # st.rerun()
