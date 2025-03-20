@@ -105,93 +105,110 @@ elif st.session_state.process_step == 2:
     st.header("Step 2: Hypothesis Setup")
 
     st.markdown("""
-    ### Enter a short identifier (ID) and the hypothesis text.
-    - If the ID already exists, you can load it.
-    - Otherwise, you can create a new hypothesis.
+    ### Enter a short identifier (ID) for the hypothesis.
+    - If the ID already exists, we will load it in read-only form.
+    - If the ID does not exist, you can create a new hypothesis below.
     """)
 
+    # Ensure we track existence checks
     if "id_exists" not in st.session_state:
         st.session_state["id_exists"] = None
 
-    # ----------------------------------------------------------------
-    # ID input with on_change to dynamically check the DB
-    # ----------------------------------------------------------------
+    # 1) ID input with on_change to dynamically check the DB
     st.text_input(
         "Hypothesis ID (short name)",
         key="hypothesis_id_input",
-        on_change=check_hypothesis_id  # <-- your existing function
+        on_change=check_hypothesis_id  # your existing function; sets st.session_state["id_exists"] to True/False
     )
 
-    # Display dynamic messaging based on whether the ID exists
-    if st.session_state["id_exists"] is True:
-        st.info("An existing hypothesis with this ID was found in the database.")
-    elif st.session_state["id_exists"] is False:
-        st.warning("No existing hypothesis found for this ID. You may create one below.")
+    # 2) Check existence
+    hypothesis_id = st.session_state.get("hypothesis_id_input", "").strip()
+    loaded_text = None
+
+    if hypothesis_id and st.session_state["id_exists"] is True:
+        # The ID exists in DB => fetch its text
+        doc = hypothesis_collection.find_one({"_id": hypothesis_id})
+        if doc:
+            loaded_text = doc["text"]
+        else:
+            # If 'id_exists' = True but doc not found => inconsistent, but let's handle gracefully
+            st.error("Inconsistent state: ID said to exist, but not found in DB.")
+            st.stop()
+
+        # Put the existing text in session_state for display (read-only)
+        st.session_state["hypothesis_text_input"] = loaded_text
+
+        st.info(f"Loaded existing hypothesis with ID '{hypothesis_id}'. You cannot overwrite it.")
+    elif hypothesis_id and st.session_state["id_exists"] is False:
+        st.warning("No existing hypothesis found for this ID. You can create a new one below.")
     else:
         st.write("Please enter an ID above to check availability.")
 
-    # ----------------------------------------------------------------
-    # Hypothesis Text
-    # ----------------------------------------------------------------
-    st.markdown("#### Hypothesis Text (cannot be edited after creation):")
-    st.text_area("Enter your hypothesis details here", key="hypothesis_text_input")
+    # 3) Display text area
+    #    If ID exists => show read-only text area with loaded_text
+    #    If ID does not exist => editable text area for new text
+    if st.session_state["id_exists"] is True and loaded_text:
+        # Show read-only text area for existing ID
+        st.markdown("#### Existing Hypothesis Text (read-only):")
+        st.text_area(
+            "Existing Hypothesis Text",
+            value=loaded_text,
+            disabled=True
+        )
+    else:
+        # ID does not exist, so let user type a new text
+        st.markdown("#### New Hypothesis Text (cannot be edited after creation):")
+        st.text_area(
+            "Enter your hypothesis details here",
+            key="hypothesis_text_input"  # updatable in session
+        )
 
-    # ----------------------------------------------------------------
-    # Navigation Buttons
-    # ----------------------------------------------------------------
+    # 4) Navigation Buttons
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col1:
+        # "← Back"
         if st.button("← Back"):
             st.session_state.process_step = 1
             st.experimental_rerun()
 
     with col2:
-        # Button to "Load / Create" hypothesis
-        if st.button("Load / Create Hypothesis"):
-            hypothesis_id = st.session_state.get("hypothesis_id_input", "").strip()
-            hypothesis_text = st.session_state.get("hypothesis_text_input", "").strip()
-
-            # 1) Verify we have an ID
-            if not hypothesis_id:
-                st.warning("⚠️ Please enter a Hypothesis ID.")
-                st.stop()  # Stop here - do not insert or load anything
-
-            # 2) If the ID is known to exist, load it
-            if st.session_state["id_exists"] is True:
-                hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
-                if not hypothesis_entry:
-                    st.error("Inconsistent state: 'id_exists' is True, but no entry found.")
-                    st.stop()  # Stop here
-
-                st.session_state["hypothesis_id"] = hypothesis_id
-                st.success(f"Loaded existing hypothesis: {hypothesis_entry['text']}")
-                st.experimental_rerun()
-
-            # 3) If the ID does NOT exist, create a new hypothesis
-            else:
-                if not hypothesis_text:
-                    st.warning("⚠️ Please enter some text to create a new hypothesis.")
+        # Only show "Create Hypothesis" if ID doesn't exist
+        if st.session_state["id_exists"] is False and hypothesis_id:
+            if st.button("Create Hypothesis"):
+                # Must have text
+                new_text = st.session_state.get("hypothesis_text_input", "").strip()
+                if not new_text:
+                    st.warning("⚠️ Please enter text before creating a new hypothesis.")
                     st.stop()
 
-                # Insert new doc with both original_text and text
+                # Insert new doc
                 hypothesis_collection.insert_one({
                     "_id": hypothesis_id,
-                    "original_text": hypothesis_text,
-                    "text": hypothesis_text,
+                    "original_text": new_text,
+                    "text": new_text,
                     "auto_summary": None
                 })
                 st.session_state["hypothesis_id"] = hypothesis_id
                 st.success(f"✅ Created new hypothesis with ID '{hypothesis_id}'")
                 st.experimental_rerun()
+        else:
+            # If ID exists, user can't create or overwrite
+            st.caption("No creation needed if ID already exists.")
 
-    # ----------------------------------------------------------------
-    # "Next →" button
-    # Only active if we have a valid hypothesis loaded or created
-    # ----------------------------------------------------------------
     with col3:
-        if st.session_state.get("hypothesis_id", None):
+        # "Next →" button
+        # We only allow going forward if we have an existing or newly created hypothesis_id
+        # i.e. either st.session_state["id_exists"] is True OR we've just created a new one
+        already_in_db = (st.session_state["id_exists"] is True and hypothesis_id)
+        newly_created = st.session_state.get("hypothesis_id") == hypothesis_id and hypothesis_id
+        can_proceed = already_in_db or newly_created
+
+        if can_proceed:
             if st.button("Next →"):
+                # Save the "active" hypothesis ID in session, if not already set
+                if "hypothesis_id" not in st.session_state:
+                    st.session_state["hypothesis_id"] = hypothesis_id
                 st.session_state.process_step = 3
                 st.experimental_rerun()
 
