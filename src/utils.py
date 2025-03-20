@@ -123,14 +123,14 @@ def parse_data(file_path: str, hypothesis: str, provider: str, model: str, api_k
 
         try:
             if provider == "GPT":
-                openai.api_key = api_key
-                response = openai.ChatCompletion.create(
+                client = OpenAI(api_key=api_key)
+                response = client.chat.completions.create(
                     model=model,
                     max_tokens=8192,
                     temperature=0.1,
                     messages=[{"role": "user", "content": message_content}],
                 )
-                response_text = response["choices"][0]["message"]["content"]
+                response_text = response.choices[0].message.content
             elif provider == "Anthropic":
                 client = Anthropic(api_key=api_key)
                 message = client.messages.create(
@@ -152,13 +152,14 @@ def parse_data(file_path: str, hypothesis: str, provider: str, model: str, api_k
                             item["text"] = c[:10000] + "\n... [truncated] ..."
                 try:
                     if provider == "GPT":
-                        response = openai.ChatCompletion.create(
+                        client = OpenAI(api_key=api_key)
+                        response = client.chat.completions.create(
                             model=model,
                             max_tokens=8192,
                             temperature=0.1,
                             messages=[{"role": "user", "content": message_content}],
                         )
-                        response_text = response["choices"][0]["message"]["content"]
+                        response_text = response.choices[0].message.content
                     elif provider == "Anthropic":
                         client = Anthropic(api_key=api_key)
                         message = client.messages.create(
