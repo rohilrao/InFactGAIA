@@ -5,7 +5,7 @@ import datetime
 from bson.objectid import ObjectId
 from pymongo.server_api import ServerApi
 import openai
-from anthropic import Client
+from anthropic import Anthropic
 
 # ------------------------------------------------
 # 🔐 MongoDB Connection
@@ -25,32 +25,31 @@ hypothesis_collection = db["hypotheses"]
 # ------------------------------------------------
 def call_llm(provider, model, api_key, prompt_text):
     """
-    Example function to call GPT or Anthropic. 
-    Replace with your real library calls.
+    Function to call GPT or Anthropic.
     """
-    # Pseudocode for GPT
+    # For GPT
     if provider == "GPT":
         openai.api_key = api_key
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model=model,
             max_tokens=8192,
             messages=[{"role": "user", "content": prompt_text}],
             temperature=0.1
         )
-        return response.choices[0].message["content"]
+        return response.choices[0].message.content
 
-
-    # Pseudocode for Anthropic
+    # For Anthropic
     elif provider == "Anthropic":
-        client = Client(api_key)
-        response = client.messages.create(
+        client = Anthropic(api_key=api_key)
+        message = client.messages.create(
             model=model,
             max_tokens=8192,
             temperature=0.1,
-            messages=[{"role": "user", "content": prompt_text}]
+            messages=[
+                {"role": "user", "content": prompt_text}
+            ]
         )
-        return response["completion"]
-        
+        return message.content[0].text
 
     else:
         raise ValueError("Unsupported provider")
@@ -256,7 +255,7 @@ elif st.session_state.process_step == 4:
                         status="unprocessed"
                     )
                     del st.session_state["pending_upload"]
-                    st.session_state["last_uploaded_file"] = file_name
+                    st.session_state["last_uploaded_time"] = datetime.datetime.now(datetime.timezone.utc)
                     st.session_state["last_uploaded_time"] = datetime.datetime.utcnow()
                     st.success(f"Uploaded: {file_name}")
                     st.rerun()
