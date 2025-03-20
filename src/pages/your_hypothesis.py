@@ -332,12 +332,12 @@ elif st.session_state.process_step == 3:
     with col1:
         if st.button("← Back to Step 2"):
             st.session_state.process_step = 2
-            st.experimental_rerun()
+            st.rerun()
 
     with col2:
         if st.button("Next → to File Upload"):
             st.session_state.process_step = 4
-            st.experimental_rerun()
+            st.rerun()
 
 
 
