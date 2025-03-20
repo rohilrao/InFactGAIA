@@ -143,11 +143,15 @@ TEMPLATE = """
     {% endif %}
 </div>
 """
+import streamlit.components.v1 as components
+
 def render_parsed_data(parsed_data, filename):
-    """Renders the extracted JSON into an HTML template using Jinja2."""
+    """Renders the extracted JSON into an HTML template using Jinja2 and properly displays it in Streamlit."""
     template = Template(TEMPLATE)
     rendered_html = template.render(data=parsed_data, filename=filename)
-    st.markdown(rendered_html, unsafe_allow_html=True)
+
+    # ✅ Ensure Streamlit renders full HTML properly
+    components.html(rendered_html, height=600, scrolling=True)
 # ------------------------------------------------
 # 🔐 MongoDB Connection
 # ------------------------------------------------
