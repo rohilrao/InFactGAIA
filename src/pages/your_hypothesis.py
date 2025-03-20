@@ -490,6 +490,8 @@ elif st.session_state.process_step == 3:
 # STEP 4: File Manager
 # ----------------------------
 
+
+
 elif st.session_state.process_step == 4:
     st.header("Step 4: Upload Files for Your Hypothesis")
 
@@ -507,38 +509,42 @@ elif st.session_state.process_step == 4:
         file_name = uploaded_file.name
         file_content = uploaded_file.read()
 
-        # ✅ Step 1: Proper Duplicate Check BEFORE Upload
-        existing_file = fs.find_one({"hypothesis_id": hypothesis_id, "filename": file_name})
+        # ✅ FIXED DUPLICATE CHECK: Check inside `fs.files`
+        existing_file = db.fs.files.find_one(
+            {"metadata.hypothesis_id": hypothesis_id, "filename": file_name}
+        )
 
         if existing_file:
-            st.warning(f"⚠️ A file named **{file_name}** already exists under this hypothesis. Please upload a different file.")
+            st.warning(f"⚠️ A file named **{file_name}** already exists under hypothesis `{hypothesis_id}`. Please upload a different file.")
         else:
             # ✅ Step 2: Save file to GridFS
             file_id = fs.put(
                 file_content,
                 filename=file_name,
-                hypothesis_id=hypothesis_id,
+                metadata={"hypothesis_id": hypothesis_id},
                 upload_date=str(datetime.date.today()),
             )
 
-            # ✅ Store latest uploaded file ID in session
+            # ✅ Store latest uploaded file ID in session & mark parsing as active
             st.session_state["latest_uploaded_file_id"] = file_id
             st.session_state["latest_uploaded_filename"] = file_name
+            st.session_state["is_parsing"] = True  # 🚀 **NEW: Mark that parsing is happening**
             st.success(f"✅ Uploaded: {file_name}")
+
             st.rerun()
 
     # 📂 Fetch & Display existing files
-    files = list(fs.find({"hypothesis_id": hypothesis_id}))
+    files = list(db.fs.files.find({"metadata.hypothesis_id": hypothesis_id}))  # ✅ Proper query
     if files:
         st.subheader("Existing Files")
 
         for file in files:
-            file_id = file._id
-            filename = file.filename
+            file_id = file["_id"]
+            filename = file["filename"]
 
             col1, col2, col3 = st.columns([3, 1, 1])
             with col1:
-                st.markdown(f"📄 **{filename}**")  # ✅ NO "PROCESSED" STATUS SHOWN
+                st.markdown(f"📄 **{filename}**")
 
             with col2:
                 with fs.get(file_id) as grid_out:
@@ -546,10 +552,14 @@ elif st.session_state.process_step == 4:
                 st.download_button("⬇️ Download", file_content, filename, key=f"download_{file_id}")
 
             with col3:
-                if st.button("🗑️ Delete", key=f"delete_{file_id}"):
-                    fs.delete(file_id)
-                    st.warning(f"Deleted {filename}")
-                    st.rerun()
+                # ❌ **FIXED: Prevent Deleting While Parsing**
+                if st.session_state.get("is_parsing") and st.session_state.get("latest_uploaded_file_id") == file_id:
+                    st.button("🔄 Parsing...", disabled=True, key=f"disable_delete_{file_id}")  # **Disable delete**
+                else:
+                    if st.button("🗑️ Delete", key=f"delete_{file_id}"):
+                        fs.delete(file_id)
+                        st.warning(f"Deleted {filename}")
+                        st.rerun()
 
     # ✅ Step 3: Parse the Latest Uploaded File (ONLY the most recent one)
     if "latest_uploaded_file_id" in st.session_state:
@@ -563,7 +573,7 @@ elif st.session_state.process_step == 4:
         with open(temp_file_path, "wb") as f:
             f.write(fs.get(file_id).read())
 
-        #st.write(f"📂 **Temp file created for parsing:** `{temp_file_path}`")
+        st.write(f"📂 **Temp file created for parsing:** `{temp_file_path}`")
 
         # ✅ Parse the file
         with st.spinner(f"🔄 Parsing {filename}..."):
@@ -579,6 +589,9 @@ elif st.session_state.process_step == 4:
             except Exception as e:
                 st.error(f"❌ Error parsing file {filename}: {str(e)}")
                 parsed_data = None
+
+        # ✅ **FINALLY: Mark Parsing as Done**
+        st.session_state["is_parsing"] = False
 
         # ✅ Show parsed data using `render_parsed_data`
         if parsed_data:
