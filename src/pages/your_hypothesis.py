@@ -489,6 +489,7 @@ elif st.session_state.process_step == 3:
 # ----------------------------
 # STEP 4: File Manager
 # ----------------------------
+
 elif st.session_state.process_step == 4:
     st.header("Step 4: Upload Files for Your Hypothesis")
 
@@ -506,21 +507,21 @@ elif st.session_state.process_step == 4:
         file_name = uploaded_file.name
         file_content = uploaded_file.read()
 
-        # ✅ Step 1: Pre-upload Duplicate Check (BEFORE saving to DB)
+        # ✅ Step 1: Proper Duplicate Check BEFORE Upload
         existing_file = fs.find_one({"hypothesis_id": hypothesis_id, "filename": file_name})
+
         if existing_file:
             st.warning(f"⚠️ A file named **{file_name}** already exists under this hypothesis. Please upload a different file.")
         else:
-            # ✅ Step 2: Store file in GridFS
+            # ✅ Step 2: Save file to GridFS
             file_id = fs.put(
                 file_content,
                 filename=file_name,
                 hypothesis_id=hypothesis_id,
                 upload_date=str(datetime.date.today()),
-                status="unprocessed"
             )
 
-            # ✅ Store the latest uploaded file's ID in session (for displaying parsed data)
+            # ✅ Store latest uploaded file ID in session
             st.session_state["latest_uploaded_file_id"] = file_id
             st.session_state["latest_uploaded_filename"] = file_name
             st.success(f"✅ Uploaded: {file_name}")
@@ -534,24 +535,21 @@ elif st.session_state.process_step == 4:
         for file in files:
             file_id = file._id
             filename = file.filename
-            file_doc = db.fs.files.find_one({"_id": file_id})
-            status = file_doc.get("status", "unprocessed")
 
             col1, col2, col3 = st.columns([3, 1, 1])
             with col1:
-                st.markdown(f"📄 **{filename}** - {'✅ Processed' if status == 'processed' else '⚠️ Unprocessed'}")
+                st.markdown(f"📄 **{filename}**")  # ✅ NO "PROCESSED" STATUS SHOWN
 
             with col2:
                 with fs.get(file_id) as grid_out:
                     file_content = grid_out.read()
                 st.download_button("⬇️ Download", file_content, filename, key=f"download_{file_id}")
 
-            if status == "unprocessed":
-                with col3:
-                    if st.button("🗑️ Delete", key=f"delete_{file_id}"):
-                        fs.delete(file_id)
-                        st.warning(f"Deleted {filename}")
-                        st.rerun()
+            with col3:
+                if st.button("🗑️ Delete", key=f"delete_{file_id}"):
+                    fs.delete(file_id)
+                    st.warning(f"Deleted {filename}")
+                    st.rerun()
 
     # ✅ Step 3: Parse the Latest Uploaded File (ONLY the most recent one)
     if "latest_uploaded_file_id" in st.session_state:
@@ -565,7 +563,7 @@ elif st.session_state.process_step == 4:
         with open(temp_file_path, "wb") as f:
             f.write(fs.get(file_id).read())
 
-        st.write(f"📂 **Temp file created for parsing:** `{temp_file_path}`")
+        #st.write(f"📂 **Temp file created for parsing:** `{temp_file_path}`")
 
         # ✅ Parse the file
         with st.spinner(f"🔄 Parsing {filename}..."):
@@ -577,14 +575,15 @@ elif st.session_state.process_step == 4:
 
                 parsed_data = parse_data(temp_file_path, hypothesis_text, provider, model, api_key)
                 st.session_state[f"parsed_data_{file_id}"] = parsed_data  # Store parsed data for this file
+
             except Exception as e:
                 st.error(f"❌ Error parsing file {filename}: {str(e)}")
                 parsed_data = None
 
-        # ✅ Show parsed data for only the latest uploaded file
+        # ✅ Show parsed data using `render_parsed_data`
         if parsed_data:
             st.subheader(f"🔍 Parsed Data for {filename}")
-            st.json(parsed_data, expanded=False)
+            render_parsed_data(parsed_data, filename)
 
     # Navigation
     col1, col2 = st.columns([1, 1])
