@@ -489,7 +489,7 @@ elif st.session_state.process_step == 3:
 # ----------------------------
 # STEP 4: File Manager
 # ----------------------------
- elif st.session_state.process_step == 4:
+elif st.session_state.process_step == 4:
     st.header("Step 4: Upload Files for Your Hypothesis")
 
     hypothesis_id = st.session_state.get("hypothesis_id", None)
