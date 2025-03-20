@@ -20,6 +20,25 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) 
 from utils import parse_data 
 from jinja2 import Template
 
+
+# ✅ Function to store parsed data in MongoDB under the file entry in `fs.files`
+def save_parsed_data_to_file(file_id, parsed_data):
+    """
+    Updates the MongoDB GridFS file entry with parsed data.
+    """
+    try:
+        db.fs.files.update_one(
+            {"_id": file_id},  # Update file by its unique ID
+            {"$set": {
+                "parsed_data": parsed_data,
+                "status": "processed"  # Mark file as processed
+            }}
+        )
+        st.success(f"✅ Parsed data stored successfully for file ID: {file_id}")
+    except Exception as e:
+        st.error(f"❌ Failed to save parsed data: {str(e)}")
+
+
 # Sample Jinja2 template for displaying the extracted data
 TEMPLATE = """
 <div style="border: 1px solid #ddd; padding: 15px; border-radius: 8px; background-color: #f9f9f9;">
@@ -460,58 +479,65 @@ elif st.session_state.process_step == 4:
         # 📂 Fetch & Display existing files
         files = list(fs.find({"hypothesis_id": hypothesis_id}))
         if files:
-            st.subheader("Existing Files")
+    st.subheader("Existing Files")
 
-            for file in files:
-                file_id = file._id
-                filename = file.filename
-                status = file.status
+    for file in files:
+        file_id = file._id  # Unique ID from GridFS
+        filename = file.filename
+        file_doc = db.fs.files.find_one({"_id": file_id})  # Get metadata from fs.files
+        status = file_doc.get("status", "unprocessed")  # Fetch processing status
 
-                # ✅ Reconstruct file from GridFS and save it as a temp file
-                temp_dir = tempfile.gettempdir()  # System temp directory
-                temp_file_path = os.path.join(temp_dir, filename)
+        # ✅ Retrieve and save file temporarily
+        temp_dir = tempfile.gettempdir()  
+        temp_file_path = os.path.join(temp_dir, filename)
 
-                with open(temp_file_path, "wb") as f:
-                    f.write(fs.get(file_id).read())
+        with open(temp_file_path, "wb") as f:
+            f.write(fs.get(file_id).read())
 
-                st.write(f"📂 **Temp file created for processing:** `{temp_file_path}`")
+        col1, col2, col3 = st.columns([3, 1, 1])
+        with col1:
+            st.markdown(f"📄 **{filename}** - {'✅ Processed' if status == 'processed' else '⚠️ Unprocessed'}")
 
-                col1, col2, col3 = st.columns([3, 1, 1])
-                with col1:
-                    st.markdown(f"📄 **{filename}** - {'✅ Processed' if status == 'processed' else '⚠️ Unprocessed'}")
+        with col2:
+            with fs.get(file_id) as grid_out:
+                file_content = grid_out.read()
+            st.download_button("⬇️ Download", file_content, filename, key=f"download_{file_id}")
 
-                with col2:
-                    with fs.get(file_id) as grid_out:
-                        file_content = grid_out.read()
-                    st.download_button("⬇️ Download", file_content, filename, key=f"download_{file_id}")
+        if status == "unprocessed":
+            with col3:
+                if st.button("🗑️ Delete", key=f"delete_{file_id}"):
+                    fs.delete(file_id)
+                    st.warning(f"Deleted {filename}")
+                    st.rerun()
 
-                if status == "unprocessed":
-                    with col3:
-                        if st.button("🗑️ Delete", key=f"delete_{file_id}"):
-                            fs.delete(file_id)
-                            st.warning(f"Deleted {filename}")
-                            st.rerun()
+        # ✅ Parse and store file data if unprocessed
+        if status == "unprocessed":
+            with st.spinner(f"🔄 Parsing {filename}..."):
+                try:
+                    hypothesis_text = st.session_state.get("hypothesis_text", "")
+                    provider = st.session_state.get("provider")
+                    model = st.session_state.get("model")
+                    api_key = st.session_state.get("api_key")
 
-                # ✅ Automatically parse the file
-                with st.spinner(f"🔄 Parsing {filename}..."):
-                    try:
-                        hypothesis_text = st.session_state.get("hypothesis_text", "")
-                        provider = st.session_state.get("provider")
-                        model = st.session_state.get("model")
-                        api_key = st.session_state.get("api_key")
+                    # ✅ Pass the temporary file path to `parse_data()`
+                    parsed_data = parse_data(temp_file_path, hypothesis_text, provider, model, api_key)
+                    st.session_state[f"parsed_data_{file_id}"] = parsed_data
 
-                        # ✅ Pass the temporary file path to `parse_data()`
-                        parsed_data = parse_data(temp_file_path, hypothesis_text, provider, model, api_key)
-                        st.session_state[f"parsed_data_{file_id}"] = parsed_data
-                    except Exception as e:
-                        st.error(f"❌ Error parsing file {filename}: {str(e)}")
-                        parsed_data = None
+                    # ✅ Save parsed data in MongoDB under the file entry
+                    save_parsed_data_to_file(file_id, parsed_data)
 
-                # ✅ Show parsed data
-                if parsed_data:
-                    render_parsed_data(parsed_data, filename)
+                except Exception as e:
+                    st.error(f"❌ Error parsing file {filename}: {str(e)}")
+                    parsed_data = None
+
+        # ✅ Retrieve parsed data from the file entry in MongoDB
+        stored_parsed_data = file_doc.get("parsed_data", None)
+
+        if stored_parsed_data:
+            render_parsed_data(stored_parsed_data, filename)
         else:
-            st.info("⚠️ No files found for this hypothesis.")
+            st.info(f"⚠️ No parsed data found for {filename}.")
+        st.write("---") # Separator between files
 
     # Navigation
     col1, col2 = st.columns([1, 1])
