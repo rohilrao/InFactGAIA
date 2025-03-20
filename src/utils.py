@@ -9,6 +9,201 @@ from GptInFactNode import GptInFactNode
 from DeepSeekInFactNode import DeepSeekInFactNode
 from InFactRenderer import InFactRenderer
 from IPython.display import HTML, display
+from openai import OpenAI
+
+from typing import Any, Dict, Union, List, Tuple
+import json
+import logging
+from pathlib import Path
+import os
+import base64
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from autogen.code_utils import extract_code
+import numpy as np
+from dataclasses import dataclass
+import math
+from typing import List, Tuple, Dict, Optional
+import json
+import pdfplumber
+
+import os
+import json
+import base64
+import openai
+import pandas as pd
+from pathlib import Path
+from typing import Dict
+from anthropic import Anthropic
+
+
+def parse_data(file_path: str, hypothesis: str, provider: str, model: str, api_key: str) -> Dict:
+    file_type = Path(file_path).suffix.lower()
+    try:
+        if file_type == ".csv":
+            df = pd.read_csv(file_path)
+            content = df.to_string()
+            message_content = [{"type": "text", "text": content}]
+        elif file_type in [".pdf", ".PDF"]:
+            with open(file_path, "rb") as f:
+                pdf_data = base64.b64encode(f.read()).decode("utf-8")
+            message_content = [
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": pdf_data
+                    }
+                }
+            ]
+        elif file_type in [".png", ".jpg", ".jpeg", ".gif", ".webp"]:
+            with open(file_path, "rb") as f:
+                img_data = base64.b64encode(f.read()).decode("utf-8")
+            media_type = {
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".gif": "image/gif",
+                ".webp": "image/webp"
+            }[file_type]
+            message_content = [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": img_data
+                    }
+                }
+            ]
+        else:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            message_content = [{"type": "text", "text": content}]
+
+        prompt = f"""Extract relevant data points for evaluating the hypothesis:
+        "{hypothesis}"
+
+        Provide your response as a JSON code block, like this:
+        ```json
+        {{
+            "numerical_values": [],
+            "metadata": {{}},
+            "issues": [],
+            "confidence_assessment": {{
+                "confidence_score": 0.75,
+                "explanation": "Detailed explanation of confidence level",
+                "key_strengths": [
+                    "Strength 1",
+                    "Strength 2"
+                ],
+                "key_limitations": [
+                    "Limitation 1",
+                    "Limitation 2"
+                ]
+            }}
+        }}
+        ```
+        
+        The confidence_assessment should:
+        1. Include a confidence_score between 0 and 1
+        2. Provide a detailed explanation of the confidence level
+        3. List key strengths of the evidence
+        4. List key limitations or potential issues
+        
+        The overall JSON should include:
+        1. Extracted numerical values and their uncertainties
+        2. Relevant metadata (source quality, methodology, etc.)
+        3. Any potential issues or biases in the data
+        """
+
+        message_content.append({"type": "text", "text": prompt})
+
+        try:
+            if provider == "GPT":
+                openai.api_key = api_key
+                response = openai.ChatCompletion.create(
+                    model=model,
+                    max_tokens=8192,
+                    temperature=0.1,
+                    messages=[{"role": "user", "content": message_content}],
+                )
+                response_text = response["choices"][0]["message"]["content"]
+            elif provider == "Anthropic":
+                client = Anthropic(api_key=api_key)
+                message = client.messages.create(
+                    model=model,
+                    max_tokens=8192,
+                    temperature=0.1,
+                    messages=[{"role": "user", "content": message_content}],
+                )
+                response_text = message.content[0].text
+            else:
+                return {"error": "Unsupported LLM provider"}
+        except Exception as e:
+            error_message = str(e)
+            if "429" in error_message or "rate_limit_error" in error_message:
+                for item in message_content:
+                    if item["type"] == "text":
+                        c = item["text"]
+                        if len(c) > 10000:
+                            item["text"] = c[:10000] + "\n... [truncated] ..."
+                try:
+                    if provider == "GPT":
+                        response = openai.ChatCompletion.create(
+                            model=model,
+                            max_tokens=8192,
+                            temperature=0.1,
+                            messages=[{"role": "user", "content": message_content}],
+                        )
+                        response_text = response["choices"][0]["message"]["content"]
+                    elif provider == "Anthropic":
+                        client = Anthropic(api_key=api_key)
+                        message = client.messages.create(
+                            model=model,
+                            max_tokens=8192,
+                            temperature=0.1,
+                            messages=[{"role": "user", "content": message_content}],
+                        )
+                        response_text = message.content[0].text
+                    else:
+                        return {"error": "Unsupported LLM provider"}
+                except Exception as retry_error:
+                    return {
+                        "error": "Rate limit exceeded even after truncation",
+                        "details": str(retry_error),
+                    }
+            else:
+                return {"error": error_message}
+
+        if not response_text:
+            return {"error": "No response from LLM"}
+
+        try:
+            extracted_blocks = extract_code(response_text)
+            json_str = None
+            for lang, block in extracted_blocks:
+                if lang.lower() in ["json", ""]:
+                    try:
+                        json.loads(block)
+                        json_str = block
+                        break
+                    except json.JSONDecodeError:
+                        continue
+            if not json_str:
+                json_str = response_text
+            parsed_data = json.loads(json_str)
+            return parsed_data
+        except json.JSONDecodeError:
+            return {
+                "extraction_error": "Failed to parse LLM response",
+                "raw_response": response_text
+            }
+    except Exception as e:
+        return {"error": str(e)}
+    
 
 # ✅ Function to get processed files JSON path
 def get_processed_log_path(node_type, results_dir):

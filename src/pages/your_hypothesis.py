@@ -6,6 +6,13 @@ from bson.objectid import ObjectId
 from pymongo.server_api import ServerApi
 import openai
 from anthropic import Anthropic
+import json
+import datetime
+import base64
+import pandas as pd
+import streamlit as st
+from pathlib import Path
+from ..utils import parse_data
 
 # ------------------------------------------------
 # 🔐 MongoDB Connection
@@ -241,12 +248,12 @@ elif st.session_state.process_step == 3:
     # ─────────────────────────────────────────────────────────────────
     # Automatically Reformulate as Yes/No with Progress Indicator
     # ─────────────────────────────────────────────────────────────────
-    if "yes_no_formulation" not in hypothesis_entry:
+    if "yes_no_formulation" not in hypothesis_entry or hypothesis_entry.get("yes_no_formulation") is None:
         with st.spinner("🔄 Reformulating hypothesis..."):
             prompt_reformulate = (
                 f"Given this hypothesis:\n\n'{original_text}'\n\n"
-                "Rewrite it as a clear, concise Yes-No question. The answer to the formulated question should be either 'Yes' or 'No'."
-                "Keep your response brief—ONLY return the reformulated question, nothing else."
+                "Rewrite/Reformulate it as a clear, concise Yes-No question. The answer to the reformulated question should be either 'Yes' or 'No'."
+                "Keep your response brief — ONLY return the reformulated question, nothing else."
             )
             
             # Call LLM
@@ -353,8 +360,8 @@ elif st.session_state.process_step == 4:
     else:
         st.subheader(f"Hypothesis ID: `{hypothesis_id}`")
 
-        # ========== FILE UPLOAD SECTION (As in your original code) ========= #
-        uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg", "html"])
+        # ========== FILE UPLOAD SECTION ========= #
+        uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg", "html", "csv"])
 
         # ✅ If user removes file from the uploader, clear session state
         if "pending_upload" in st.session_state and not uploaded_file:
@@ -370,54 +377,80 @@ elif st.session_state.process_step == 4:
 
         if "pending_upload" in st.session_state:
             file_name = st.session_state["pending_upload"]["filename"]
-            # Check if this file already exists under the given hypothesis
             existing_file = fs.find_one({"hypothesis_id": hypothesis_id, "filename": file_name})
 
             if existing_file:
                 st.warning(f"⚠️ A file named **{file_name}** already exists under this hypothesis.")
-                del st.session_state["pending_upload"]  # Remove pending if duplicate found
+                del st.session_state["pending_upload"]
             else:
-                if st.button("Confirm Upload"):
-                    file_id = fs.put(
-                        st.session_state["pending_upload"]["content"],
-                        filename=file_name,
-                        hypothesis_id=hypothesis_id,
-                        upload_date=str(datetime.date.today()),
-                        status="unprocessed"
-                    )
-                    del st.session_state["pending_upload"]
-                    st.session_state["last_uploaded_time"] = datetime.datetime.now(datetime.timezone.utc)
-                    st.session_state["last_uploaded_time"] = datetime.datetime.utcnow()
-                    st.success(f"Uploaded: {file_name}")
-                    st.rerun()
+                # ✅ Save file to GridFS
+                file_id = fs.put(
+                    st.session_state["pending_upload"]["content"],
+                    filename=file_name,
+                    hypothesis_id=hypothesis_id,
+                    upload_date=str(datetime.date.today()),
+                    status="unprocessed"
+                )
+                del st.session_state["pending_upload"]
+                st.session_state["last_uploaded_time"] = datetime.datetime.utcnow()
+                st.success(f"✅ Uploaded: {file_name}")
+                st.rerun()
 
         # 📂 Fetch & Display existing files
         files = list(fs.find({"hypothesis_id": hypothesis_id}))
         if files:
             st.subheader("Existing Files")
+
             for file in files:
                 file_id = file._id
                 filename = file.filename
                 status = file.status
-                status_display = (
-                    '<span style="color: green; font-weight: bold;">Processed</span>'
-                    if status == "processed" else
-                    '<span style="color: red; font-weight: bold;">Unprocessed</span>'
-                )
+
+                # ✅ Reconstruct file from GridFS and save it as a temp file
+                temp_dir = tempfile.gettempdir()  # System temp directory
+                temp_file_path = os.path.join(temp_dir, filename)
+
+                with open(temp_file_path, "wb") as f:
+                    f.write(fs.get(file_id).read())
+
+                st.write(f"📂 **Temp file created for processing:** `{temp_file_path}`")
 
                 col1, col2, col3 = st.columns([3, 1, 1])
                 with col1:
-                    st.markdown(f"📄 **{filename}** - {status_display}", unsafe_allow_html=True)
+                    st.markdown(f"📄 **{filename}** - {'✅ Processed' if status == 'processed' else '⚠️ Unprocessed'}")
+
                 with col2:
                     with fs.get(file_id) as grid_out:
                         file_content = grid_out.read()
                     st.download_button("⬇️ Download", file_content, filename, key=f"download_{file_id}")
+
                 if status == "unprocessed":
                     with col3:
                         if st.button("🗑️ Delete", key=f"delete_{file_id}"):
-                            fs.delete(ObjectId(file_id))
+                            fs.delete(file_id)
                             st.warning(f"Deleted {filename}")
                             st.rerun()
+
+                # ✅ Automatically parse the file
+                with st.spinner(f"🔄 Parsing {filename}..."):
+                    try:
+                        hypothesis_text = st.session_state.get("hypothesis_text", "")
+                        provider = st.session_state.get("provider")
+                        model = st.session_state.get("model")
+                        api_key = st.session_state.get("api_key")
+
+                        # ✅ Pass the temporary file path to `parse_data()`
+                        parsed_data = parse_data(temp_file_path, hypothesis_text, provider, model, api_key)
+                        st.session_state[f"parsed_data_{file_id}"] = parsed_data
+                    except Exception as e:
+                        st.error(f"❌ Error parsing file {filename}: {str(e)}")
+                        parsed_data = None
+
+                # ✅ Show parsed data
+                if parsed_data:
+                    st.subheader(f"🔍 Parsed Data for {filename}")
+                    st.json(parsed_data, expanded=False)
+
         else:
             st.info("⚠️ No files found for this hypothesis.")
 
@@ -430,6 +463,3 @@ elif st.session_state.process_step == 4:
     with col2:
         if st.button("Finish"):
             st.success("All steps completed!")
-            # You could reset the wizard or navigate away:
-            # st.session_state.process_step = 1
-            # st.rerun()
