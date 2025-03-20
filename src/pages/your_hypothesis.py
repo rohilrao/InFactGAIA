@@ -18,6 +18,62 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))  # Adds "src" to path
 
 from utils import parse_data 
+from jinja2 import Template
+
+# Sample Jinja2 template for displaying the extracted data
+TEMPLATE = """
+<div style="border: 1px solid #ddd; padding: 15px; border-radius: 8px; background-color: #f9f9f9;">
+    <h4>Parsed Data for {{ filename }}</h4>
+
+    {% if data.confidence_assessment %}
+        <h5>Confidence Score: {{ data.confidence_assessment.confidence_score }}</h5>
+        <p><strong>Explanation:</strong> {{ data.confidence_assessment.explanation }}</p>
+
+        {% if data.confidence_assessment.key_strengths %}
+            <h5>✅ Key Strengths</h5>
+            <ul>
+                {% for strength in data.confidence_assessment.key_strengths %}
+                <li>{{ strength }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        {% if data.confidence_assessment.key_limitations %}
+            <h5>⚠️ Key Limitations</h5>
+            <ul>
+                {% for limitation in data.confidence_assessment.key_limitations %}
+                <li>{{ limitation }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endif %}
+
+    {% if data.numerical_values %}
+        <h5>📊 Numerical Values</h5>
+        <pre>{{ data.numerical_values | join(", ") }}</pre>
+    {% endif %}
+
+    {% if data.metadata %}
+        <h5>📝 Metadata</h5>
+        <pre>{{ data.metadata }}</pre>
+    {% endif %}
+
+    {% if data.issues %}
+        <h5>⚠️ Issues</h5>
+        <ul>
+            {% for issue in data.issues %}
+            <li>{{ issue }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+</div>
+"""
+
+def render_parsed_data(parsed_data, filename):
+    """Renders the extracted JSON into an HTML template using Jinja2."""
+    template = Template(TEMPLATE)
+    rendered_html = template.render(data=parsed_data, filename=filename)
+    st.markdown(rendered_html, unsafe_allow_html=True)
 
 # ------------------------------------------------
 # 🔐 MongoDB Connection
@@ -453,9 +509,7 @@ elif st.session_state.process_step == 4:
 
                 # ✅ Show parsed data
                 if parsed_data:
-                    st.subheader(f"🔍 Parsed Data for {filename}")
-                    st.json(parsed_data, expanded=False)
-
+                    render_parsed_data(parsed_data, filename)
         else:
             st.info("⚠️ No files found for this hypothesis.")
 
