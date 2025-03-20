@@ -68,7 +68,7 @@ def get_db_client():
     return MongoClient(MONGO_URI, server_api=ServerApi("1"))
 
 client = get_db_client()
-db = client["hypothesis_management"]
+db = client["infact_db_v3"]
 hypothesis_collection = db["hypotheses"]
 
 # API Base URLs

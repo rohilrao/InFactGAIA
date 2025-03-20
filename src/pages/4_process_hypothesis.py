@@ -248,7 +248,7 @@ def get_db_client():
     return MongoClient(MONGO_URI, server_api=ServerApi("1"))
 
 client = get_db_client()
-db = client["hypothesis_management"]
+db = client["infact_db_v3"]
 fs = gridfs.GridFS(db)  # File storage system
 hypothesis_collection = db["hypotheses"]
 
