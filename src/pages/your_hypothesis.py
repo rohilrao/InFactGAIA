@@ -170,7 +170,7 @@ elif st.session_state.process_step == 2:
         # "← Back"
         if st.button("← Back"):
             st.session_state.process_step = 1
-            st.experimental_rerun()
+            st.rerun()
 
     with col2:
         # Only show "Create Hypothesis" if ID doesn't exist
@@ -191,7 +191,7 @@ elif st.session_state.process_step == 2:
                 })
                 st.session_state["hypothesis_id"] = hypothesis_id
                 st.success(f"✅ Created new hypothesis with ID '{hypothesis_id}'")
-                st.experimental_rerun()
+                st.rerun()
         else:
             # If ID exists, user can't create or overwrite
             st.caption("No creation needed if ID already exists.")
@@ -210,7 +210,7 @@ elif st.session_state.process_step == 2:
                 if "hypothesis_id" not in st.session_state:
                     st.session_state["hypothesis_id"] = hypothesis_id
                 st.session_state.process_step = 3
-                st.experimental_rerun()
+                st.rerun()
 
 # ----------------------------
 # STEP 3: Generate Summary
