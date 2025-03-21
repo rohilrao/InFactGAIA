@@ -695,187 +695,187 @@ class GptInFactNode:
         return 1 / (1 + np.exp(-log_odds))
     
 
-def interactive_analyze_data(self, data: Dict) -> str:
-    """Generate analysis code using LLM without executing it (for interactive review).
-    
-    Args:
-        data: Dict containing the parsed data to analyze
+    def interactive_analyze_data(self, data: Dict) -> str:
+        """Generate analysis code using LLM without executing it (for interactive review).
         
-    Returns:
-        str: Generated Python code for analysis
-    """
-    self.logger.info("Generating analysis code for interactive review")
-
-    MAX_LOG_LIKELIHOOD_RATIO = 5.
-
-    try:
-        # Generate analysis code
-        prompt = f"""
-        Given this data:
-        {json.dumps(data, indent=2)}
-
-        Generate Python code to calculate log likelihoods for the hypothesis:
-        "{self.hypothesis}"
-
-        This should be a single function named `calculate_log_likelihoods`.
-        It should take a single argument, a dict with the format given above,
-        and output only the tuple of log-likelihoods
-          l_plus = log P(data | hypothesis),
-          l_minus = log P(data | not hypothesis).
-
-        The code should:
-        1. Calculate l_plus and l_minus (log likelihoods)
-        2. Handle uncertainties properly
-        3. Account for data quality and potential biases
-        4. Limit overconfidence by capping the absolute difference between l_plus and l_minus to {MAX_LOG_LIKELIHOOD_RATIO}.
-        5. Use the usual libraries such as numpy and scipy for calculations
-        6. Use print() to output intermediate results, as well as the final result before returning.
-        7. Ensure numerical stability by avoiding edge cases such as infinity (`inf`) and NaN values in likelihood and probability calculations.
-
-        Return only executable Python code with the function definition.
-        Do not include the function call itself.
+        Args:
+            data: Dict containing the parsed data to analyze
+            
+        Returns:
+            str: Generated Python code for analysis
         """
+        self.logger.info("Generating analysis code for interactive review")
 
-        self.logger.debug(f"Analysis prompt: {prompt}")
+        MAX_LOG_LIKELIHOOD_RATIO = 5.
 
-        message = self.client.chat.completions.create(
-            model=self.model,
-            max_completion_tokens=8192,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
+        try:
+            # Generate analysis code
+            prompt = f"""
+            Given this data:
+            {json.dumps(data, indent=2)}
 
-        response_text = self._get_message_text(message)
-        self.logger.debug(f"API response: {response_text}")
+            Generate Python code to calculate log likelihoods for the hypothesis:
+            "{self.hypothesis}"
 
-        # Extract code using autogen
-        from autogen.code_utils import extract_code
-        extracted_code = extract_code(response_text)
+            This should be a single function named `calculate_log_likelihoods`.
+            It should take a single argument, a dict with the format given above,
+            and output only the tuple of log-likelihoods
+            l_plus = log P(data | hypothesis),
+            l_minus = log P(data | not hypothesis).
 
-        if not extracted_code:
-            self.logger.error("No code block found in API response")
-            raise ValueError("No code block found in API response")
+            The code should:
+            1. Calculate l_plus and l_minus (log likelihoods)
+            2. Handle uncertainties properly
+            3. Account for data quality and potential biases
+            4. Limit overconfidence by capping the absolute difference between l_plus and l_minus to {MAX_LOG_LIKELIHOOD_RATIO}.
+            5. Use the usual libraries such as numpy and scipy for calculations
+            6. Use print() to output intermediate results, as well as the final result before returning.
+            7. Ensure numerical stability by avoiding edge cases such as infinity (`inf`) and NaN values in likelihood and probability calculations.
 
-        # Get the first Python code block
-        code = None
-        for lang, code_block in extracted_code:
-            if lang.lower() in ['python', 'py', '']:
-                code = code_block
-                break
+            Return only executable Python code with the function definition.
+            Do not include the function call itself.
+            """
 
-        if not code:
-            self.logger.error("No Python code block found in API response")
-            raise ValueError("No Python code block found in API response")
+            self.logger.debug(f"Analysis prompt: {prompt}")
 
-        self.logger.debug(f"Extracted Python code: {code}")
-        return code
+            message = self.client.chat.completions.create(
+                model=self.model,
+                max_completion_tokens=8192,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
 
-    except Exception as e:
-        self.logger.error(f"Error in interactive_analyze_data: {str(e)}", exc_info=True)
-        raise
+            response_text = self._get_message_text(message)
+            self.logger.debug(f"API response: {response_text}")
 
-def execute_analysis_code(self, code: str, data: Dict) -> Tuple[float, float]:
-    """Execute the provided analysis code and return the results.
-    
-    Args:
-        code: Python code string to execute
-        data: Data to analyze
+            # Extract code using autogen
+            from autogen.code_utils import extract_code
+            extracted_code = extract_code(response_text)
+
+            if not extracted_code:
+                self.logger.error("No code block found in API response")
+                raise ValueError("No code block found in API response")
+
+            # Get the first Python code block
+            code = None
+            for lang, code_block in extracted_code:
+                if lang.lower() in ['python', 'py', '']:
+                    code = code_block
+                    break
+
+            if not code:
+                self.logger.error("No Python code block found in API response")
+                raise ValueError("No Python code block found in API response")
+
+            self.logger.debug(f"Extracted Python code: {code}")
+            return code
+
+        except Exception as e:
+            self.logger.error(f"Error in interactive_analyze_data: {str(e)}", exc_info=True)
+            raise
+
+    def execute_analysis_code(self, code: str, data: Dict) -> Tuple[float, float]:
+        """Execute the provided analysis code and return the results.
         
-    Returns:
-        Tuple[float, float]: (l_plus, l_minus) log likelihood values
-    """
-    self.logger.info("Executing analysis code")
-    
-    globals_dict = {
-        "np": np,
-        "math": math,
-        "data": data
-    }
-    
-    try:
-        exec(code, globals_dict)
-        l_plus, l_minus = globals_dict['calculate_log_likelihoods'](data)
-        
-        # Validate outputs
-        if l_plus is None or l_minus is None:
-            raise ValueError("Code did not define l_plus and l_minus")
+        Args:
+            code: Python code string to execute
+            data: Data to analyze
             
-        if not (isinstance(l_plus, (int, float)) and isinstance(l_minus, (int, float))):
-            raise ValueError("l_plus and l_minus must be numeric values")
+        Returns:
+            Tuple[float, float]: (l_plus, l_minus) log likelihood values
+        """
+        self.logger.info("Executing analysis code")
+        
+        globals_dict = {
+            "np": np,
+            "math": math,
+            "data": data
+        }
+        
+        try:
+            exec(code, globals_dict)
+            l_plus, l_minus = globals_dict['calculate_log_likelihoods'](data)
             
-        self.logger.info(f"Code execution successful - l_plus: {l_plus}, l_minus: {l_minus}")
-        return float(l_plus), float(l_minus)
-        
-    except Exception as e:
-        self.logger.error(f"Code execution failed: {str(e)}")
-        raise
-
-def process_data_interactively(self, data_file: str, validated_code: str = None) -> Union[Tuple[Dict, Dict], Tuple[float, Tuple[float, float]]]:
-    """
-    Interactive version of process_data that allows for user review and modification of analysis code.
-    
-    This method can be used in two ways:
-    1. Initial call without validated_code - it will only parse the data and return it
-    2. Second call with validated_code - it will execute the provided code and update the node state
-    
-    Args:
-        data_file: Path to the data file
-        validated_code: Optional pre-validated Python code for analysis
-        
-    Returns:
-        If validated_code is None: (parsed_data, metadata)
-        If validated_code is provided: (new_posterior, (lower_bound, upper_bound))
-    """
-    self.logger.info(f"Interactively processing data file: {data_file}")
-
-    try:
-        # Parse data
-        parsed_data = self._parse_data(data_file)
-        self.logger.debug(f"Parsed data: {json.dumps(parsed_data, indent=2)}")
-        
-        # Extract metadata
-        metadata = self._extract_metadata(data_file)
-        
-        # If no validated code provided, just return the parsed data and metadata
-        if validated_code is None:
-            return parsed_data, metadata
+            # Validate outputs
+            if l_plus is None or l_minus is None:
+                raise ValueError("Code did not define l_plus and l_minus")
+                
+            if not (isinstance(l_plus, (int, float)) and isinstance(l_minus, (int, float))):
+                raise ValueError("l_plus and l_minus must be numeric values")
+                
+            self.logger.info(f"Code execution successful - l_plus: {l_plus}, l_minus: {l_minus}")
+            return float(l_plus), float(l_minus)
             
-        # Check redundancy
-        if self._is_redundant(parsed_data):
-            self.logger.info("Data determined to be redundant, skipping")
-            return self.current_posterior, self._calculate_uncertainty()
+        except Exception as e:
+            self.logger.error(f"Code execution failed: {str(e)}")
+            raise
 
-        # Use the provided validated code to get log likelihood values
-        l_plus, l_minus = self.execute_analysis_code(validated_code, parsed_data)
-        self.logger.info(f"Analysis results - l_plus: {l_plus}, l_minus: {l_minus}")
+    def process_data_interactively(self, data_file: str, validated_code: str = None) -> Union[Tuple[Dict, Dict], Tuple[float, Tuple[float, float]]]:
+        """
+        Interactive version of process_data that allows for user review and modification of analysis code.
+        
+        This method can be used in two ways:
+        1. Initial call without validated_code - it will only parse the data and return it
+        2. Second call with validated_code - it will execute the provided code and update the node state
+        
+        Args:
+            data_file: Path to the data file
+            validated_code: Optional pre-validated Python code for analysis
+            
+        Returns:
+            If validated_code is None: (parsed_data, metadata)
+            If validated_code is provided: (new_posterior, (lower_bound, upper_bound))
+        """
+        self.logger.info(f"Interactively processing data file: {data_file}")
 
-        # Update posterior
-        new_posterior = self.current_posterior + l_plus - l_minus
-        self.logger.info(f"Updated posterior from {self.current_posterior} to {new_posterior}")
+        try:
+            # Parse data
+            parsed_data = self._parse_data(data_file)
+            self.logger.debug(f"Parsed data: {json.dumps(parsed_data, indent=2)}")
+            
+            # Extract metadata
+            metadata = self._extract_metadata(data_file)
+            
+            # If no validated code provided, just return the parsed data and metadata
+            if validated_code is None:
+                return parsed_data, metadata
+                
+            # Check redundancy
+            if self._is_redundant(parsed_data):
+                self.logger.info("Data determined to be redundant, skipping")
+                return self.current_posterior, self._calculate_uncertainty()
 
-        # Store data point
-        self.data_points.append({
-            'raw_data': parsed_data,
-            'metadata': metadata,
-            'l_plus': l_plus,
-            'l_minus': l_minus,
-            'posterior': new_posterior,
-            'confidence_assessment': parsed_data.get('confidence_assessment', {
-                'confidence_score': 0,
-                'explanation': 'No confidence assessment available',
-                'key_strengths': [],
-                'key_limitations': []
-            }),
-            'analysis_rationale': validated_code  # Store the user-validated code
-        })
+            # Use the provided validated code to get log likelihood values
+            l_plus, l_minus = self.execute_analysis_code(validated_code, parsed_data)
+            self.logger.info(f"Analysis results - l_plus: {l_plus}, l_minus: {l_minus}")
 
-        self.current_posterior = new_posterior
-        lower, upper = self._calculate_uncertainty()
+            # Update posterior
+            new_posterior = self.current_posterior + l_plus - l_minus
+            self.logger.info(f"Updated posterior from {self.current_posterior} to {new_posterior}")
 
-        self.logger.info(f"Processing complete. Current probability: {self._to_probability(new_posterior):.2%} ({lower:.2%}, {upper:.2%})")
-        return new_posterior, (lower, upper)
+            # Store data point
+            self.data_points.append({
+                'raw_data': parsed_data,
+                'metadata': metadata,
+                'l_plus': l_plus,
+                'l_minus': l_minus,
+                'posterior': new_posterior,
+                'confidence_assessment': parsed_data.get('confidence_assessment', {
+                    'confidence_score': 0,
+                    'explanation': 'No confidence assessment available',
+                    'key_strengths': [],
+                    'key_limitations': []
+                }),
+                'analysis_rationale': validated_code  # Store the user-validated code
+            })
 
-    except Exception as e:
-        self.logger.error(f"Error in process_data_interactively: {str(e)}", exc_info=True)
-        raise
+            self.current_posterior = new_posterior
+            lower, upper = self._calculate_uncertainty()
+
+            self.logger.info(f"Processing complete. Current probability: {self._to_probability(new_posterior):.2%} ({lower:.2%}, {upper:.2%})")
+            return new_posterior, (lower, upper)
+
+        except Exception as e:
+            self.logger.error(f"Error in process_data_interactively: {str(e)}", exc_info=True)
+            raise
