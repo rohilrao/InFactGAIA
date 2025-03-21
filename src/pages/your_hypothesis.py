@@ -542,275 +542,128 @@ elif st.session_state.process_step == 4:
     hypothesis_text = hypothesis_entry["text"]
     st.session_state["hypothesis_text"] = hypothesis_text
     
-    st.subheader(f"Hypothesis ID: `{hypothesis_id}`")
-    st.write(f"Hypothesis: **{hypothesis_text}**")
-
-    # ========== FETCH ALL EXISTING FILES AT START ========= #
-    # Fetch this only once per page load to avoid duplicate DB queries
-    if "existing_files" not in st.session_state:
-        existing_files = list(db.fs.files.find({"metadata.hypothesis_id": hypothesis_id}))
-        existing_filenames = [file["filename"] for file in existing_files]
-        
-        st.session_state["existing_files"] = existing_files
-        st.session_state["existing_filenames"] = existing_filenames
+    # Simple hypothesis display
+    st.write(f"**Hypothesis ID:** `{hypothesis_id}`")
+    st.write(f"**Hypothesis:** {hypothesis_text}")
+    st.markdown("---")
     
-    # ========== FILE UPLOAD SECTION ========= #
-    st.markdown("### Upload Evidence File")
-    st.info("Upload files to support your hypothesis. Supported types: TXT, PDF, PNG, JPG, HTML, CSV")
+    # Print current files for debugging
+    existing_files = list(db.fs.files.find({"metadata.hypothesis_id": hypothesis_id}))
+    existing_filenames = [file["filename"] for file in existing_files]
+    print(f"DEBUG - Current files for hypothesis ID '{hypothesis_id}': {existing_filenames}")
     
-    # File uploader with immediate duplicate checking
-    uploaded_file = st.file_uploader("Select a file to upload", 
-                                     type=["txt", "pdf", "png", "jpg", "html", "csv"])
+    # Simple file uploader
+    uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg", "html", "csv"])
     
-    if uploaded_file:
+    # Track if we're currently parsing
+    is_parsing = st.session_state.get("is_parsing", False)
+    
+    # Logic for handling file upload
+    if uploaded_file and not is_parsing:
         file_name = uploaded_file.name
+        print(f"DEBUG - User selected file: '{file_name}'")
         
-        # Check for duplicates against our cached list BEFORE processing
-        if file_name in st.session_state["existing_filenames"]:
-            st.warning(f"⚠️ A file named **{file_name}** already exists for this hypothesis. Please select a different file.")
+        # Check if this file already exists for THIS hypothesis
+        is_duplicate = file_name in existing_filenames
+        
+        if is_duplicate:
+            print(f"DEBUG - DUPLICATE DETECTED: File '{file_name}' already exists for hypothesis ID '{hypothesis_id}'")
+            print(f"DEBUG - Existing files for this hypothesis: {existing_filenames}")
+            st.write(f"⚠️ A file named '{file_name}' already exists for this hypothesis. Please choose a different file.")
         else:
-            # Show upload confirmation button
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.write(f"Selected: **{file_name}**")
-            with col2:
-                if st.button("Upload File", type="primary"):
-                    with st.spinner(f"Uploading {file_name}..."):
-                        file_content = uploaded_file.read()
-                        
-                        # Save to GridFS
-                        file_id = fs.put(
-                            file_content,
-                            filename=file_name,
-                            metadata={
-                                "hypothesis_id": hypothesis_id,
-                                "hypothesis_text": hypothesis_text
-                            },
-                            upload_date=str(datetime.date.today()),
-                        )
-                        
-                        # Update session state
-                        st.session_state["latest_uploaded_file_id"] = file_id
-                        st.session_state["latest_uploaded_filename"] = file_name
-                        st.session_state["is_parsing"] = True
-                        
-                        # Update our cached lists
-                        new_file = db.fs.files.find_one({"_id": file_id})
-                        if new_file:
-                            st.session_state["existing_files"].append(new_file)
-                            st.session_state["existing_filenames"].append(file_name)
-                        
-                        st.success(f"✅ Successfully uploaded: {file_name}")
-                        st.rerun()
-
-    # ========== DISPLAY FILES SECTION ========= #
-    if st.session_state["existing_files"]:
-        st.markdown("### Your Evidence Files")
-        
-        # Create tabs to separate file listing from processing status
-        file_tab, process_tab = st.tabs(["All Files", "Processing Status"])
-        
-        with file_tab:
-            # Create a cleaner file display
-            for file in st.session_state["existing_files"]:
-                file_id = file["_id"]
-                filename = file["filename"]
-                has_parsed_data = "parsed_data" in file
+            print(f"DEBUG - File '{file_name}' is not a duplicate for hypothesis ID '{hypothesis_id}'")
+            # Show upload button if not a duplicate
+            if st.button("Upload File", key="upload_button"):
+                print(f"DEBUG - Uploading file '{file_name}' for hypothesis ID '{hypothesis_id}'")
+                # Read file content
+                file_content = uploaded_file.read()
                 
-                # Create a card-like container for each file
-                st.markdown(f"""
-                <div style="padding: 10px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px;">
-                    <h4>📄 {filename} {'✅' if has_parsed_data else '⏳'}</h4>
-                </div>
-                """, unsafe_allow_html=True)
+                # Save to GridFS
+                file_id = fs.put(
+                    file_content,
+                    filename=file_name,
+                    metadata={
+                        "hypothesis_id": hypothesis_id,
+                        "hypothesis_text": hypothesis_text
+                    },
+                    upload_date=str(datetime.date.today()),
+                )
                 
-                col1, col2, col3 = st.columns([2, 1, 1])
+                print(f"DEBUG - File successfully uploaded with ID: {file_id}")
                 
-                with col1:
-                    # File information
-                    st.write(f"Status: {'Analyzed' if has_parsed_data else 'Pending analysis'}")
-                    upload_date = file.get('upload_date', 'Unknown')
-                    st.write(f"Uploaded: {upload_date}")
+                # Store file ID in session
+                st.session_state["current_file_id"] = file_id
+                st.session_state["current_filename"] = file_name
+                st.session_state["is_parsing"] = True
                 
-                with col2:
-                    # Download and view options
-                    with fs.get(file_id) as grid_out:
-                        file_content = grid_out.read()
-                    st.download_button("⬇️ Download", file_content, filename, key=f"download_{file_id}")
-                    
-                    if has_parsed_data:
-                        if st.button("🔍 View Analysis", key=f"view_{file_id}"):
-                            st.session_state["viewing_file_id"] = file_id
-                            st.session_state["viewing_filename"] = filename
-                            st.rerun()
-                
-                with col3:
-                    # Delete with confirmation to prevent accidents
-                    is_processing = (st.session_state.get("is_parsing", False) and 
-                                    st.session_state.get("latest_uploaded_file_id") == file_id)
-                    
-                    if is_processing:
-                        st.button("🔄 Processing...", disabled=True, key=f"disabled_{file_id}")
-                    else:
-                        # Two-step delete with confirmation
-                        if st.button("🗑️ Delete", key=f"delete_{file_id}"):
-                            st.session_state[f"confirm_delete_{file_id}"] = True
-                            
-                        # Show confirmation dialog if requested
-                        if st.session_state.get(f"confirm_delete_{file_id}", False):
-                            st.warning(f"Are you sure you want to delete **{filename}**?")
-                            confirm_col1, confirm_col2 = st.columns(2)
-                            with confirm_col1:
-                                if st.button("Yes, Delete", key=f"confirm_yes_{file_id}"):
-                                    # Delete the file
-                                    fs.delete(ensure_object_id(file_id))
-                                    
-                                    # Update our cached lists
-                                    st.session_state["existing_files"] = [f for f in st.session_state["existing_files"] 
-                                                                         if str(f["_id"]) != str(file_id)]
-                                    st.session_state["existing_filenames"].remove(filename)
-                                    
-                                    # Clear confirmation state
-                                    del st.session_state[f"confirm_delete_{file_id}"]
-                                    
-                                    st.success(f"Deleted: {filename}")
-                                    st.rerun()
-                            with confirm_col2:
-                                if st.button("Cancel", key=f"confirm_no_{file_id}"):
-                                    # Clear confirmation state
-                                    del st.session_state[f"confirm_delete_{file_id}"]
-                                    st.rerun()
-                
-                st.markdown("---")
-        
-        with process_tab:
-            # Show processing status information
-            if st.session_state.get("is_parsing", False) and "latest_uploaded_file_id" in st.session_state:
-                filename = st.session_state["latest_uploaded_filename"]
-                st.info(f"Currently processing: **{filename}**")
-            else:
-                st.write("No files are currently being processed.")
-    
-    else:
-        st.info("No files have been uploaded yet. Upload your first file above.")
-
-    # ========== FILE ANALYSIS VIEW ========= #
-    if "viewing_file_id" in st.session_state:
-        st.markdown("---")
-        st.subheader("File Analysis")
-        
-        view_file_id = ensure_object_id(st.session_state["viewing_file_id"])
-        view_filename = st.session_state["viewing_filename"]
-        
-        # Get file data
-        file_doc = db.fs.files.find_one({"_id": view_file_id})
-        
-        if file_doc and "parsed_data" in file_doc:
-            st.write(f"Showing analysis for: **{view_filename}**")
-            
-            # Display parsed data
-            render_parsed_data(file_doc["parsed_data"], view_filename)
-            
-            if st.button("Close Analysis View"):
-                # Clear viewing state
-                del st.session_state["viewing_file_id"]
-                del st.session_state["viewing_filename"]
+                # Rerun to reflect state changes
                 st.rerun()
-        else:
-            st.error("Analysis data not found for this file. It may still be processing.")
-            # Clean up viewing state
-            del st.session_state["viewing_file_id"]
-            del st.session_state["viewing_filename"]
+    
+    # Process file if needed
+    if is_parsing and "current_file_id" in st.session_state:
+        file_id = st.session_state["current_file_id"]
+        filename = st.session_state["current_filename"]
+        print(f"DEBUG - Beginning to process file '{filename}' with ID {file_id}")
         
-        st.markdown("---")
-
-    # ========== PROCESS LATEST UPLOADED FILE ========= #
-    if (st.session_state.get("is_parsing", False) and 
-        "latest_uploaded_file_id" in st.session_state and
-        "latest_uploaded_filename" in st.session_state):
-        
-        file_id = st.session_state["latest_uploaded_file_id"]
-        filename = st.session_state["latest_uploaded_filename"]
-
-        # Create temp file
+        # Create temporary file
         temp_dir = tempfile.gettempdir()
         temp_file_path = os.path.join(temp_dir, filename)
-
+        
+        # Get file content
+        with open(temp_file_path, "wb") as f:
+            f.write(fs.get(ensure_object_id(file_id)).read())
+        
+        print(f"DEBUG - Created temporary file at '{temp_file_path}'")
+        
+        # Process the file
         try:
-            with open(temp_file_path, "wb") as f:
-                f.write(fs.get(ensure_object_id(file_id)).read())
-                
-            # Use a status container for better processing feedback
-            with st.status(f"Processing {filename}...", expanded=True) as status:
-                try:
-                    # Get API credentials from session
-                    provider = st.session_state.get("provider")
-                    model = st.session_state.get("model")
-                    api_key = st.session_state.get("api_key")
-
-                    status.update(label=f"Analyzing {filename}...", state="running")
-                    parsed_data = parse_data(temp_file_path, hypothesis_text, provider, model, api_key)
-                    
-                    status.update(label=f"Saving analysis results...", state="running")
-                    save_parsed_data_to_file(file_id, parsed_data)
-                    
-                    # Clean up temp file
-                    try:
-                        os.remove(temp_file_path)
-                    except:
-                        pass
-                        
-                    status.update(label=f"✅ Analysis complete for {filename}", state="complete")
-                    
-                    # Refresh file data to include parsed status
-                    new_files = list(db.fs.files.find({"metadata.hypothesis_id": hypothesis_id}))
-                    st.session_state["existing_files"] = new_files
-                    
-                    # Show results immediately
-                    st.subheader(f"🔍 Analysis Results for {filename}")
-                    render_parsed_data(parsed_data, filename)
-                    
-                except Exception as e:
-                    status.update(label=f"❌ Error processing {filename}", state="error")
-                    st.error(f"Error: {str(e)}")
-                
-                finally:
-                    # Always mark parsing as complete
-                    st.session_state["is_parsing"] = False
-                
-        except Exception as e:
-            st.error(f"Error accessing file: {str(e)}")
+            provider = st.session_state.get("provider")
+            model = st.session_state.get("model")
+            api_key = st.session_state.get("api_key")
+            
+            print(f"DEBUG - Parsing file '{filename}' with provider '{provider}' and model '{model}'")
+            parsed_data = parse_data(temp_file_path, hypothesis_text, provider, model, api_key)
+            
+            # Save parsed data
+            print(f"DEBUG - Saving parsed data for file '{filename}'")
+            save_parsed_data_to_file(file_id, parsed_data)
+            
+            # Clean up
+            try:
+                os.remove(temp_file_path)
+                print(f"DEBUG - Removed temporary file '{temp_file_path}'")
+            except Exception as e:
+                print(f"DEBUG - Failed to remove temp file: {str(e)}")
+            
+            # Mark parsing as complete
             st.session_state["is_parsing"] = False
-
-    # ========== NAVIGATION ========= #
+            print(f"DEBUG - Finished processing file '{filename}'")
+            
+            # Display parsed data
+            render_parsed_data(parsed_data, filename)
+            
+        except Exception as e:
+            print(f"DEBUG - ERROR processing file '{filename}': {str(e)}")
+            st.session_state["is_parsing"] = False
+    
+    # Navigation
     st.markdown("---")
-    nav_col1, nav_col2 = st.columns([1, 1])
-    with nav_col1:
+    col1, col2 = st.columns([1, 1])
+    with col1:
         if st.button("← Back to Step 3"):
-            # Clean up processing state
-            for key in ["is_parsing", "latest_uploaded_file_id", "latest_uploaded_filename", 
-                       "viewing_file_id", "viewing_filename", "existing_files", "existing_filenames"]:
+            # Clean up session state
+            for key in ["is_parsing", "current_file_id", "current_filename"]:
                 if key in st.session_state:
                     del st.session_state[key]
                     
             st.session_state.process_step = 3
             st.rerun()
             
-    with nav_col2:
-        if st.button("Complete ✓", type="primary"):
-            # Clean up all temporary state
-            cleanup_keys = [
-                "is_parsing", "latest_uploaded_file_id", "latest_uploaded_filename", 
-                "viewing_file_id", "viewing_filename", "existing_files", "existing_filenames"
-            ]
-            
-            # Also clean up any confirmation states
-            delete_confirm_keys = [k for k in st.session_state.keys() if k.startswith("confirm_delete_")]
-            cleanup_keys.extend(delete_confirm_keys)
-            
-            for key in cleanup_keys:
+    with col2:
+        if st.button("Finish"):
+            # Clean up session state
+            for key in ["is_parsing", "current_file_id", "current_filename"]:
                 if key in st.session_state:
                     del st.session_state[key]
                     
-            st.balloons()
-            st.success("✅ All steps completed! Your hypothesis and associated files have been saved.")
+            st.write("All steps completed! Your hypothesis and files have been saved.")
