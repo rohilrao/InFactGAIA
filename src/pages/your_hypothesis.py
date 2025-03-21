@@ -237,7 +237,7 @@ if st.session_state.process_step == 1:
     
     provider = st.selectbox("Select Provider:", ["GPT", "Anthropic"])  # Only GPT or Anthropic
     model_options = {
-        "GPT": ["gpt-4o"],   # Example GPT models
+        "GPT": ["gpt-4o", "chatgpt-4o-latest"],   # Example GPT models
         "Anthropic": ["claude-3-5-sonnet"]   # Example Anthropic model
     }
     model = st.selectbox("Select Model:", model_options[provider])
