@@ -710,3 +710,565 @@ elif st.session_state.process_step == 4:
                     del st.session_state[key]
                     
             st.write("All steps completed! Your hypothesis and files have been saved.")
+
+# ----------------------------
+# STEP 5: Interactive Code Review
+# ----------------------------
+elif st.session_state.process_step == 5:
+    st.header("Step 5: Interactive Code Review")
+    
+    # Get hypothesis information
+    hypothesis_id = st.session_state.get("hypothesis_id", None)
+    if not hypothesis_id:
+        st.warning("No Hypothesis ID found in session. Please go back to Step 2.")
+        st.stop()
+
+    # Get the current hypothesis text and file info from DB
+    hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
+    if not hypothesis_entry:
+        st.error("Could not find hypothesis data in database.")
+        st.stop()
+
+    hypothesis_text = hypothesis_entry["text"]
+    st.write(f"**Hypothesis ID:** `{hypothesis_id}`")
+    st.write(f"**Hypothesis:** {hypothesis_text}")
+    st.markdown("---")
+    
+    # Get file ID if it exists in session state
+    file_id = st.session_state.get("current_file_id", None)
+    
+    if not file_id:
+        # Let user select an unprocessed file if not already selected
+        unprocessed_files = list(db.fs.files.find({"metadata.hypothesis_id": hypothesis_id, "status": "unprocessed"}))
+        
+        if not unprocessed_files:
+            st.warning("No unprocessed files found. Please upload files in Step 4.")
+            
+            if st.button("← Back to Step 4"):
+                st.session_state.process_step = 4
+                st.rerun()
+            st.stop()
+        
+        st.subheader("Select a file to analyze")
+        file_options = {file["filename"]: file["_id"] for file in unprocessed_files}
+        selected_filename = st.selectbox("Choose file:", list(file_options.keys()))
+        
+        if st.button("Select File"):
+            st.session_state["current_file_id"] = file_options[selected_filename]
+            st.session_state["current_filename"] = selected_filename
+            st.rerun()
+    
+    else:
+        # We have a file to analyze
+        filename = st.session_state.get("current_filename", "Selected File")
+        st.subheader(f"Analyzing: {filename}")
+        
+        # Check if we already have parsed data and node
+        parsed_data = st.session_state.get("parsed_data", None)
+        node = st.session_state.get("node", None)
+        
+        if not parsed_data or not node:
+            # Fetch file content and create temporary file
+            file_obj = fs.get(ensure_object_id(file_id))
+            temp_dir = tempfile.gettempdir()
+            temp_file_path = os.path.join(temp_dir, filename)
+            
+            with open(temp_file_path, "wb") as f:
+                f.write(file_obj.read())
+                
+            # Initialize node and process file to extract data
+            with st.spinner("Initializing and parsing file data..."):
+                provider = st.session_state.get("provider", "anthropic")
+                model = st.session_state.get("model", "claude-3-5-sonnet-20241022")
+                api_key = st.session_state.get("api_key", "")
+                
+                try:
+                    # Create appropriate node type
+                    if provider.lower() == "anthropic":
+                        node = AnthropicInFactNode(
+                            hypothesis=hypothesis_text,
+                            api_key=api_key,
+                            model=model
+                        )
+                    elif provider.lower() == "gpt":
+                        node = GptInFactNode(
+                            hypothesis=hypothesis_text,
+                            api_key=api_key,
+                            model=model
+                        )
+                    elif provider.lower() == "deepseek":
+                        node = DeepSeekInFactNode(
+                            hypothesis=hypothesis_text,
+                            api_key=api_key,
+                            model=model
+                        )
+                    else:
+                        st.error(f"Unknown provider: {provider}")
+                        st.stop()
+                    
+                    # Process data interactively to get parsed data
+                    parsed_data, metadata = node.process_data_interactively(temp_file_path)
+                    
+                    # Store in session state
+                    st.session_state["parsed_data"] = parsed_data
+                    st.session_state["metadata"] = metadata
+                    st.session_state["node"] = node
+                    st.success("File parsed successfully!")
+                    
+                    # Clean up temporary file
+                    try:
+                        os.remove(temp_file_path)
+                    except Exception as e:
+                        st.warning(f"Failed to remove temporary file: {str(e)}")
+                        
+                except Exception as e:
+                    st.error(f"Error parsing file: {str(e)}")
+                    st.stop()
+        
+        # Display parsed data in collapsible section
+        with st.expander("Parsed Data (Click to expand)"):
+            st.json(parsed_data)
+        
+        # Check if we have generated code
+        generated_code = st.session_state.get("generated_code", None)
+        
+        if not generated_code:
+            if st.button("Generate Analysis Code"):
+                with st.spinner("Generating analysis code..."):
+                    try:
+                        # Get the node from session state
+                        node = st.session_state.get("node")
+                        if not node:
+                            st.error("Session expired. Please start over.")
+                            st.stop()
+                        
+                        # Generate code using our interactive function
+                        code = node.interactive_analyze_data(parsed_data)
+                        st.session_state["generated_code"] = code
+                        st.success("Code generated successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error generating code: {str(e)}")
+        
+        else:
+            # Display the code in an editable text area
+            st.subheader("Review and Edit Analysis Code")
+            edited_code = st.text_area("Analysis Code", value=generated_code, height=400)
+            
+            # Check if code has been modified
+            if edited_code != generated_code:
+                st.session_state["generated_code"] = edited_code
+                st.info("Code has been modified. Please verify it before executing.")
+            
+            # Allow user to provide feedback and regenerate code
+            feedback_col1, feedback_col2 = st.columns([3, 1])
+            
+            with feedback_col1:
+                feedback = st.text_area("Feedback for code improvement (optional)", 
+                                         placeholder="Provide feedback on what to improve...")
+            
+            with feedback_col2:
+                if st.button("Regenerate Code"):
+                    if feedback:
+                        with st.spinner("Regenerating code based on feedback..."):
+                            try:
+                                # Get the node
+                                node = st.session_state.get("node")
+                                if not node:
+                                    st.error("Session expired. Please start over.")
+                                    st.stop()
+                                
+                                # Generate new code with feedback
+                                feedback_prompt = f"""
+                                Here is the original code:
+                                
+                                ```python
+                                {edited_code}
+                                ```
+                                
+                                User feedback:
+                                {feedback}
+                                
+                                Please improve the code based on this feedback. The code should still:
+                                1. Be a function named `calculate_log_likelihoods`
+                                2. Take a single dict parameter and return a tuple of (l_plus, l_minus)
+                                3. Calculate log likelihoods for the hypothesis: "{hypothesis_text}"
+                                4. Be ready to execute as-is
+                                
+                                Return only the improved Python code.
+                                """
+                                
+                                message = node.client.messages.create(
+                                    model=node.model,
+                                    max_tokens=8192,
+                                    temperature=0.1,
+                                    messages=[{
+                                        "role": "user",
+                                        "content": feedback_prompt
+                                    }]
+                                )
+                                
+                                response_text = node._get_message_text(message)
+                                
+                                # Extract code using autogen
+                                from autogen.code_utils import extract_code
+                                extracted_code = extract_code(response_text)
+                                
+                                if not extracted_code:
+                                    st.error("No code block found in AI response")
+                                    st.stop()
+                                
+                                # Get the first Python code block
+                                improved_code = None
+                                for lang, code_block in extracted_code:
+                                    if lang.lower() in ['python', 'py', '']:
+                                        improved_code = code_block
+                                        break
+                                
+                                if not improved_code:
+                                    st.error("No Python code block found in AI response")
+                                    st.stop()
+                                
+                                st.session_state["generated_code"] = improved_code
+                                st.success("Code regenerated successfully!")
+                                st.rerun()
+                                
+                            except Exception as e:
+                                st.error(f"Error regenerating code: {str(e)}")
+                    else:
+                        st.warning("Please provide feedback to guide code regeneration.")
+            
+            # Execute code button
+            st.subheader("Validate Code")
+            execute_col1, execute_col2 = st.columns([1, 1])
+            
+            with execute_col1:
+                if st.button("Validate and Test Code"):
+                    with st.spinner("Testing code execution..."):
+                        try:
+                            # Get the node
+                            node = st.session_state.get("node")
+                            if not node:
+                                st.error("Session expired. Please start over.")
+                                st.stop()
+                            
+                            # Execute code
+                            l_plus, l_minus = node.execute_analysis_code(edited_code, parsed_data)
+                            
+                            st.session_state["l_plus"] = l_plus
+                            st.session_state["l_minus"] = l_minus
+                            st.session_state["validated_code"] = edited_code
+                            
+                            # Convert log odds to probability for display
+                            p_h_given_d = 1 / (1 + math.exp(-l_plus + l_minus))
+                            
+                            st.success("Code executed successfully!")
+                            st.write(f"**l_plus (log P(data | hypothesis)):** {l_plus:.4f}")
+                            st.write(f"**l_minus (log P(data | not hypothesis)):** {l_minus:.4f}")
+                            st.write(f"**Probability of hypothesis given this data:** {p_h_given_d:.2%}")
+                            
+                        except Exception as e:
+                            st.error(f"Code execution failed: {str(e)}")
+                            st.info("Please revise the code and try again.")
+            
+            # If code has been validated, allow proceeding to next step
+            if "validated_code" in st.session_state:
+                with execute_col2:
+                    if st.button("Continue to Processing"):
+                        # Store necessary information in session state
+                        st.session_state["file_ready_for_processing"] = True
+                        st.session_state.process_step = 6
+                        st.rerun()
+    
+    # Navigation
+    st.markdown("---")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("← Back to Step 4"):
+            # Clean up session state
+            for key in ["current_file_id", "current_filename", "parsed_data", 
+                       "generated_code", "node", "validated_code", "l_plus", "l_minus"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+                    
+            st.session_state.process_step = 4
+            st.rerun()
+
+# ----------------------------
+# STEP 6: Evidence Processing
+# ----------------------------
+elif st.session_state.process_step == 6:
+    st.header("Step 6: Evidence Processing")
+    
+    # Get hypothesis information
+    hypothesis_id = st.session_state.get("hypothesis_id", None)
+    if not hypothesis_id:
+        st.warning("No Hypothesis ID found in session. Please go back to Step 2.")
+        st.stop()
+
+    # Get the current hypothesis text and file info from DB
+    hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
+    if not hypothesis_entry:
+        st.error("Could not find hypothesis data in database.")
+        st.stop()
+
+    hypothesis_text = hypothesis_entry["text"]
+    st.write(f"**Hypothesis ID:** `{hypothesis_id}`")
+    st.write(f"**Hypothesis:** {hypothesis_text}")
+    st.markdown("---")
+    
+    # Check if we have a file ready for processing
+    if not st.session_state.get("file_ready_for_processing", False):
+        st.warning("No file ready for processing. Please complete Step 5 first.")
+        
+        if st.button("← Back to Step 5"):
+            st.session_state.process_step = 5
+            st.rerun()
+        st.stop()
+    
+    # Get essential data from session state
+    file_id = st.session_state.get("current_file_id")
+    filename = st.session_state.get("current_filename")
+    parsed_data = st.session_state.get("parsed_data")
+    validated_code = st.session_state.get("validated_code")
+    l_plus = st.session_state.get("l_plus")
+    l_minus = st.session_state.get("l_minus")
+    node = st.session_state.get("node")
+    
+    if not node or not validated_code:
+        st.error("Required session data is missing. Please go back to Step 5.")
+        if st.button("← Return to Step 5"):
+            st.session_state.process_step = 5
+            st.rerun()
+        st.stop()
+    
+    st.subheader(f"Processing file: {filename}")
+    
+    # Show a summary of the analysis so far
+    st.write("### Analysis Summary")
+    
+    # Convert log odds to probability for display
+    p_h_given_d = 1 / (1 + math.exp(-l_plus + l_minus))
+    
+    st.write(f"**l_plus (log P(data | hypothesis)):** {l_plus:.4f}")
+    st.write(f"**l_minus (log P(data | not hypothesis)):** {l_minus:.4f}")
+    st.write(f"**Probability of hypothesis given this data:** {p_h_given_d:.2%}")
+    
+    # Check if we've already processed the file
+    if st.session_state.get("file_processed", False):
+        st.success("File processing complete!")
+        st.write("### Final Node State and Analysis")
+        
+        # Display node state visualization
+        if node:
+            # Get current posterior and convert to probability
+            posterior_prob = 1 / (1 + math.exp(-node.current_posterior))
+            
+            # Display current probability
+            st.write(f"**Current probability of hypothesis:** {posterior_prob:.2%}")
+            
+            # Display confidence interval if available
+            lower, upper = node._calculate_uncertainty()
+            st.write(f"**95% Confidence Interval:** ({lower:.2%}, {upper:.2%})")
+            
+            # Create a progress bar to visualize probability
+            st.progress(posterior_prob)
+            
+            # Display data points table
+            if node.data_points:
+                st.write("### Evidence Summary")
+                
+                # Create a DataFrame for display
+                data_rows = []
+                for i, dp in enumerate(node.data_points):
+                    metadata = dp.get('metadata', {})
+                    filename = metadata.get('filename', f"Data point {i+1}")
+                    
+                    # Calculate Bayes factor
+                    bayes_factor = math.exp(dp['l_plus'] - dp['l_minus'])
+                    
+                    # Map strength of evidence
+                    if bayes_factor < 1:
+                        evidence_strength = "Evidence against hypothesis"
+                        evidence_color = "red"
+                    elif bayes_factor < 3:
+                        evidence_strength = "Weak evidence"
+                        evidence_color = "orange"
+                    elif bayes_factor < 10:
+                        evidence_strength = "Moderate evidence"
+                        evidence_color = "blue"
+                    elif bayes_factor < 30:
+                        evidence_strength = "Strong evidence"
+                        evidence_color = "green"
+                    else:
+                        evidence_strength = "Very strong evidence"
+                        evidence_color = "darkgreen"
+                    
+                    data_rows.append({
+                        "File": filename,
+                        "l_plus": round(dp['l_plus'], 4),
+                        "l_minus": round(dp['l_minus'], 4),
+                        "Bayes Factor": round(bayes_factor, 2),
+                        "Evidence Strength": evidence_strength
+                    })
+                
+                import pandas as pd
+                df = pd.DataFrame(data_rows)
+                st.dataframe(df)
+        
+        # Option to download node state
+        if "node_state_file_id" in st.session_state:
+            node_state_file_id = st.session_state["node_state_file_id"]
+            if fs.exists(node_state_file_id):
+                st.download_button(
+                    label="⬇️ Download Node State",
+                    data=fs.get(node_state_file_id).read(),
+                    file_name=f"{filename}_node_state.json",
+                    mime="application/json"
+                )
+        
+        # Option to download analysis
+        if "analysis_file_id" in st.session_state:
+            analysis_file_id = st.session_state["analysis_file_id"]
+            if fs.exists(analysis_file_id):
+                file_content = fs.get(analysis_file_id).read().decode()
+                st.download_button(
+                    label="⬇️ Download Analysis Report",
+                    data=file_content,
+                    file_name=f"{filename}_analysis.html",
+                    mime="text/html"
+                )
+                st.components.v1.html(file_content, height=600, scrolling=True)
+    
+    else:
+        # Display the validated code in a read-only text area
+        with st.expander("Review Finalized Analysis Code"):
+            st.code(validated_code, language="python")
+        
+        # Offer to process the file
+        st.subheader("Process File")
+        st.write("Click below to process the file using the validated analysis code.")
+        
+        process_col1, process_col2 = st.columns([1, 1])
+        
+        with process_col1:
+            if st.button("🚀 Process Evidence File"):
+                log_placeholder = st.empty()  # Create placeholder for logs
+                output_buffer = StreamToLogger(log_placeholder)
+                sys.stdout, sys.stderr = output_buffer, output_buffer  # Redirect logs to UI
+                
+                try:
+                    with st.spinner("Processing file..."):
+                        # Fetch file content and create temporary file
+                        file_obj = fs.get(ensure_object_id(file_id))
+                        temp_dir = tempfile.gettempdir()
+                        temp_file_path = os.path.join(temp_dir, filename)
+                        
+                        with open(temp_file_path, "wb") as f:
+                            f.write(file_obj.read())
+                        
+                        # Process the data interactively with validated code
+                        new_posterior, (lower, upper) = node.process_data_interactively(temp_file_path, validated_code)
+                        
+                        # Save node state to a temporary file
+                        temp_node_state_path = os.path.join(temp_dir, f"node_state_{filename}.json")
+                        node.save(temp_node_state_path)
+                        
+                        # Upload node state to GridFS
+                        with open(temp_node_state_path, "r", encoding="utf-8") as f:
+                            node_state_content = f.read()
+                        
+                        state_file_id = fs.put(
+                            node_state_content.encode(),
+                            filename=f"node_state_{filename}.json",
+                            content_type="application/json"
+                        )
+                        
+                        # Render analysis
+                        temp_analysis_path = os.path.join(temp_dir, f"analysis_{filename}.html")
+                        renderer = InFactRenderer()
+                        renderer.render_analysis(node, temp_analysis_path)
+                        
+                        # Upload analysis to GridFS
+                        with open(temp_analysis_path, "r", encoding="utf-8") as f:
+                            analysis_content = f.read()
+                        
+                        analysis_file_id = fs.put(
+                            analysis_content.encode(),
+                            filename=f"analysis_{filename}.html",
+                            content_type="text/html"
+                        )
+                        
+                        # Update file status in database
+                        db.fs.files.update_one(
+                            {"_id": ensure_object_id(file_id)},
+                            {
+                                "$set": {
+                                    "status": "processed",
+                                    "node_state_file_id": state_file_id,
+                                    "last_processed_at": datetime.datetime.utcnow(),
+                                    "analysis_file_id": analysis_file_id,
+                                }
+                            }
+                        )
+                        
+                        # Store IDs in session state
+                        st.session_state["node_state_file_id"] = state_file_id
+                        st.session_state["analysis_file_id"] = analysis_file_id
+                        st.session_state["file_processed"] = True
+                        
+                        # Cleanup temporary files
+                        try:
+                            os.remove(temp_file_path)
+                            os.remove(temp_node_state_path)
+                            os.remove(temp_analysis_path)
+                        except Exception as e:
+                            st.warning(f"Failed to remove temporary files: {str(e)}")
+                        
+                        st.success("File processed successfully!")
+                        st.rerun()
+                        
+                except Exception as e:
+                    st.error(f"Error processing file: {str(e)}")
+                
+                finally:
+                    # Restore stdout/stderr
+                    sys.stdout, sys.stderr = sys.__stdout__, sys.__stderr__
+        
+        with process_col2:
+            if st.button("Edit Analysis Code"):
+                # Go back to code editing in step 5
+                st.session_state["file_ready_for_processing"] = False
+                st.session_state.process_step = 5
+                st.rerun()
+    
+    # Navigation
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 1, 1])
+    
+    with col1:
+        if st.button("← Back to Step 5"):
+            # Keep most session state but reset processing flag
+            st.session_state["file_ready_for_processing"] = False
+            st.session_state.process_step = 5
+            st.rerun()
+    
+    with col2:
+        if st.button("Process New Evidence"):
+            # Clean up session state for new file
+            for key in ["current_file_id", "current_filename", "parsed_data", 
+                       "generated_code", "validated_code", "l_plus", "l_minus",
+                       "file_ready_for_processing", "file_processed",
+                       "node_state_file_id", "analysis_file_id"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            
+            # Keep the node object to maintain state
+            st.session_state.process_step = 5
+            st.rerun()
+    
+    with col3:
+        if st.button("View All Results"):
+            # Navigate to a hypothetical results page
+            st.session_state.process_step = 7  # Assuming step 7 is results view
+            st.rerun()
