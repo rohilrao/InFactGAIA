@@ -85,7 +85,7 @@ def save_parsed_data_to_file(file_id, parsed_data):
             {"_id": file_id},  # Update file by its unique ID
             {"$set": {
                 "parsed_data": parsed_data,
-                "status": "processed"  # Mark file as processed
+                "parsing_complete": True  
             }}
         )
         st.success("✅ Parsed data stored successfully")
@@ -629,6 +629,7 @@ elif st.session_state.process_step == 4:
                         "hypothesis_id": hypothesis_id,
                         "hypothesis_text": hypothesis_text
                     },
+                    status="unprocessed",
                     upload_date=str(datetime.date.today()),
                 )
                 
