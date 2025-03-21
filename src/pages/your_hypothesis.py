@@ -25,7 +25,7 @@ from jinja2 import Template
 process_steps = {
     1: "Setup",
     2: "Create Hypothesis", 
-    3: "Configure Model",
+    3: "Generate Summary",
     4: "Upload Files",
     5: "Interactive Code Review",
     6: "Evidence Processing",
@@ -704,14 +704,15 @@ elif st.session_state.process_step == 4:
             st.rerun()
             
     with col2:
-        if st.button("Finish"):
-            # Clean up session state
+        if st.button("Next → to Code Review"):
+            # Clean up any temporary processing state
             for key in ["is_parsing", "current_file_id", "current_filename"]:
                 if key in st.session_state:
                     del st.session_state[key]
                     
-            st.write("All steps completed! Your hypothesis and files have been saved.")
-
+            # Advance to the next step
+            st.session_state.process_step = 5
+            st.rerun()
 # ----------------------------
 # STEP 5: Interactive Code Review
 # ----------------------------
