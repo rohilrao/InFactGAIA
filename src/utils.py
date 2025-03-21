@@ -39,50 +39,24 @@ from anthropic import Anthropic
 
 
 def parse_data(file_path: str, hypothesis: str, provider: str, model: str, api_key: str) -> Dict:
+    """
+    Parse file data and extract information relevant to a hypothesis using the specified LLM.
+    
+    Args:
+        file_path: Path to the file to be analyzed
+        hypothesis: The hypothesis to evaluate against
+        provider: "GPT" or "Anthropic"
+        model: Model name (e.g., "gpt-4o", "claude-3-5-sonnet")
+        api_key: API key for the provider
+        
+    Returns:
+        Dict containing parsed data or error information
+    """
+    print(f"DEBUG - Parsing file: {file_path} using {provider}/{model}")
     file_type = Path(file_path).suffix.lower()
+    
     try:
-        if file_type == ".csv":
-            df = pd.read_csv(file_path)
-            content = df.to_string()
-            message_content = [{"type": "text", "text": content}]
-        elif file_type in [".pdf", ".PDF"]:
-            with open(file_path, "rb") as f:
-                pdf_data = base64.b64encode(f.read()).decode("utf-8")
-            message_content = [
-                {
-                    "type": "document",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "application/pdf",
-                        "data": pdf_data
-                    }
-                }
-            ]
-        elif file_type in [".png", ".jpg", ".jpeg", ".gif", ".webp"]:
-            with open(file_path, "rb") as f:
-                img_data = base64.b64encode(f.read()).decode("utf-8")
-            media_type = {
-                ".png": "image/png",
-                ".jpg": "image/jpeg",
-                ".jpeg": "image/jpeg",
-                ".gif": "image/gif",
-                ".webp": "image/webp"
-            }[file_type]
-            message_content = [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": media_type,
-                        "data": img_data
-                    }
-                }
-            ]
-        else:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            message_content = [{"type": "text", "text": content}]
-
+        # Prepare the base prompt text
         prompt = f"""Extract relevant data points for evaluating the hypothesis:
         "{hypothesis}"
 
@@ -119,92 +93,436 @@ def parse_data(file_path: str, hypothesis: str, provider: str, model: str, api_k
         3. Any potential issues or biases in the data
         """
 
-        message_content.append({"type": "text", "text": prompt})
+        # Handle different providers and file types appropriately
+        if provider == "GPT":
+            return _parse_with_openai(file_path, file_type, hypothesis, model, api_key, prompt)
+        elif provider == "Anthropic":
+            return _parse_with_anthropic(file_path, file_type, hypothesis, model, api_key, prompt)
+        else:
+            return {"error": f"Unsupported provider: {provider}"}
+            
+    except Exception as e:
+        print(f"DEBUG - Error in parse_data: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
 
-        try:
-            if provider == "GPT":
-                client = OpenAI(api_key=api_key)
+def _parse_with_openai(file_path, file_type, hypothesis, model, api_key, prompt):
+    """Handle parsing with OpenAI models"""
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key)
+    
+    try:
+        # Handle different file types for OpenAI
+        if file_type == ".csv":
+            try:
+                # Read CSV as text
+                df = pd.read_csv(file_path)
+                content = df.to_string()
+                
+                messages = [{"role": "user", "content": [
+                    {"type": "text", "text": content},
+                    {"type": "text", "text": prompt}
+                ]}]
+            except Exception as e:
+                print(f"DEBUG - Error reading CSV, falling back to basic text: {str(e)}")
+                # Fall back to simple text reading
+                with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                messages = [{"role": "user", "content": [
+                    {"type": "text", "text": f"CSV Content (read as text):\n{content[:15000]}"},
+                    {"type": "text", "text": prompt}
+                ]}]
+            
+        elif file_type in [".pdf", ".PDF"]:
+            # For PDFs with OpenAI, try multiple approaches with fallbacks
+            
+            # First, try to determine if we can use vision capabilities
+            has_vision = "gpt-4" in model and "vision" in model or "gpt-4o" in model
+            
+            # Define a text extraction fallback
+            def extract_text_fallback():
+                print("DEBUG - Using text extraction fallback for PDF")
+                try:
+                    # Try PyMuPDF first
+                    try:
+                        import fitz  # PyMuPDF
+                        doc = fitz.open(file_path)
+                        text = ""
+                        for page in doc:
+                            text += page.get_text()
+                        return text
+                    except Exception as e:
+                        print(f"DEBUG - PyMuPDF failed: {str(e)}, trying pdfplumber")
+                        
+                    # Fall back to pdfplumber
+                    try:
+                        import pdfplumber
+                        with pdfplumber.open(file_path) as pdf:
+                            text = ""
+                            for page in pdf.pages:
+                                text += page.extract_text() or ""
+                        return text
+                    except Exception as e:
+                        print(f"DEBUG - pdfplumber failed: {str(e)}, trying textract")
+                        
+                    # Fall back to textract as last resort
+                    try:
+                        import textract
+                        text = textract.process(file_path, method='pdfminer').decode('utf-8')
+                        return text
+                    except Exception as e:
+                        print(f"DEBUG - textract failed: {str(e)}")
+                        
+                    # If all else fails, inform about the issue
+                    return "Error: Unable to extract text from PDF using multiple methods."
+                        
+                except ImportError as e:
+                    print(f"DEBUG - PDF extraction libraries not available: {str(e)}")
+                    return "Error: Required PDF processing libraries not installed."
+            
+            # Start with preferred method based on model capabilities
+            if has_vision:
+                try:
+                    # Option 1: Use the vision capability to handle PDFs
+                    import fitz  # PyMuPDF
+                    
+                    doc = fitz.open(file_path)
+                    content_parts = []
+                    
+                    # Only process first few pages to avoid token limits
+                    max_pages = min(5, len(doc))
+                    
+                    for page_num in range(max_pages):
+                        page = doc.load_page(page_num)
+                        pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
+                        img_data = pix.tobytes("png")
+                        
+                        # Convert to base64
+                        img_b64 = base64.b64encode(img_data).decode('utf-8')
+                        content_parts.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{img_b64}"
+                            }
+                        })
+                    
+                    # Add text prompt after all images
+                    content_parts.append({"type": "text", "text": prompt})
+                    messages = [{"role": "user", "content": content_parts}]
+                    
+                except Exception as e:
+                    print(f"DEBUG - Failed to process PDF as images: {str(e)}, falling back to text extraction")
+                    # Fall back to text extraction
+                    extracted_text = extract_text_fallback()
+                    messages = [{"role": "user", "content": [
+                        {"type": "text", "text": f"PDF Content:\n{extracted_text[:15000]}"},
+                        {"type": "text", "text": prompt}
+                    ]}]
+            else:
+                # For non-vision models, go straight to text extraction
+                extracted_text = extract_text_fallback()
+                messages = [{"role": "user", "content": [
+                    {"type": "text", "text": f"PDF Content:\n{extracted_text[:15000]}"},
+                    {"type": "text", "text": prompt}
+                ]}]
+        
+        elif file_type in [".png", ".jpg", ".jpeg", ".gif", ".webp"]:
+            # Handle images - OpenAI requires image_url format
+            with open(file_path, "rb") as f:
+                img_data = base64.b64encode(f.read()).decode("utf-8")
+            
+            media_type = {
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".gif": "image/gif",
+                ".webp": "image/webp"
+            }[file_type]
+            
+            messages = [{"role": "user", "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{media_type};base64,{img_data}"
+                    }
+                },
+                {"type": "text", "text": prompt}
+            ]}]
+            
+        else:
+            # Handle text-based files
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            
+            messages = [{"role": "user", "content": [
+                {"type": "text", "text": content},
+                {"type": "text", "text": prompt}
+            ]}]
+        
+        # Make the API call
+        print(f"DEBUG - Calling OpenAI API with model {model}")
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=4096,
+            temperature=0.1,
+        )
+        
+        response_text = response.choices[0].message.content
+        return _extract_json_response(response_text)
+        
+    except Exception as e:
+        print(f"DEBUG - OpenAI API error: {str(e)}")
+        if "429" in str(e) or "rate_limit" in str(e).lower():
+            # Try with truncated content
+            try:
+                # Simplify messages to just the prompt with minimal file content
+                messages = [{"role": "user", "content": [
+                    {"type": "text", "text": f"[Limited file content due to size constraints]"},
+                    {"type": "text", "text": prompt}
+                ]}]
+                
                 response = client.chat.completions.create(
                     model=model,
-                    max_tokens=8192,
+                    messages=messages,
+                    max_tokens=4096,
                     temperature=0.1,
-                    messages=[{"role": "user", "content": message_content}],
                 )
+                
                 response_text = response.choices[0].message.content
-            elif provider == "Anthropic":
-                client = Anthropic(api_key=api_key)
+                return _extract_json_response(response_text)
+                
+            except Exception as retry_error:
+                return {
+                    "error": "Rate limit exceeded even after truncation",
+                    "details": str(retry_error)
+                }
+        else:
+            return {"error": str(e)}
+
+def _parse_with_anthropic(file_path, file_type, hypothesis, model, api_key, prompt):
+    """Handle parsing with Anthropic Claude models"""
+    from anthropic import Anthropic
+    client = Anthropic(api_key=api_key)
+    
+    # Define a helper function for PDF text extraction as fallback
+    def extract_text_from_pdf():
+        print("DEBUG - Using text extraction fallback for PDF with Claude")
+        try:
+            # Try PyMuPDF first
+            try:
+                import fitz  # PyMuPDF
+                doc = fitz.open(file_path)
+                text = ""
+                for page in doc:
+                    text += page.get_text()
+                return text
+            except Exception as e:
+                print(f"DEBUG - PyMuPDF failed: {str(e)}, trying pdfplumber")
+                
+            # Fall back to pdfplumber
+            try:
+                import pdfplumber
+                with pdfplumber.open(file_path) as pdf:
+                    text = ""
+                    for page in pdf.pages:
+                        text += page.extract_text() or ""
+                return text
+            except Exception as e:
+                print(f"DEBUG - pdfplumber failed: {str(e)}, trying textract")
+                
+            # Fall back to textract as last resort
+            try:
+                import textract
+                text = textract.process(file_path, method='pdfminer').decode('utf-8')
+                return text
+            except Exception as e:
+                print(f"DEBUG - All PDF extraction methods failed: {str(e)}")
+                return "Error: Unable to extract text from PDF."
+                
+        except ImportError as e:
+            print(f"DEBUG - PDF extraction libraries not available: {str(e)}")
+            return "Error: Required PDF processing libraries not installed."
+    
+    try:
+        # Prepare the message content based on file type
+        if file_type == ".csv":
+            try:
+                df = pd.read_csv(file_path)
+                content = df.to_string()
+                message_content = [
+                    {"type": "text", "text": content},
+                    {"type": "text", "text": prompt}
+                ]
+            except Exception as e:
+                print(f"DEBUG - Error reading CSV, falling back to basic text: {str(e)}")
+                # Fall back to simple text reading
+                with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.read()
+                message_content = [
+                    {"type": "text", "text": f"CSV Content (read as text):\n{content[:15000]}"},
+                    {"type": "text", "text": prompt}
+                ]
+            
+        elif file_type in [".pdf", ".PDF"]:
+            # First try native PDF handling for Claude
+            try:
+                with open(file_path, "rb") as f:
+                    pdf_data = base64.b64encode(f.read()).decode("utf-8")
+                
+                message_content = [
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": pdf_data
+                        }
+                    },
+                    {"type": "text", "text": prompt}
+                ]
+                
+                # Test the API call with minimal prompt to see if PDF handling works
+                # This lets us catch file type errors before sending the full content
+                test_response = client.messages.create(
+                    model=model,
+                    max_tokens=10,  # Minimal tokens for test
+                    messages=[{
+                        "role": "user", 
+                        "content": [
+                            {
+                                "type": "document",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "application/pdf",
+                                    "data": pdf_data
+                                }
+                            },
+                            {"type": "text", "text": "Is this PDF readable? Just say yes or no."}
+                        ]
+                    }]
+                )
+                
+                # If we get here, PDF handling works, continue with original message_content
+                print("DEBUG - Claude direct PDF handling successful")
+                
+            except Exception as e:
+                print(f"DEBUG - Claude PDF handling failed: {str(e)}, falling back to text extraction")
+                # Extract text as fallback
+                extracted_text = extract_text_from_pdf()
+                message_content = [
+                    {"type": "text", "text": f"PDF Content:\n{extracted_text[:25000]}"},
+                    {"type": "text", "text": prompt}
+                ]
+            
+        elif file_type in [".png", ".jpg", ".jpeg", ".gif", ".webp"]:
+            with open(file_path, "rb") as f:
+                img_data = base64.b64encode(f.read()).decode("utf-8")
+                
+            media_type = {
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".gif": "image/gif",
+                ".webp": "image/webp"
+            }[file_type]
+            
+            message_content = [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": img_data
+                    }
+                },
+                {"type": "text", "text": prompt}
+            ]
+            
+        else:
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+                
+            message_content = [
+                {"type": "text", "text": content},
+                {"type": "text", "text": prompt}
+            ]
+        
+        # Make the API call
+        print(f"DEBUG - Calling Claude API with model {model}")
+        message = client.messages.create(
+            model=model,
+            max_tokens=4096,
+            temperature=0.1,
+            messages=[{"role": "user", "content": message_content}]
+        )
+        
+        response_text = message.content[0].text
+        return _extract_json_response(response_text)
+        
+    except Exception as e:
+        print(f"DEBUG - Claude API error: {str(e)}")
+        if "429" in str(e) or "rate_limit" in str(e).lower():
+            # Try with truncated content
+            try:
+                # Simplify message to just the prompt
+                message_content = [
+                    {"type": "text", "text": "[Limited file content due to size constraints]"},
+                    {"type": "text", "text": prompt}
+                ]
+                
                 message = client.messages.create(
                     model=model,
-                    max_tokens=8192,
+                    max_tokens=4096,
                     temperature=0.1,
-                    messages=[{"role": "user", "content": message_content}],
+                    messages=[{"role": "user", "content": message_content}]
                 )
+                
                 response_text = message.content[0].text
-            else:
-                return {"error": "Unsupported LLM provider"}
-        except Exception as e:
-            error_message = str(e)
-            if "429" in error_message or "rate_limit_error" in error_message:
-                for item in message_content:
-                    if item["type"] == "text":
-                        c = item["text"]
-                        if len(c) > 10000:
-                            item["text"] = c[:10000] + "\n... [truncated] ..."
-                try:
-                    if provider == "GPT":
-                        client = OpenAI(api_key=api_key)
-                        response = client.chat.completions.create(
-                            model=model,
-                            max_tokens=8192,
-                            temperature=0.1,
-                            messages=[{"role": "user", "content": message_content}],
-                        )
-                        response_text = response.choices[0].message.content
-                    elif provider == "Anthropic":
-                        client = Anthropic(api_key=api_key)
-                        message = client.messages.create(
-                            model=model,
-                            max_tokens=8192,
-                            temperature=0.1,
-                            messages=[{"role": "user", "content": message_content}],
-                        )
-                        response_text = message.content[0].text
-                    else:
-                        return {"error": "Unsupported LLM provider"}
-                except Exception as retry_error:
-                    return {
-                        "error": "Rate limit exceeded even after truncation",
-                        "details": str(retry_error),
-                    }
-            else:
-                return {"error": error_message}
+                return _extract_json_response(response_text)
+                
+            except Exception as retry_error:
+                return {
+                    "error": "Rate limit exceeded even after truncation",
+                    "details": str(retry_error)
+                }
+        else:
+            return {"error": str(e)}
 
-        if not response_text:
-            return {"error": "No response from LLM"}
-
-        try:
-            extracted_blocks = extract_code(response_text)
-            json_str = None
-            for lang, block in extracted_blocks:
-                if lang.lower() in ["json", ""]:
-                    try:
-                        json.loads(block)
-                        json_str = block
-                        break
-                    except json.JSONDecodeError:
-                        continue
-            if not json_str:
-                json_str = response_text
-            parsed_data = json.loads(json_str)
-            return parsed_data
-        except json.JSONDecodeError:
-            return {
-                "extraction_error": "Failed to parse LLM response",
-                "raw_response": response_text
-            }
-    except Exception as e:
-        return {"error": str(e)}
+def _extract_json_response(response_text):
+    """Extract and parse JSON from the model response"""
+    import re
+    import json
     
+    # Look for JSON code blocks
+    json_pattern = r'```(?:json)?([\s\S]*?)```'
+    matches = re.findall(json_pattern, response_text)
+    
+    if matches:
+        # Try each match until we find valid JSON
+        for match in matches:
+            try:
+                parsed_data = json.loads(match.strip())
+                return parsed_data
+            except json.JSONDecodeError:
+                continue
+    
+    # If no valid JSON in code blocks, try to find JSON directly
+    try:
+        # Look for any text that might be JSON (between curly braces)
+        json_candidate = re.search(r'({[\s\S]*})', response_text)
+        if json_candidate:
+            parsed_data = json.loads(json_candidate.group(1))
+            return parsed_data
+    except (json.JSONDecodeError, AttributeError):
+        pass
+    
+    # If all else fails, return the raw response
+    return {
+        "extraction_error": "Failed to parse JSON from response",
+        "raw_response": response_text
+    }
 
 # ✅ Function to get processed files JSON path
 def get_processed_log_path(node_type, results_dir):
