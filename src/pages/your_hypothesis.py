@@ -334,8 +334,9 @@ elif st.session_state.process_step == 2:
                     "text": new_text,
                     "auto_summary": None
                 })
-                st.session_state["hypothesis_id"] = hypothesis_id
                 st.success(f"✅ Created new hypothesis with ID '{hypothesis_id}'")
+                datetime.time.sleep(1)  # optional polish
+                st.session_state["id_exists"] = True  # this makes the button disappear on rerun
                 st.rerun()
         else:
             # If ID exists, user can't create or overwrite
