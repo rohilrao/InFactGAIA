@@ -21,6 +21,15 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) 
 from utils import parse_data 
 from jinja2 import Template
 
+# Helper function for consistent ObjectId handling
+def ensure_object_id(id_value):
+    """Convert string IDs to ObjectId if needed."""
+    if isinstance(id_value, str) and ObjectId.is_valid(id_value):
+        try:
+            return ObjectId(id_value)
+        except:
+            return id_value
+    return id_value
 
 # ✅ Function to store parsed data in MongoDB under the file entry in `fs.files`
 def save_parsed_data_to_file(file_id, parsed_data):
@@ -28,6 +37,7 @@ def save_parsed_data_to_file(file_id, parsed_data):
     Updates the MongoDB GridFS file entry with parsed data.
     """
     try:
+        file_id = ensure_object_id(file_id)
         db.fs.files.update_one(
             {"_id": file_id},  # Update file by its unique ID
             {"$set": {
@@ -35,7 +45,7 @@ def save_parsed_data_to_file(file_id, parsed_data):
                 "status": "processed"  # Mark file as processed
             }}
         )
-        st.success(f"✅ Parsed data stored successfully for file ID: {file_id}")
+        st.success("✅ Parsed data stored successfully")
     except Exception as e:
         st.error(f"❌ Failed to save parsed data: {str(e)}")
 
@@ -358,17 +368,20 @@ elif st.session_state.process_step == 2:
 
         if can_proceed:
             if st.button("Next →"):
-                # Save the "active" hypothesis ID in session, if not already set
-                if "hypothesis_id" not in st.session_state:
-                    st.session_state["hypothesis_id"] = hypothesis_id
+                # Use a single set operation for the session state
+                st.session_state["hypothesis_id"] = hypothesis_id
+                
+                # Also store the hypothesis text for later use
+                hypothesis_doc = hypothesis_collection.find_one({"_id": hypothesis_id})
+                if hypothesis_doc:
+                    st.session_state["hypothesis_text"] = hypothesis_doc["text"]
+                
                 st.session_state.process_step = 3
                 st.rerun()
 
 # ----------------------------
 # STEP 3: Generate Summary
 # ----------------------------
-
-
 elif st.session_state.process_step == 3:
     st.header("Step 3: Hypothesis Refinement & Summary")
 
@@ -393,11 +406,18 @@ elif st.session_state.process_step == 3:
     # ─────────────────────────────────────────────────────────────────
     # Automatically Reformulate as Yes/No with Progress Indicator
     # ─────────────────────────────────────────────────────────────────
-    if "yes_no_formulation" not in hypothesis_entry or hypothesis_entry.get("yes_no_formulation") is None:
+    need_reformulation = False
+    if "original_text" not in hypothesis_entry:
+        need_reformulation = True
+    elif hypothesis_entry["original_text"] == hypothesis_entry["text"]:
+        need_reformulation = True
+
+    if need_reformulation:
         with st.spinner("🔄 Reformulating hypothesis..."):
             prompt_reformulate = (
                 f"Given this hypothesis:\n\n'{original_text}'\n\n"
-                "Rewrite/Reformulate it as a clear, concise Yes-No question. The answer to the reformulated question should be either 'Yes' or 'No'."
+                "Rewrite/Reformulate it as a clear, concise Yes-No question. " 
+                "The answer to the reformulated question should be either 'Yes' or 'No'. "
                 "Keep your response brief — ONLY return the reformulated question, nothing else."
             )
             
@@ -409,6 +429,10 @@ elif st.session_state.process_step == 3:
                 prompt_text=prompt_reformulate
             ).strip()
             
+            # Validate the response (basic check that it ends with a question mark)
+            if not yes_no_formulation.endswith('?'):
+                yes_no_formulation = yes_no_formulation.rstrip('.') + '?'
+            
             # Update DB
             hypothesis_collection.update_one(
                 {"_id": hypothesis_id},
@@ -418,7 +442,11 @@ elif st.session_state.process_step == 3:
                 }}
             )
             
-            # Refresh the data
+            # Refresh the data in session state for use in Step 4
+            st.session_state["hypothesis_text"] = yes_no_formulation
+            
+            # Refresh the data in current view
+            hypothesis_entry["original_text"] = original_text
             hypothesis_entry["text"] = yes_no_formulation
     
     st.write("#### Refined Hypothesis:")
@@ -496,9 +524,6 @@ elif st.session_state.process_step == 3:
 # ----------------------------
 # STEP 4: File Manager
 # ----------------------------
-
-
-
 elif st.session_state.process_step == 4:
     st.header("Step 4: Upload Files for Your Hypothesis")
 
@@ -507,7 +532,17 @@ elif st.session_state.process_step == 4:
         st.warning("No Hypothesis ID found in session. Please go back to Step 2.")
         st.stop()
 
+    # Get the current hypothesis text from DB to ensure we have the latest version
+    hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
+    if not hypothesis_entry:
+        st.error("Could not find hypothesis data in database.")
+        st.stop()
+
+    hypothesis_text = hypothesis_entry["text"]
+    st.session_state["hypothesis_text"] = hypothesis_text  # Keep session state in sync
+    
     st.subheader(f"Hypothesis ID: `{hypothesis_id}`")
+    st.write(f"Hypothesis: **{hypothesis_text}**")
 
     # ========== FILE UPLOAD SECTION ========= #
     uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg", "html", "csv"])
@@ -528,7 +563,10 @@ elif st.session_state.process_step == 4:
             file_id = fs.put(
                 file_content,
                 filename=file_name,
-                metadata={"hypothesis_id": hypothesis_id},
+                metadata={
+                    "hypothesis_id": hypothesis_id,
+                    "hypothesis_text": hypothesis_text
+                },
                 upload_date=str(datetime.date.today()),
             )
 
@@ -548,10 +586,14 @@ elif st.session_state.process_step == 4:
         for file in files:
             file_id = file["_id"]
             filename = file["filename"]
+            
+            # Check if this file has been processed
+            has_parsed_data = "parsed_data" in file
+            status_label = "✅ Processed" if has_parsed_data else "⏳ Not processed"
 
-            col1, col2, col3 = st.columns([3, 1, 1])
+            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
             with col1:
-                st.markdown(f"📄 **{filename}**")
+                st.markdown(f"📄 **{filename}** ({status_label})")
 
             with col2:
                 with fs.get(file_id) as grid_out:
@@ -559,17 +601,44 @@ elif st.session_state.process_step == 4:
                 st.download_button("⬇️ Download", file_content, filename, key=f"download_{file_id}")
 
             with col3:
+                # Show parsed data if it exists
+                if has_parsed_data:
+                    if st.button("🔍 View Analysis", key=f"view_{file_id}"):
+                        st.session_state["viewing_file_id"] = file_id
+                        st.session_state["viewing_filename"] = filename
+                        st.rerun()
+
+            with col4:
                 # ❌ **FIXED: Prevent Deleting While Parsing**
                 if st.session_state.get("is_parsing") and st.session_state.get("latest_uploaded_file_id") == file_id:
                     st.button("🔄 Parsing...", disabled=True, key=f"disable_delete_{file_id}")  # **Disable delete**
                 else:
                     if st.button("🗑️ Delete", key=f"delete_{file_id}"):
-                        fs.delete(file_id)
+                        fs.delete(ensure_object_id(file_id))
                         st.warning(f"Deleted {filename}")
                         st.rerun()
 
+    # Show the parsed data for a selected file if any
+    if "viewing_file_id" in st.session_state:
+        view_file_id = ensure_object_id(st.session_state["viewing_file_id"])
+        view_filename = st.session_state["viewing_filename"]
+        
+        # Get file from GridFS
+        file_doc = db.fs.files.find_one({"_id": view_file_id})
+        
+        if file_doc and "parsed_data" in file_doc:
+            st.subheader(f"🔍 Analysis for {view_filename}")
+            st.write("---")
+            render_parsed_data(file_doc["parsed_data"], view_filename)
+            
+            if st.button("Close Analysis View"):
+                del st.session_state["viewing_file_id"]
+                del st.session_state["viewing_filename"]
+                st.rerun()
+            st.write("---")
+
     # ✅ Step 3: Parse the Latest Uploaded File (ONLY the most recent one)
-    if "latest_uploaded_file_id" in st.session_state:
+    if "latest_uploaded_file_id" in st.session_state and st.session_state.get("is_parsing", False):
         file_id = st.session_state["latest_uploaded_file_id"]
         filename = st.session_state["latest_uploaded_filename"]
 
@@ -578,20 +647,30 @@ elif st.session_state.process_step == 4:
         temp_file_path = os.path.join(temp_dir, filename)
 
         with open(temp_file_path, "wb") as f:
-            f.write(fs.get(file_id).read())
+            f.write(fs.get(ensure_object_id(file_id)).read())
 
         st.write(f"📂 **Temp file created for parsing:** `{temp_file_path}`")
 
         # ✅ Parse the file
         with st.spinner(f"🔄 Parsing {filename}..."):
             try:
-                hypothesis_text = st.session_state.get("hypothesis_text", "")
                 provider = st.session_state.get("provider")
                 model = st.session_state.get("model")
                 api_key = st.session_state.get("api_key")
 
                 parsed_data = parse_data(temp_file_path, hypothesis_text, provider, model, api_key)
-                st.session_state[f"parsed_data_{file_id}"] = parsed_data  # Store parsed data for this file
+                
+                # Store parsed data in the session temporarily
+                st.session_state[f"parsed_data_{file_id}"] = parsed_data
+                
+                # But also save directly to MongoDB for persistence
+                save_parsed_data_to_file(file_id, parsed_data)
+                
+                # Clean up the temp file
+                try:
+                    os.remove(temp_file_path)
+                except:
+                    pass
 
             except Exception as e:
                 st.error(f"❌ Error parsing file {filename}: {str(e)}")
@@ -613,4 +692,11 @@ elif st.session_state.process_step == 4:
             st.rerun()
     with col2:
         if st.button("Finish"):
-            st.success("All steps completed!")
+            # Clear temporary state before finishing
+            if "latest_uploaded_file_id" in st.session_state:
+                del st.session_state["latest_uploaded_file_id"]
+                del st.session_state["latest_uploaded_filename"] 
+            if "is_parsing" in st.session_state:
+                del st.session_state["is_parsing"]
+                
+            st.success("✅ All steps completed! Your hypothesis and associated files have been saved.")
