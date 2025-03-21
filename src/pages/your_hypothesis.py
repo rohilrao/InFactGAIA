@@ -322,7 +322,6 @@ elif st.session_state.process_step == 2:
         # Only show "Create Hypothesis" if ID doesn't exist
         if st.session_state["id_exists"] is False and hypothesis_id:
             if st.button("Create Hypothesis"):
-                # Must have text
                 new_text = st.session_state.get("hypothesis_text_input", "").strip()
                 if not new_text:
                     st.warning("⚠️ Please enter text before creating a new hypothesis.")
@@ -335,9 +334,15 @@ elif st.session_state.process_step == 2:
                     "text": new_text,
                     "auto_summary": None
                 })
+
+                # Mark as created
+                st.session_state["hypothesis_id"] = hypothesis_id
+
+                # 🔥 FORCE CHECK so button disappears on rerun
+                check_hypothesis_id()
+
                 st.success(f"✅ Created new hypothesis with ID '{hypothesis_id}'")
-                time.sleep(1)  # optional polish
-                st.session_state["id_exists"] = True  # this makes the button disappear on rerun
+                time.sleep(1)
                 st.rerun()
         else:
             # If ID exists, user can't create or overwrite
