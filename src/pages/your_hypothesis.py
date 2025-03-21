@@ -15,6 +15,7 @@ from pathlib import Path
 import os
 import tempfile
 import sys
+import time
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))  # Adds "src" to path
 
 from utils import parse_data 
@@ -335,7 +336,7 @@ elif st.session_state.process_step == 2:
                     "auto_summary": None
                 })
                 st.success(f"✅ Created new hypothesis with ID '{hypothesis_id}'")
-                datetime.time.sleep(1)  # optional polish
+                time.sleep(1)  # optional polish
                 st.session_state["id_exists"] = True  # this makes the button disappear on rerun
                 st.rerun()
         else:
