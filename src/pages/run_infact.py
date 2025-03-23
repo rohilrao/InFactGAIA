@@ -45,6 +45,40 @@ def ensure_object_id(id_value):
             return id_value
     return id_value
 
+# ------------------------------------------------
+# Helper: LLM call function
+# ------------------------------------------------
+def call_llm(provider, model, api_key, prompt_text):
+    """
+    Function to call GPT or Anthropic.
+    """
+    # For GPT
+    if provider == "GPT":
+        openai.api_key = api_key
+        response = openai.chat.completions.create(
+            model=model,
+            max_tokens=8192,
+            messages=[{"role": "user", "content": prompt_text}],
+            temperature=0.1
+        )
+        return response.choices[0].message.content
+
+    # For Anthropic
+    elif provider == "Anthropic":
+        client = Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model=model,
+            max_tokens=8192,
+            temperature=0.1,
+            messages=[
+                {"role": "user", "content": prompt_text}
+            ]
+        )
+        return message.content[0].text
+
+    else:
+        raise ValueError("Unsupported provider")
+
 # Step 1: AI Model Config
 if st.session_state.process_step == 1:
     if display_setup_step():
@@ -90,36 +124,3 @@ elif st.session_state.process_step == 4:
 # Additional steps follow the same pattern...
 # Step 4, 5, 6, 7, etc.
 
-# ------------------------------------------------
-# Helper: LLM call function
-# ------------------------------------------------
-def call_llm(provider, model, api_key, prompt_text):
-    """
-    Function to call GPT or Anthropic.
-    """
-    # For GPT
-    if provider == "GPT":
-        openai.api_key = api_key
-        response = openai.chat.completions.create(
-            model=model,
-            max_tokens=8192,
-            messages=[{"role": "user", "content": prompt_text}],
-            temperature=0.1
-        )
-        return response.choices[0].message.content
-
-    # For Anthropic
-    elif provider == "Anthropic":
-        client = Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model=model,
-            max_tokens=8192,
-            temperature=0.1,
-            messages=[
-                {"role": "user", "content": prompt_text}
-            ]
-        )
-        return message.content[0].text
-
-    else:
-        raise ValueError("Unsupported provider")
