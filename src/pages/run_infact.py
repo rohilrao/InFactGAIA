@@ -23,6 +23,11 @@ from pathlib import Path
 import pandas as pd
 from bson.objectid import ObjectId
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))  # Adds "src" to path
+
+from utils import parse_data 
+from jinja2 import Template
+
 # Initialize app
 st.title("Hypothesis Wizard")
 
