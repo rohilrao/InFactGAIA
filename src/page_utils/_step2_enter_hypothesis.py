@@ -1,7 +1,10 @@
 import time
 import streamlit as st
+import sys
+import os
+# Add the src folder to the path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from src.db import hypothesis_collection
-
 
 def check_hypothesis_id():
     """Checks if the user-entered ID exists in MongoDB and stores the result."""
