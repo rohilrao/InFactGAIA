@@ -12,6 +12,9 @@ from page_utils.setup_step import display_setup_step
 from page_utils.hypothesis_step import display_hypothesis_step
 from page_utils.summary_step import display_summary_step
 from page_utils.file_upload_step import display_file_upload_step
+from page_utils.code_review_step import display_code_review_step
+from page_utils.evidence_step import display_evidence_step
+from page_utils.results_step import display_results_step
 
 # Import other necessary modules for remaining steps
 from anthropic import Anthropic
@@ -126,6 +129,44 @@ elif st.session_state.process_step == 4:
         st.rerun()
 
 
-# Additional steps follow the same pattern...
-# Step 4, 5, 6, 7, etc.
+# Step 5: Interactive Code Review
+elif st.session_state.process_step == 5:
+    result = display_code_review_step(db, fs, hypothesis_collection)
+    
+    if result == "next":
+        st.session_state.process_step = 6
+        st.rerun()
+    elif result == "back":
+        st.session_state.process_step = 4
+        st.rerun()
+    elif result == "reload":
+        st.rerun()
 
+# Step 6: Evidence Processing
+elif st.session_state.process_step == 6:
+    result = display_evidence_step(db, fs, hypothesis_collection)
+    
+    if result == "next":
+        st.session_state.process_step = 7
+        st.rerun()
+    elif result == "back":
+        st.session_state.process_step = 5
+        st.rerun()
+    elif result == "back_to_step5":
+        # Special case to go back to step 5 but keep node state
+        st.session_state.process_step = 5
+        st.rerun()
+    elif result == "reload":
+        st.rerun()
+
+# Step 7: View Results
+elif st.session_state.process_step == 7:
+    result = display_results_step(db, fs, hypothesis_collection)
+    
+    if result == "back":
+        st.session_state.process_step = 6
+        st.rerun()
+    elif result == "home":
+        # Reset to start
+        st.session_state.process_step = 1
+        st.rerun()
