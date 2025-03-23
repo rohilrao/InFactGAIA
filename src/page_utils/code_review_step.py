@@ -187,8 +187,10 @@ def display_code_review_step(db, fs, hypothesis_collection):
                     if feedback:
                         with st.spinner("Regenerating code based on feedback..."):
                             try:
-                                # Get the node
+                                # Get the node and provider
                                 node = st.session_state.get("node")
+                                provider = st.session_state.get("provider", "anthropic")
+                                
                                 if not node:
                                     st.error("Session expired. Please start over.")
                                     st.stop()
@@ -213,17 +215,47 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 Return only the improved Python code.
                                 """
                                 
-                                message = node.client.messages.create(
-                                    model=node.model,
-                                    max_tokens=8192,
-                                    temperature=0.1,
-                                    messages=[{
-                                        "role": "user",
-                                        "content": feedback_prompt
-                                    }]
-                                )
-                                
-                                response_text = node._get_message_text(message)
+                                # Generate response using the appropriate provider
+                                response_text = ""
+                                try:
+                                    if hasattr(node, "_get_message_text"):
+                                        if provider.lower() == "anthropic":
+                                            message = node.client.messages.create(
+                                                model=node.model,
+                                                max_tokens=8192,
+                                                temperature=0.1,
+                                                messages=[{
+                                                    "role": "user",
+                                                    "content": feedback_prompt
+                                                }]
+                                            )
+                                            response_text = node._get_message_text(message)
+                                        elif provider.lower() == "gpt":
+                                            response = node.client.chat.completions.create(
+                                                model=node.model,
+                                                max_tokens=8192,
+                                                temperature=0.1,
+                                                messages=[{"role": "user", "content": feedback_prompt}]
+                                            )
+                                            response_text = response.choices[0].message.content
+                                        elif provider.lower() == "deepseek":
+                                            # Assuming DeepSeek has a similar API structure
+                                            response = node.client.chat.completions.create(
+                                                model=node.model,
+                                                max_tokens=8192,
+                                                temperature=0.1,
+                                                messages=[{"role": "user", "content": feedback_prompt}]
+                                            )
+                                            response_text = response.choices[0].message.content
+                                        else:
+                                            st.error(f"Unsupported provider: {provider}")
+                                            st.stop()
+                                    else:
+                                        # Fallback to a provider-agnostic method if available
+                                        response_text = node.generate_text(feedback_prompt)
+                                except Exception as e:
+                                    st.error(f"Error generating response: {str(e)}")
+                                    st.stop()
                                 
                                 # Extract code using autogen
                                 extracted_code = extract_code(response_text)
@@ -251,7 +283,6 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 st.error(f"Error regenerating code: {str(e)}")
                     else:
                         st.warning("Please provide feedback to guide code regeneration.")
-            
             # Execute code button
             st.subheader("Validate Code")
             execute_col1, execute_col2 = st.columns([1, 1])
