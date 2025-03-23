@@ -26,7 +26,7 @@ from InFactRenderer import InFactRenderer
 # Add the page_utils folder to the path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "page_utils")))
 from _step1_model_config import step_1_model_config
-
+from _step2_enter_hypothesis import enter_hypothesis
 
 process_steps = {
     1: "Setup",
@@ -174,4 +174,9 @@ def call_llm(provider, model, api_key, prompt_text):
 # ----------------------------
 if st.session_state.process_step == 1:
     step_1_model_config()
-    
+
+# ----------------------------
+# STEP 2: Enter Hypothesis
+# ----------------------------
+elif st.session_state.process_step == 2:
+    enter_hypothesis()
