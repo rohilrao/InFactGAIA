@@ -10,6 +10,8 @@ from page_utils.step_utils import initialize_session_state, show_step_progress
 from page_utils.db_utils import initialize_db
 from page_utils.setup_step import display_setup_step
 from page_utils.hypothesis_step import display_hypothesis_step
+from page_utils.summary_step import display_summary_step
+from page_utils.file_upload_step import display_file_upload_step
 
 # Import other necessary modules for remaining steps
 from anthropic import Anthropic
@@ -43,10 +45,6 @@ def ensure_object_id(id_value):
             return id_value
     return id_value
 
-# ------------------------------------------------
-# Wizard Steps
-# ------------------------------------------------
-
 # Step 1: AI Model Config
 if st.session_state.process_step == 1:
     if display_setup_step():
@@ -66,21 +64,28 @@ elif st.session_state.process_step == 2:
     elif result == "reload":
         st.rerun()
 
-# Step 3: Generate Summary
+# Step 3: Hypothesis Refinement & Summary
 elif st.session_state.process_step == 3:
-    st.header("Step 3: Generate Summary")
-    # Your existing code for step 3...
+    result = display_summary_step(hypothesis_collection, call_llm)
     
-    # Sample navigation buttons
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("← Back to Hypothesis"):
-            st.session_state.process_step = 2
-            st.rerun()
-    with col2:
-        if st.button("Next: Upload Files →"):
-            st.session_state.process_step = 4
-            st.rerun()
+    if result == "next":
+        st.session_state.process_step = 4
+        st.rerun()
+    elif result == "back":
+        st.session_state.process_step = 2
+        st.rerun()
+
+# Step 4: File Upload
+elif st.session_state.process_step == 4:
+    result = display_file_upload_step(db, fs, hypothesis_collection, parse_data)
+    
+    if result == "next":
+        st.session_state.process_step = 5
+        st.rerun()
+    elif result == "back":
+        st.session_state.process_step = 3
+        st.rerun()
+
 
 # Additional steps follow the same pattern...
 # Step 4, 5, 6, 7, etc.
