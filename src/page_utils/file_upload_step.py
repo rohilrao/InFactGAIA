@@ -24,13 +24,14 @@ def save_parsed_data_to_file(db, file_id, parsed_data):
             {"$set": {
                 "parsed_data": parsed_data,
                 "parsing_complete": True,
-                "status": "ready for analysis"  # New status after parsing
+                "status": "ready_for_analysis"  # Update status to ready for analysis
             }}
         )
         st.success("✅ Parsed data stored successfully")
+        return True
     except Exception as e:
         st.error(f"❌ Failed to save parsed data: {str(e)}")
-
+        return False
 
 def delete_file(db, fs, file_id):
     """
@@ -212,19 +213,48 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     if existing_files:
         st.write(f"You have {len(existing_files)} file(s) uploaded for this hypothesis:")
         
-        for idx, file in enumerate(existing_files):
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                filename = file["filename"]
-                # Display "Ready for Analysis" if parsing is complete; otherwise, "Unprocessed"
-                status_text = "✅ Ready for Analysis" if file.get("parsing_complete", False) else "⏳ Unprocessed"
-                st.write(f"**{idx+1}. {filename}** - {status_text}")
+        # Create a scrollable container for the file list
+        with st.container():
+            # Set a fixed height for scrollable area
+            st.markdown("""
+            <style>
+            .file-list {
+                height: 200px;
+                overflow-y: auto;
+                padding: 10px;
+                border: 1px solid #e6e6e6;
+                border-radius: 5px;
+            }
+            </style>
+            """, unsafe_allow_html=True)
             
-            with col2:
-                if st.button("Delete", key=f"delete_{idx}"):
-                    if delete_file(db, fs, file["_id"]):
-                        # Force refresh after deletion
-                        st.rerun()
+            st.markdown('<div class="file-list">', unsafe_allow_html=True)
+            
+            for idx, file in enumerate(existing_files):
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    filename = file["filename"]
+                    
+                    # Get file status with appropriate icon
+                    if file.get("status") == "ready_for_analysis":
+                        status_icon = "✅"
+                        status_text = "Ready for Analysis"
+                    elif file.get("parsing_complete", False):
+                        status_icon = "✅"
+                        status_text = "Ready for Analysis"
+                    else:
+                        status_icon = "⏳"
+                        status_text = "Unprocessed"
+                    
+                    st.write(f"**{idx+1}. {filename}** - {status_icon} {status_text}")
+                
+                with col2:
+                    if st.button("Delete", key=f"delete_{idx}"):
+                        if delete_file(db, fs, file["_id"]):
+                            # Force refresh after deletion
+                            st.rerun()
+            
+            st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.info("No files uploaded yet. Upload your first file below.")
     
@@ -265,7 +295,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
                         "hypothesis_id": hypothesis_id,
                         "hypothesis_text": hypothesis_text
                     },
-                    status="unprocessed",
+                    status="unprocessed",  # Initial status
                     upload_date=str(datetime.date.today()),
                 )
                 
@@ -280,6 +310,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
                 st.rerun()
     
     # 4. FILE PROCESSING SECTION
+    parsed_data_displayed = False
     if is_parsing and "current_file_id" in st.session_state:
         st.divider()
         st.markdown("### :orange[Processing File]")
@@ -309,8 +340,8 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             
             # Save parsed data
             print(f"DEBUG - Saving parsed data for file '{filename}'")
-            save_parsed_data_to_file(db, file_id, parsed_data)
-            st.rerun()
+            if save_parsed_data_to_file(db, file_id, parsed_data):
+                st.success(f"File '{filename}' is now ready for analysis")
             
             # Clean up
             try:
@@ -323,6 +354,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             st.divider()
             st.markdown("### :orange[Parsed Data]")
             render_parsed_data(parsed_data, filename)
+            parsed_data_displayed = True
             
             # Add option to delete if not satisfied
             if st.button("Delete This File", key="delete_current"):
@@ -353,7 +385,23 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
                     # Force refresh
                     st.rerun()
     
-    # 5. NAVIGATION
+    # 5. DISPLAY MOST RECENT FILE'S PARSED DATA (if no current parsing)
+    if not parsed_data_displayed and not is_parsing and existing_files:
+        # Find the most recently uploaded file that has parsed data
+        recent_files = [f for f in existing_files if f.get("parsing_complete", False)]
+        
+        if recent_files:
+            # Sort by upload date (newest first)
+            recent_files.sort(key=lambda x: x.get("upload_date", ""), reverse=True)
+            most_recent = recent_files[0]
+            
+            if "parsed_data" in most_recent:
+                st.divider()
+                st.markdown("### :orange[Most Recent Parsed Data]")
+                st.caption(f"Showing data for: {most_recent['filename']}")
+                render_parsed_data(most_recent["parsed_data"], most_recent["filename"])
+    
+    # 6. NAVIGATION
     st.divider()
     col1, col2 = st.columns([1, 1])
     with col1:
