@@ -2,12 +2,11 @@ import streamlit as st
 
 process_steps = {
     1: "Setup",
-    2: "Create Hypothesis", 
-    3: "Generate Summary",
-    4: "Upload Files",
-    5: "Interactive Code Review",
-    6: "Evidence Processing",
-    7: "View Results"
+    2: "Hypothesis Setup", 
+    3: "Uploaded Files",
+    4: "Code Analysis",
+    5: "Process Evidence",
+    6: "Results"
 }
 
 def initialize_session_state():
