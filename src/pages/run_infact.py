@@ -15,6 +15,7 @@ from page_utils.file_upload_step import display_file_upload_step
 from page_utils.code_review_step import display_code_review_step
 from page_utils.evidence_step import display_evidence_step
 from page_utils.results_step import display_results_step
+from page_utils.hypothesis_setup import display_combined_hypothesis_step
 
 # Import other necessary modules for remaining steps
 from anthropic import Anthropic
@@ -93,22 +94,46 @@ if st.session_state.process_step == 1:
         st.session_state.process_step = 2
         st.rerun()
 
-# Step 2: Hypothesis Setup
+# Commented out original steps 2 and 3
+# # Step 2: Hypothesis Setup
+# elif st.session_state.process_step == 2:
+#     result = display_hypothesis_step(hypothesis_collection)
+#     
+#     if result == "next":
+#         st.session_state.process_step = 3
+#         st.rerun()
+#     elif result == "back":
+#         st.session_state.process_step = 1
+#         st.rerun()
+#     elif result == "reload":
+#         st.rerun()
+# 
+# # Step 3: Hypothesis Refinement & Summary
+# elif st.session_state.process_step == 3:
+#     result = display_summary_step(hypothesis_collection, call_llm)
+#     
+#     if result == "next":
+#         st.session_state.process_step = 4
+#         st.rerun()
+#     elif result == "back":
+#         st.session_state.process_step = 2
+#         st.rerun()
+
+#Step 2
+# Replace the individual step calls with this:
 elif st.session_state.process_step == 2:
-    result = display_hypothesis_step(hypothesis_collection)
+    result = display_combined_hypothesis_step(hypothesis_collection, call_llm)
     
     if result == "next":
-        st.session_state.process_step = 3
+        st.session_state.process_step = 3  # Go to the next sequential step (what was step 4)
         st.rerun()
     elif result == "back":
         st.session_state.process_step = 1
         st.rerun()
-    elif result == "reload":
-        st.rerun()
 
-# Step 3: Hypothesis Refinement & Summary
+# Step 3: File Upload
 elif st.session_state.process_step == 3:
-    result = display_summary_step(hypothesis_collection, call_llm)
+    result = display_file_upload_step(db, fs, hypothesis_collection, parse_data)
     
     if result == "next":
         st.session_state.process_step = 4
@@ -117,9 +142,10 @@ elif st.session_state.process_step == 3:
         st.session_state.process_step = 2
         st.rerun()
 
-# Step 4: File Upload
+
+# Step 4: Interactive Code Review
 elif st.session_state.process_step == 4:
-    result = display_file_upload_step(db, fs, hypothesis_collection, parse_data)
+    result = display_code_review_step(db, fs, hypothesis_collection)
     
     if result == "next":
         st.session_state.process_step = 5
@@ -127,11 +153,12 @@ elif st.session_state.process_step == 4:
     elif result == "back":
         st.session_state.process_step = 3
         st.rerun()
+    elif result == "reload":
+        st.rerun()
 
-
-# Step 5: Interactive Code Review
+# Step 5: Evidence Processing
 elif st.session_state.process_step == 5:
-    result = display_code_review_step(db, fs, hypothesis_collection)
+    result = display_evidence_step(db, fs, hypothesis_collection)
     
     if result == "next":
         st.session_state.process_step = 6
@@ -139,32 +166,19 @@ elif st.session_state.process_step == 5:
     elif result == "back":
         st.session_state.process_step = 4
         st.rerun()
+    elif result == "back_to_step4":
+        # Special case to go back to step 4 but keep node state
+        st.session_state.process_step = 4
+        st.rerun()
     elif result == "reload":
         st.rerun()
 
-# Step 6: Evidence Processing
+# Step 6: View Results
 elif st.session_state.process_step == 6:
-    result = display_evidence_step(db, fs, hypothesis_collection)
-    
-    if result == "next":
-        st.session_state.process_step = 7
-        st.rerun()
-    elif result == "back":
-        st.session_state.process_step = 5
-        st.rerun()
-    elif result == "back_to_step5":
-        # Special case to go back to step 5 but keep node state
-        st.session_state.process_step = 5
-        st.rerun()
-    elif result == "reload":
-        st.rerun()
-
-# Step 7: View Results
-elif st.session_state.process_step == 7:
     result = display_results_step(db, fs, hypothesis_collection)
     
     if result == "back":
-        st.session_state.process_step = 6
+        st.session_state.process_step = 5
         st.rerun()
     elif result == "home":
         # Reset to start
