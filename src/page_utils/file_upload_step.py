@@ -30,6 +30,20 @@ def save_parsed_data_to_file(db, file_id, parsed_data):
     except Exception as e:
         st.error(f"❌ Failed to save parsed data: {str(e)}")
 
+def delete_file(db, fs, file_id):
+    """
+    Deletes a file from GridFS.
+    """
+    try:
+        file_id = ensure_object_id(file_id)
+        fs.delete(file_id)
+        db.fs.chunks.delete_many({"files_id": file_id})
+        st.success("✅ File deleted successfully")
+        return True
+    except Exception as e:
+        st.error(f"❌ Failed to delete file: {str(e)}")
+        return False
+
 def render_parsed_data(parsed_data, filename):
     """
     Renders parsed data using the InFactRenderer.
@@ -164,7 +178,8 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     Returns:
         str: Navigation action - "back", "next", or None
     """
-    st.header("Step 4: Upload Files for Your Hypothesis")
+    # 1. HEADER SECTION
+    st.markdown("### :orange[Upload Files for Your Hypothesis]")
 
     # Get hypothesis information
     hypothesis_id = st.session_state.get("hypothesis_id", None)
@@ -184,18 +199,42 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     # Simple hypothesis display
     st.write(f"**Hypothesis ID:** `{hypothesis_id}`")
     st.write(f"**Hypothesis:** {hypothesis_text}")
-    st.markdown("---")
+    st.divider()
     
-    # Print current files for debugging
+    # 2. FILE LISTING SECTION
+    st.markdown("### :orange[Current Files]")
+    
+    # Get existing files for this hypothesis
     existing_files = list(db.fs.files.find({"metadata.hypothesis_id": hypothesis_id}))
-    existing_filenames = [file["filename"] for file in existing_files]
-    print(f"DEBUG - Current files for hypothesis ID '{hypothesis_id}': {existing_filenames}")
     
-    # Simple file uploader
-    uploaded_file = st.file_uploader("Upload a file", type=["txt", "pdf", "png", "jpg", "html", "csv"])
+    if existing_files:
+        st.write(f"You have {len(existing_files)} file(s) uploaded for this hypothesis:")
+        
+        for idx, file in enumerate(existing_files):
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                filename = file["filename"]
+                parsing_status = "✅ Processed" if file.get("parsing_complete", False) else "⏳ Unprocessed"
+                st.write(f"**{idx+1}. {filename}** - {parsing_status}")
+            
+            with col2:
+                if st.button("Delete", key=f"delete_{idx}"):
+                    if delete_file(db, fs, file["_id"]):
+                        # Force refresh after deletion
+                        st.rerun()
+    else:
+        st.info("No files uploaded yet. Upload your first file below.")
+    
+    st.divider()
+    
+    # 3. FILE UPLOAD SECTION
+    st.markdown("### :orange[Upload New File]")
     
     # Track if we're currently parsing
     is_parsing = st.session_state.get("is_parsing", False)
+    
+    # File uploader
+    uploaded_file = st.file_uploader("Select a file to upload", type=["txt", "pdf", "png", "jpg", "html", "csv"])
     
     # Logic for handling file upload
     if uploaded_file and not is_parsing:
@@ -203,14 +242,12 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
         print(f"DEBUG - User selected file: '{file_name}'")
         
         # Check if this file already exists for THIS hypothesis
+        existing_filenames = [file["filename"] for file in existing_files]
         is_duplicate = file_name in existing_filenames
         
         if is_duplicate:
-            print(f"DEBUG - DUPLICATE DETECTED: File '{file_name}' already exists for hypothesis ID '{hypothesis_id}'")
-            print(f"DEBUG - Existing files for this hypothesis: {existing_filenames}")
-            st.write(f"⚠️ A file named '{file_name}' already exists for this hypothesis. Please choose a different file.")
+            st.warning(f"A file named '{file_name}' already exists for this hypothesis. Please choose a different file.")
         else:
-            print(f"DEBUG - File '{file_name}' is not a duplicate for hypothesis ID '{hypothesis_id}'")
             # Show upload button if not a duplicate
             if st.button("Upload File", key="upload_button"):
                 print(f"DEBUG - Uploading file '{file_name}' for hypothesis ID '{hypothesis_id}'")
@@ -239,8 +276,11 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
                 # Rerun to reflect state changes
                 st.rerun()
     
-    # Process file if needed
+    # 4. FILE PROCESSING SECTION
     if is_parsing and "current_file_id" in st.session_state:
+        st.divider()
+        st.markdown("### :orange[Processing File]")
+        
         file_id = st.session_state["current_file_id"]
         filename = st.session_state["current_filename"]
         print(f"DEBUG - Beginning to process file '{filename}' with ID {file_id}")
@@ -275,22 +315,45 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             except Exception as e:
                 print(f"DEBUG - Failed to remove temp file: {str(e)}")
             
-            # Mark parsing as complete
-            st.session_state["is_parsing"] = False
-            print(f"DEBUG - Finished processing file '{filename}'")
-            
             # Display parsed data
+            st.divider()
+            st.markdown("### :orange[Parsed Data]")
             render_parsed_data(parsed_data, filename)
+            
+            # Add option to delete if not satisfied
+            if st.button("Delete This File", key="delete_current"):
+                if delete_file(db, fs, file_id):
+                    # Clean up session state
+                    for key in ["is_parsing", "current_file_id", "current_filename"]:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    # Force refresh
+                    st.rerun()
+            else:
+                # Mark parsing as complete if not deleted
+                st.session_state["is_parsing"] = False
+                print(f"DEBUG - Finished processing file '{filename}'")
             
         except Exception as e:
             print(f"DEBUG - ERROR processing file '{filename}': {str(e)}")
+            st.error(f"Error processing file: {str(e)}")
             st.session_state["is_parsing"] = False
+            
+            # Add option to delete if error occurred
+            if st.button("Delete This File", key="delete_error"):
+                if delete_file(db, fs, file_id):
+                    # Clean up session state
+                    for key in ["is_parsing", "current_file_id", "current_filename"]:
+                        if key in st.session_state:
+                            del st.session_state[key]
+                    # Force refresh
+                    st.rerun()
     
-    # Navigation
-    st.markdown("---")
+    # 5. NAVIGATION
+    st.divider()
     col1, col2 = st.columns([1, 1])
     with col1:
-        if st.button("← Back to Step 3"):
+        if st.button("← Back"):
             # Clean up session state
             for key in ["is_parsing", "current_file_id", "current_filename"]:
                 if key in st.session_state:
@@ -299,7 +362,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             return "back"
             
     with col2:
-        if st.button("Next → to Code Review"):
+        if st.button("Next →"):
             # Clean up any temporary processing state
             for key in ["is_parsing", "current_file_id", "current_filename"]:
                 if key in st.session_state:
