@@ -231,93 +231,47 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     existing_files = list(db.fs.files.find({"metadata.hypothesis_id": hypothesis_id}))
     
     if existing_files:
-        st.write(f"You have {len(existing_files)} file(s) uploaded for this hypothesis:")
+        st.caption(f"{len(existing_files)} file(s) associated with this hypothesis")
         
-        # Add CSS for scrollable container with better styling
-        st.markdown("""
-        <style>
-        .file-list {
-            max-height: 250px;
-            overflow-y: auto;
-            border: 1px solid #e0e0e0;
-            border-radius: 5px;
-            margin-bottom: 10px;
-            background-color: #f9f9f9;
-        }
-        .file-item {
-            padding: 8px 12px;
-            border-bottom: 1px solid #eaeaea;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .file-item:hover {
-            background-color: #f0f0f0;
-        }
-        .file-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .status-ready {
-            color: green;
-            font-weight: bold;
-        }
-        .status-processing {
-            color: orange;
-            font-weight: bold;
-        }
-        .status-unprocessed {
-            color: #888;
-            font-style: italic;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+        # Create a scrollable container
+        file_container = st.container(height=250, border=True)
         
-        # Start the scrollable container
-        st.markdown('<div class="file-list">', unsafe_allow_html=True)
-        
-        # Create rows for each file
-        for file in existing_files:
-            file_id = file["_id"]
-            filename = file["filename"]
-            
-            # Determine status and appropriate styling
-            if file.get("status") == "ready_for_analysis" or file.get("parsing_complete", False):
-                status_html = '<span class="status-ready">✅ Ready for Analysis</span>'
-            elif file.get("status") == "processing":
-                status_html = '<span class="status-processing">⏳ Processing</span>'
-            else:
-                status_html = '<span class="status-unprocessed">⚪ Unprocessed</span>'
+        # Display files within the scrollable container
+        with file_container:
+            for idx, file in enumerate(existing_files):
+                file_id = file["_id"]
+                filename = file["filename"]
                 
-            # Create a unique key for this file
-            key = f"file_{str(file_id)}"
-            
-            # Display file info in the list
-            st.markdown(
-                f'<div class="file-item" id="{key}">'
-                f'  <div class="file-info">'
-                f'    <span>{filename}</span>'
-                f'    {status_html}'
-                f'  </div>'
-                f'</div>',
-                unsafe_allow_html=True
-            )
-            
-            # Add delete button for this file
-            col1, col2 = st.columns([4, 1])
-            with col2:
-                if st.button("Delete", key=f"del_{key}"):
-                    if delete_file(db, fs, file_id):
-                        st.success(f"Deleted file: {filename}")
-                        st.rerun()
-        
-        # Close the scrollable container
-        st.markdown('</div>', unsafe_allow_html=True)
+                # Create a row for each file
+                col1, col2, col3 = st.columns([3, 3, 1])
+                
+                # File name column
+                with col1:
+                    st.write(f"**{filename}**")
+                
+                # Status column
+                with col2:
+                    if file.get("status") == "ready_for_analysis" or file.get("parsing_complete", False):
+                        st.markdown("<span style='color:green'>✅ Ready for Analysis</span>", unsafe_allow_html=True)
+                    elif file.get("status") == "processing":
+                        st.markdown("<span style='color:orange'>⏳ Processing</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("<span style='color:#888'>⚪ Unprocessed</span>", unsafe_allow_html=True)
+                
+                # Action column
+                with col3:
+                    if st.button("Delete", key=f"delete_{idx}", use_container_width=True):
+                        if delete_file(db, fs, file_id):
+                            st.rerun()
+                
+                # Add a separator between files
+                if idx < len(existing_files) - 1:
+                    st.divider()
     else:
         st.info("No files uploaded yet. Upload your first file below.")
     
     st.divider()
+    
     # 3. FILE UPLOAD SECTION
     st.markdown("### :orange[Upload New File]")
     
@@ -398,7 +352,6 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             
             # Save parsed data
             print(f"DEBUG - Saving parsed data for file '{filename}'")
-            st.rerun()
             if save_parsed_data_to_file(db, file_id, parsed_data):
                 st.success(f"File '{filename}' is now ready for analysis")
             
