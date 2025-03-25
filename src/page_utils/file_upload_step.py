@@ -368,7 +368,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             render_parsed_data(parsed_data, filename)
             parsed_data_displayed = True
             st.rerun()
-            
+
             # Add option to delete if not satisfied
             if st.button("Delete This File", key="delete_current"):
                 if delete_file(db, fs, file_id):
@@ -405,7 +405,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
         
         if recent_files:
             # Sort by upload date (newest first)
-            recent_files.sort(key=lambda x: x.get("upload_date", ""), reverse=True)
+            recent_files.sort(key=lambda x: x.get("upload_date", ""), reverse=False)
             most_recent = recent_files[0]
             
             if "parsed_data" in most_recent:
