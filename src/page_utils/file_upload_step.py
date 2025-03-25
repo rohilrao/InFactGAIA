@@ -184,16 +184,36 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     # 1. HEADER SECTION
     st.markdown("### :orange[Upload Files for Your Hypothesis]")
 
-    # Get hypothesis information
+    # Get hypothesis information 
     hypothesis_id = st.session_state.get("hypothesis_id", None)
+    
+    # Debug session state
+    st.write("DEBUG - Session state keys:", list(st.session_state.keys()))
+    
+    # Check if we have hypothesis_id in session state
     if not hypothesis_id:
-        st.warning("No Hypothesis ID found in session. Please go back to Step 2.")
-        st.stop()
-
+        # Also check hypothesis_id_input as fallback
+        hypothesis_id = st.session_state.get("hypothesis_id_input", "").strip()
+        if hypothesis_id:
+            st.warning(f"Using hypothesis ID from input field: {hypothesis_id}")
+            # Save it properly to session state
+            st.session_state["hypothesis_id"] = hypothesis_id
+        else:
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                st.warning("No Hypothesis ID found in session. Please go back to Step 2.")
+                if st.button("← Back to Hypothesis Setup"):
+                    return "back"
+            st.stop()
+    
     # Get the current hypothesis text from DB
     hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
     if not hypothesis_entry:
-        st.error("Could not find hypothesis data in database.")
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.error(f"Could not find hypothesis with ID '{hypothesis_id}' in database.")
+            if st.button("← Back to Hypothesis Setup"):
+                return "back"
         st.stop()
 
     hypothesis_text = hypothesis_entry["text"]

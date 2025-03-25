@@ -429,6 +429,15 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
 
     with col2:
         if st.button("Next →", key="next_btn_final"):
+            # IMPORTANT: Ensure the hypothesis ID is properly stored in session state
+            st.session_state["hypothesis_id"] = active_id
+            
+            # Debug - show what we're storing
+            print(f"DEBUG - Storing hypothesis ID in session: {active_id}")
+            
+            # Also store the hypothesis text
+            if hypothesis_doc:
+                st.session_state["hypothesis_text"] = hypothesis_doc["text"]
+                print(f"DEBUG - Storing hypothesis text in session: {hypothesis_doc['text'][:30]}...")
+            
             return "next"
-    
-    return None  # No action taken
