@@ -26,6 +26,32 @@ def display_code_review_step(db, fs, hypothesis_collection):
     Returns:
         str: Navigation action - "back", "next", or None
     """
+    # Add syntax highlighting and editor styling
+    st.markdown("""
+    <style>
+    .code-editor {
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        line-height: 1.5;
+    }
+    .analysis-box {
+        height: 150px;
+        overflow-y: auto;
+        padding: 10px;
+        background-color: #f9f9f9;
+        border: 1px solid #e0e0e0;
+        border-radius: 5px;
+        margin-bottom: 15px;
+    }
+    .results-container {
+        background-color: #f0f7ff; 
+        padding: 15px; 
+        border-radius: 5px; 
+        margin: 10px 0;
+        border-left: 4px solid #4CAF50;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     st.markdown("### :orange[Interactive Code Review]")
     
     # Get hypothesis information
@@ -59,7 +85,10 @@ def display_code_review_step(db, fs, hypothesis_collection):
         # Get files that are ready for analysis (have parsed data)
         ready_files = list(db.fs.files.find({
             "metadata.hypothesis_id": hypothesis_id, 
-            "status": "ready_for_analysis"
+            "$or": [
+                {"status": "ready_for_analysis"},
+                {"parsing_complete": True}
+            ]
         }))
         
         if not ready_files:
@@ -187,12 +216,29 @@ def display_code_review_step(db, fs, hypothesis_collection):
             # Show editing tips
             st.info("✏️ You can edit the code below. For complex edits, consider copying to your IDE, then paste back here.")
             
-            # Display editable code
-            edited_code = st.text_area(
-                "Analysis Code", 
-                value=current_code, 
-                height=400
-            )
+            # Display code editor with streamlit-ace
+            try:
+                # Try to use streamlit-ace if available
+                import streamlit_ace
+                
+                edited_code = streamlit_ace.st_ace(
+                    value=current_code,
+                    language="python",
+                    theme="github",
+                    min_lines=20,
+                    max_lines=40,
+                    key="ace_editor"
+                )
+            except ImportError:
+                # Fallback to regular text area with custom styling
+                st.markdown('<div class="code-editor">', unsafe_allow_html=True)
+                edited_code = st.text_area(
+                    "Analysis Code", 
+                    value=current_code, 
+                    height=400,
+                    key="code_editor"
+                )
+                st.markdown('</div>', unsafe_allow_html=True)
             
             # Save button for code edits
             code_changed = edited_code != current_code
@@ -277,23 +323,9 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         st.error(f"Error analyzing code: {str(e)}")
             
             # Display the analysis in a small scrollable box
-            st.markdown(
-                """
-                <style>
-                .analysis-box {
-                    height: 150px;
-                    overflow-y: auto;
-                    padding: 10px;
-                    background-color: #f9f9f9;
-                    border: 1px solid #e0e0e0;
-                    border-radius: 5px;
-                }
-                </style>
-                """, 
-                unsafe_allow_html=True
-            )
-            
-            st.markdown(f'<div class="analysis-box">{code_analysis}</div>', unsafe_allow_html=True)
+            st.markdown('<div class="analysis-box">', unsafe_allow_html=True)
+            st.markdown(code_analysis)
+            st.markdown('</div>', unsafe_allow_html=True)
             
             # Feedback and code regeneration
             st.markdown("### :orange[Improve the Code]")
@@ -422,16 +454,12 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         st.success("Code executed successfully!")
                         
                         # Display results in a nice formatted box
-                        results_html = f"""
-                        <div style="background-color: #f0f7ff; padding: 15px; border-radius: 5px; margin: 10px 0;">
-                            <h4 style="margin-top: 0;">Analysis Results</h4>
-                            <p><b>l_plus (log P(data | hypothesis)):</b> {l_plus:.4f}</p>
-                            <p><b>l_minus (log P(data | not hypothesis)):</b> {l_minus:.4f}</p>
-                            <p><b>Probability of hypothesis given this data:</b> {p_h_given_d:.2%}</p>
-                        </div>
-                        """
-                        
-                        st.markdown(results_html, unsafe_allow_html=True)
+                        st.markdown('<div class="results-container">', unsafe_allow_html=True)
+                        st.markdown("#### Analysis Results")
+                        st.write(f"**l_plus (log P(data | hypothesis)):** {l_plus:.4f}")
+                        st.write(f"**l_minus (log P(data | not hypothesis)):** {l_minus:.4f}")
+                        st.write(f"**Probability of hypothesis given this data:** {p_h_given_d:.2%}")
+                        st.markdown('</div>', unsafe_allow_html=True)
                         
                     except Exception as e:
                         st.error(f"Code execution failed: {str(e)}")
