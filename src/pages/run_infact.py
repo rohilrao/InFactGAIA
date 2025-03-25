@@ -32,8 +32,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))) 
 from utils import parse_data 
 from jinja2 import Template
 
-# Initialize app
-st.title("Hypothesis Wizard")
 
 # Initialize session state for tracking progress
 initialize_session_state()
