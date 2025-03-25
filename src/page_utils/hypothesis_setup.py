@@ -26,6 +26,44 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
         st.session_state["chat_history"] = []
     if "chat_id" not in st.session_state:
         st.session_state["chat_id"] = str(uuid.uuid4())
+    if "user_question" not in st.session_state:
+        st.session_state["user_question"] = ""
+
+    # CSS for dark mode compatible chat interface
+    st.markdown("""
+    <style>
+    .chat-container {
+        margin-bottom: 20px;
+    }
+    .chat-message {
+        padding: 12px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        display: flex;
+        flex-direction: column;
+    }
+    .user-message {
+        background-color: rgba(98, 156, 246, 0.2);
+        border: 1px solid rgba(98, 156, 246, 0.4);
+        margin-left: 20%;
+        margin-right: 2%;
+    }
+    .assistant-message {
+        background-color: rgba(131, 131, 131, 0.2);
+        border: 1px solid rgba(131, 131, 131, 0.4);
+        margin-right: 20%;
+        margin-left: 2%;
+    }
+    .message-content {
+        margin-top: 5px;
+    }
+    .message-sender {
+        font-weight: bold;
+        font-size: 0.85em;
+        opacity: 0.8;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     # Function to check if ID exists in database
     def check_hypothesis_id():
@@ -37,6 +75,22 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
         # Look up in DB
         existing = hypothesis_collection.find_one({"_id": _id})
         st.session_state["id_exists"] = True if existing else False
+
+    # Function to handle chat submission
+    def handle_chat_submit():
+        user_input = st.session_state["user_question"].strip()
+        if user_input:
+            # Add user message to chat history
+            st.session_state["chat_history"].append({
+                "role": "user",
+                "content": user_input
+            })
+            
+            # Store the question to process after rerun
+            st.session_state["pending_question"] = user_input
+            
+            # Clear the input field by updating session state
+            st.session_state["user_question"] = ""
 
     # 1. HYPOTHESIS SETUP SECTION
     st.markdown("### :orange[Hypothesis Setup]")
@@ -297,45 +351,10 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     st.session_state["sections_expanded"]["chat"] = show_chat
     
     if show_chat:
-        # Create a container for the chat messages
-        chat_container = st.container()
-        
-        # Display chat history within the container
-        with chat_container:
-            for i, message in enumerate(st.session_state["chat_history"]):
-                if message["role"] == "user":
-                    st.markdown(f"""
-                    <div style="background-color: #f0f2f6; border-radius: 10px; padding: 10px; margin-bottom: 10px;">
-                        <b>You:</b> {message["content"]}
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                    <div style="background-color: #ffffff; border: 1px solid #e6e6e6; border-radius: 10px; padding: 10px; margin-bottom: 10px;">
-                        <b>Assistant:</b> {message["content"]}
-                    </div>
-                    """, unsafe_allow_html=True)
-        
-        # Chat input below the history
-        user_question = st.text_input("Ask a question about this hypothesis", 
-                                    key=f"chat_input_{st.session_state['chat_id']}")
-        
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.session_state["chat_history"] and st.button("Clear Chat", key="clear_chat_btn"):
-                st.session_state["chat_history"] = []
-                st.session_state["chat_id"] = str(uuid.uuid4())  # Reset chat ID to force new input field
-                st.rerun()
-        
-        if user_question:
-            # Add user question to chat history
-            st.session_state["chat_history"].append({
-                "role": "user",
-                "content": user_question
-            })
-            
-            # Generate AI response
+        # Process any pending question from previous run
+        if "pending_question" in st.session_state and st.session_state["pending_question"]:
             with st.spinner("Generating response..."):
+                user_question = st.session_state["pending_question"]
                 context = hypothesis_doc["text"] + "\n\n" + hypothesis_doc["auto_summary"]
                 
                 prompt_chat = (
@@ -360,9 +379,43 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                     "role": "assistant",
                     "content": ai_response
                 })
-            
-            # Reset chat input and rerun to show updated chat
-            st.session_state[f"chat_input_{st.session_state['chat_id']}"] = ""
+                
+                # Clear the pending question
+                st.session_state["pending_question"] = ""
+        
+        # Display the chat messages using custom HTML
+        chat_container = st.container()
+        with chat_container:
+            for message in st.session_state["chat_history"]:
+                role = message["role"]
+                content = message["content"]
+                
+                if role == "user":
+                    st.markdown(f"""
+                    <div class="chat-message user-message">
+                        <div class="message-sender">You</div>
+                        <div class="message-content">{content}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div class="chat-message assistant-message">
+                        <div class="message-sender">Assistant</div>
+                        <div class="message-content">{content}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        # Chat input with on_change callback to avoid the session state issue
+        st.text_input(
+            "Ask a question about this hypothesis",
+            key="user_question",
+            on_change=handle_chat_submit
+        )
+        
+        # Clear chat button
+        if st.session_state["chat_history"] and st.button("Clear Chat", key="clear_chat_btn"):
+            st.session_state["chat_history"] = []
+            st.session_state["chat_id"] = str(uuid.uuid4())
             st.rerun()
     
     st.divider()
