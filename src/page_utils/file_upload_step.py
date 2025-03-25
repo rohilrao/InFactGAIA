@@ -233,53 +233,50 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     if existing_files:
         st.write(f"You have {len(existing_files)} file(s) uploaded for this hypothesis:")
         
-        # Create a scrollable container for the file list
-        with st.container():
-            # Set a fixed height for scrollable area
-            st.markdown("""
-            <style>
-            .file-list {
-                height: 200px;
-                overflow-y: auto;
-                padding: 10px;
-                border: 1px solid #e6e6e6;
-                border-radius: 5px;
-            }
-            </style>
-            """, unsafe_allow_html=True)
+        # Add CSS for scrollable container
+        st.markdown("""
+        <style>
+        .file-list {
+            height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #e6e6e6;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Generate HTML content for all files
+        file_html = "<div class='file-list'>"
+        for idx, file in enumerate(existing_files):
+            filename = file["filename"]
             
-            st.markdown('<div class="file-list">', unsafe_allow_html=True)
+            # Get file status with appropriate icon
+            if file.get("status") == "ready_for_analysis" or file.get("parsing_complete", False):
+                status_icon = "✅"
+                status_text = "Ready for Analysis"
+            else:
+                status_icon = "⏳"
+                status_text = "Unprocessed"
             
-            for idx, file in enumerate(existing_files):
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    filename = file["filename"]
-                    
-                    # Get file status with appropriate icon
-                    if file.get("status") == "ready_for_analysis":
-                        status_icon = "✅"
-                        status_text = "Ready for Analysis"
-                    elif file.get("parsing_complete", False):
-                        status_icon = "✅"
-                        status_text = "Ready for Analysis"
-                    else:
-                        status_icon = "⏳"
-                        status_text = "Unprocessed"
-                    
-                    st.write(f"**{idx+1}. {filename}** - {status_icon} {status_text}")
-                
-                with col2:
-                    if st.button("Delete", key=f"delete_{idx}"):
-                        if delete_file(db, fs, file["_id"]):
-                            # Force refresh after deletion
-                            st.rerun()
-            
-            st.markdown('</div>', unsafe_allow_html=True)
+            file_html += f"<p><strong>{idx+1}. {filename}</strong> - {status_icon} {status_text}</p>"
+        
+        file_html += "</div>"
+        
+        # Display the scrollable file list
+        st.markdown(file_html, unsafe_allow_html=True)
+        
+        # Create delete buttons outside the scrollable area
+        for idx, file in enumerate(existing_files):
+            if st.button(f"Delete {file['filename']}", key=f"delete_{idx}"):
+                if delete_file(db, fs, file["_id"]):
+                    # Force refresh after deletion
+                    st.rerun()
     else:
         st.info("No files uploaded yet. Upload your first file below.")
     
     st.divider()
-    
     # 3. FILE UPLOAD SECTION
     st.markdown("### :orange[Upload New File]")
     
@@ -360,6 +357,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             
             # Save parsed data
             print(f"DEBUG - Saving parsed data for file '{filename}'")
+            st.rerun()
             if save_parsed_data_to_file(db, file_id, parsed_data):
                 st.success(f"File '{filename}' is now ready for analysis")
             
