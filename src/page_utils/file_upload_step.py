@@ -188,7 +188,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     hypothesis_id = st.session_state.get("hypothesis_id", None)
     
     # Debug session state
-    st.write("DEBUG - Session state keys:", list(st.session_state.keys()))
+    # st.write("DEBUG - Session state keys:", list(st.session_state.keys()))
     
     # Check if we have hypothesis_id in session state
     if not hypothesis_id:
