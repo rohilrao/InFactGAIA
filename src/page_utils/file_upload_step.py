@@ -223,7 +223,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     st.write(f"**Hypothesis ID:** `{hypothesis_id}`")
     st.write(f"**Hypothesis:** {hypothesis_text}")
     st.divider()
-    
+
     # 2. FILE LISTING SECTION
     st.markdown("### :orange[Current Files]")
     
@@ -233,7 +233,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     if existing_files:
         st.write(f"You have {len(existing_files)} file(s) uploaded for this hypothesis:")
         
-        # Add CSS for scrollable container
+        # Add CSS for scrollable container and inline buttons
         st.markdown("""
         <style>
         .file-list {
@@ -244,39 +244,55 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             border-radius: 5px;
             margin-bottom: 10px;
         }
+        .file-entry {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .file-name {
+            flex-grow: 1;
+        }
         </style>
         """, unsafe_allow_html=True)
         
-        # Generate HTML content for all files
-        file_html = "<div class='file-list'>"
-        for idx, file in enumerate(existing_files):
-            filename = file["filename"]
+        # Create columns for the file list and buttons
+        file_col, button_col = st.columns([3, 1])
+        
+        with file_col:
+            # Display the files in a scrollable container
+            st.markdown("<div class='file-list'>", unsafe_allow_html=True)
             
-            # Get file status with appropriate icon
-            if file.get("status") == "ready_for_analysis" or file.get("parsing_complete", False):
-                status_icon = "✅"
-                status_text = "Ready for Analysis"
-            else:
-                status_icon = "⏳"
-                status_text = "Unprocessed"
+            for idx, file in enumerate(existing_files):
+                filename = file["filename"]
+                file_id = file["_id"]
+                
+                # Get file status with appropriate icon
+                if file.get("status") == "ready_for_analysis" or file.get("parsing_complete", False):
+                    status_icon = "✅"
+                    status_text = "Ready for Analysis"
+                else:
+                    status_icon = "⏳"
+                    status_text = "Unprocessed"
+                
+                # Display file with a unique key for the button
+                st.markdown(f"<div class='file-entry'>"
+                            f"<span class='file-name'><strong>{idx+1}. {filename}</strong> - {status_icon} {status_text}</span>"
+                            f"</div>", unsafe_allow_html=True)
+                
+                # Delete button next to each file
+                if st.button(f"Delete", key=f"delete_{idx}_{file_id}"):
+                    if delete_file(db, fs, file_id):
+                        # Force refresh after deletion
+                        st.rerun()
             
-            file_html += f"<p><strong>{idx+1}. {filename}</strong> - {status_icon} {status_text}</p>"
-        
-        file_html += "</div>"
-        
-        # Display the scrollable file list
-        st.markdown(file_html, unsafe_allow_html=True)
-        
-        # Create delete buttons outside the scrollable area
-        for idx, file in enumerate(existing_files):
-            if st.button(f"Delete {file['filename']}", key=f"delete_{idx}"):
-                if delete_file(db, fs, file["_id"]):
-                    # Force refresh after deletion
-                    st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.info("No files uploaded yet. Upload your first file below.")
     
     st.divider()
+    
     # 3. FILE UPLOAD SECTION
     st.markdown("### :orange[Upload New File]")
     
