@@ -367,6 +367,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             st.markdown("### :orange[Parsed Data]")
             render_parsed_data(parsed_data, filename)
             parsed_data_displayed = True
+            st.rerun()
             
             # Add option to delete if not satisfied
             if st.button("Delete This File", key="delete_current"):
