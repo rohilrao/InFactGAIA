@@ -23,12 +23,14 @@ def save_parsed_data_to_file(db, file_id, parsed_data):
             {"_id": file_id},  # Update file by its unique ID
             {"$set": {
                 "parsed_data": parsed_data,
-                "parsing_complete": True  
+                "parsing_complete": True,
+                "status": "ready for analysis"  # New status after parsing
             }}
         )
         st.success("✅ Parsed data stored successfully")
     except Exception as e:
         st.error(f"❌ Failed to save parsed data: {str(e)}")
+
 
 def delete_file(db, fs, file_id):
     """
@@ -214,8 +216,9 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             col1, col2 = st.columns([3, 1])
             with col1:
                 filename = file["filename"]
-                parsing_status = "✅ Processed" if file.get("parsing_complete", False) else "⏳ Unprocessed"
-                st.write(f"**{idx+1}. {filename}** - {parsing_status}")
+                # Display "Ready for Analysis" if parsing is complete; otherwise, "Unprocessed"
+                status_text = "✅ Ready for Analysis" if file.get("parsing_complete", False) else "⏳ Unprocessed"
+                st.write(f"**{idx+1}. {filename}** - {status_text}")
             
             with col2:
                 if st.button("Delete", key=f"delete_{idx}"):
@@ -307,6 +310,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             # Save parsed data
             print(f"DEBUG - Saving parsed data for file '{filename}'")
             save_parsed_data_to_file(db, file_id, parsed_data)
+            st.rerun()
             
             # Clean up
             try:
