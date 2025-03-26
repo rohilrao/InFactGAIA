@@ -57,7 +57,7 @@ def render_parsed_data(parsed_data, filename):
     import streamlit.components.v1 as components
     from jinja2 import Template
     
-    # Sample Jinja2 template for displaying the extracted data
+    # Render the formatted view first
     TEMPLATE = """
     <style>
         body {
@@ -167,9 +167,12 @@ def render_parsed_data(parsed_data, filename):
 
     # Ensure Streamlit renders full HTML properly
     components.html(rendered_html, height=600, scrolling=True)
-
-# ...existing code...
-
+    
+    # Add expandable section for raw JSON data
+    with st.expander("View Raw JSON Data"):
+        st.caption("This shows the complete data structure returned by the parser")
+        st.json(parsed_data)
+        
 def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     """
     Handles Step 4: File Upload and Processing
