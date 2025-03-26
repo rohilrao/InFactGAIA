@@ -78,10 +78,15 @@ def display_code_review_step(db, fs, hypothesis_collection):
         justify-content: space-between;
         margin-top: 20px;
     }
+    .small-header {
+        font-size: 0.9em;
+        color: #aaa;
+        margin-bottom: 5px;
+    }
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("### Interactive Code Review")
+    st.markdown("### :orange[Interactive Code Review]")
     
     # Get hypothesis information
     hypothesis_id = st.session_state.get("hypothesis_id", None)
@@ -109,7 +114,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
     
     if not file_id:
         # Let user select a processed (ready for analysis) file if not already selected
-        st.markdown("### Select Data for Analysis")
+        st.markdown("### :orange[Select Data for Analysis]")
         
         # Get files that are ready for analysis (have parsed data)
         ready_files = list(db.fs.files.find({
@@ -144,7 +149,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
     else:
         # We have a file to analyze
         filename = st.session_state.get("current_filename", "Selected File")
-        st.markdown(f"### Analyzing: {filename}")
+        st.markdown(f"### :orange[Analyzing: {filename}]")
         
         # Get parsed data from session or directly from the database
         parsed_data = st.session_state.get("parsed_data", None)
@@ -214,7 +219,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
         generated_code = st.session_state.get("generated_code", None)
         
         if not generated_code:
-            st.markdown("### Generate Analysis Code")
+            st.markdown("### :orange[Generate Analysis Code]")
             st.info("We'll generate code to analyze your data in relation to the hypothesis.")
             
             if st.button("Generate Analysis Code"):
@@ -237,7 +242,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
         
         else:
             # Main Code Display and Editing Section
-            st.markdown("### Analysis Code")
+            st.markdown("### :orange[Analysis Code]")
             
             # Track edit mode state
             edit_mode = st.session_state.get("edit_mode", False)
@@ -254,7 +259,10 @@ def display_code_review_step(db, fs, hypothesis_collection):
                     return "reload"
             else:
                 # We're in edit mode - show the editor
-                st.markdown("#### Edit Analysis Code")
+                st.info("For complex edits, consider copying to your IDE, then paste back here.")
+                
+                # Small header for code editor
+                st.markdown('<p class="small-header">code editor</p>', unsafe_allow_html=True)
                 
                 # Display code editor with streamlit-ace if available
                 try:
@@ -267,25 +275,31 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         theme="monokai",  # Dark theme
                         min_lines=20,
                         max_lines=40,
-                        key="ace_editor"
+                        key="ace_editor",
+                        font_size=14,
+                        keybinding="vscode",
+                        show_gutter=True,
+                        wrap=True,
+                        auto_update=True
                     )
                 except ImportError:
                     # Fallback to regular text area with custom styling
                     st.markdown('<div class="code-editor">', unsafe_allow_html=True)
                     edited_code = st.text_area(
-                        "Analysis Code", 
+                        "", 
                         value=current_code, 
                         height=400,
-                        key="code_editor"
+                        key="code_editor",
+                        label_visibility="collapsed"
                     )
                     st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Save button for code edits - placed right below the editor
+                # Save button for code edits
                 code_changed = edited_code != current_code
                 
                 col1, col2 = st.columns([1, 3])
                 with col1:
-                    if st.button("Done Editing" if not code_changed else "Save Changes"):
+                    if st.button("Save Edits" if code_changed else "Exit Editor"):
                         if code_changed:
                             st.session_state["current_code"] = edited_code
                             st.session_state.pop("validated_code", None)  # Code changed, need to revalidate
@@ -295,240 +309,244 @@ def display_code_review_step(db, fs, hypothesis_collection):
                 with col2:
                     if code_changed:
                         st.warning("You have unsaved changes to the code.")
+            
+            # Tabs for code improvement or analysis - always visible
+            improve_tab, analyze_tab = st.tabs(["Improve Code", "Scrutinize Generated Code"])
+            
+            with improve_tab:
+                st.markdown('<div class="chat-input">', unsafe_allow_html=True)
+                feedback = st.text_area(
+                    "Describe what you'd like to change in the code",
+                    placeholder="Describe improvements or changes needed...",
+                    height=80
+                )
                 
-                # Tabs for code improvement or analysis
-                improve_tab, analyze_tab = st.tabs(["Improve Code", "Analyze Code"])
+                if st.button("Apply Changes"):
+                    if feedback:
+                        with st.spinner("Regenerating code based on feedback..."):
+                            try:
+                                # Get the node and provider
+                                node = st.session_state.get("node")
+                                provider = st.session_state.get("provider", "anthropic")
+                                
+                                if not node:
+                                    st.error("Session expired. Please start over.")
+                                    st.stop()
+                                
+                                # Get current code (edited or saved)
+                                code_to_improve = edited_code if (edit_mode and code_changed) else current_code
+                                
+                                # Generate new code with feedback
+                                feedback_prompt = f"""
+                                Here is the original code:
+                                
+                                ```python
+                                {code_to_improve}
+                                ```
+                                
+                                User feedback:
+                                {feedback}
+                                
+                                Please improve the code based on this feedback. The code should still:
+                                1. Be a function named `calculate_log_likelihoods`
+                                2. Take a single dict parameter and return a tuple of (l_plus, l_minus)
+                                3. Calculate log likelihoods for the hypothesis: "{hypothesis_text}"
+                                4. Be ready to execute as-is
+                                
+                                Return only the improved Python code.
+                                """
+                                
+                                # Generate response using the appropriate provider
+                                response_text = ""
+                                if provider.lower() == "anthropic":
+                                    message = node.client.messages.create(
+                                        model=node.model,
+                                        max_tokens=8192,
+                                        temperature=0.1,
+                                        messages=[{
+                                            "role": "user",
+                                            "content": feedback_prompt
+                                        }]
+                                    )
+                                    response_text = node._get_message_text(message)
+                                elif provider.lower() in ["gpt", "deepseek"]:
+                                    response = node.client.chat.completions.create(
+                                        model=node.model,
+                                        max_tokens=8192,
+                                        temperature=0.1,
+                                        messages=[{"role": "user", "content": feedback_prompt}]
+                                    )
+                                    response_text = response.choices[0].message.content
+                                else:
+                                    st.error(f"Unsupported provider: {provider}")
+                                    st.stop()
+                                
+                                # Extract code using autogen
+                                extracted_code = extract_code(response_text)
+                                
+                                if not extracted_code:
+                                    st.error("No code block found in AI response")
+                                    st.stop()
+                                
+                                # Get the first Python code block
+                                improved_code = None
+                                for lang, code_block in extracted_code:
+                                    if lang.lower() in ['python', 'py', '']:
+                                        improved_code = code_block
+                                        break
+                                
+                                if not improved_code:
+                                    st.error("No Python code block found in AI response")
+                                    st.stop()
+                                
+                                st.session_state["generated_code"] = improved_code
+                                st.session_state["current_code"] = improved_code
+                                st.session_state.pop("code_analysis", None)  # Clear old analysis
+                                st.session_state.pop("validated_code", None)  # Need to revalidate
+                                st.session_state.pop("simple_analysis", None)  # Clear old analysis
+                                st.session_state.pop("tech_analysis", None)  # Clear old analysis
+                                st.session_state["edit_mode"] = False  # Exit edit mode
+                                st.success("Code regenerated successfully!")
+                                return "reload"
+                                
+                            except Exception as e:
+                                st.error(f"Error regenerating code: {str(e)}")
+                    else:
+                        st.warning("Please provide feedback to guide code regeneration.")
+                st.markdown('</div>', unsafe_allow_html=True)
+            
+            with analyze_tab:
+                # Get the code to analyze (edited or current)
+                code_for_analysis = edited_code if (edit_mode and code_changed) else current_code
                 
-                with improve_tab:
-                    st.markdown('<div class="section-header">Regenerate Code with Feedback</div>', unsafe_allow_html=True)
-                    st.markdown('<div class="chat-input">', unsafe_allow_html=True)
-                    feedback = st.text_area(
-                        "Describe what you'd like to change in the code",
-                        placeholder="Describe improvements or changes needed...",
-                        height=80
-                    )
-                    
-                    if st.button("Apply Changes"):
-                        if feedback:
-                            with st.spinner("Regenerating code based on feedback..."):
-                                try:
-                                    # Get the node and provider
-                                    node = st.session_state.get("node")
-                                    provider = st.session_state.get("provider", "anthropic")
-                                    
-                                    if not node:
-                                        st.error("Session expired. Please start over.")
-                                        st.stop()
-                                    
-                                    # Generate new code with feedback
-                                    feedback_prompt = f"""
-                                    Here is the original code:
-                                    
-                                    ```python
-                                    {edited_code if code_changed else current_code}
-                                    ```
-                                    
-                                    User feedback:
-                                    {feedback}
-                                    
-                                    Please improve the code based on this feedback. The code should still:
-                                    1. Be a function named `calculate_log_likelihoods`
-                                    2. Take a single dict parameter and return a tuple of (l_plus, l_minus)
-                                    3. Calculate log likelihoods for the hypothesis: "{hypothesis_text}"
-                                    4. Be ready to execute as-is
-                                    
-                                    Return only the improved Python code.
-                                    """
-                                    
-                                    # Generate response using the appropriate provider
-                                    response_text = ""
-                                    if provider.lower() == "anthropic":
-                                        message = node.client.messages.create(
-                                            model=node.model,
-                                            max_tokens=8192,
-                                            temperature=0.1,
-                                            messages=[{
-                                                "role": "user",
-                                                "content": feedback_prompt
-                                            }]
-                                        )
-                                        response_text = node._get_message_text(message)
-                                    elif provider.lower() in ["gpt", "deepseek"]:
-                                        response = node.client.chat.completions.create(
-                                            model=node.model,
-                                            max_tokens=8192,
-                                            temperature=0.1,
-                                            messages=[{"role": "user", "content": feedback_prompt}]
-                                        )
-                                        response_text = response.choices[0].message.content
-                                    else:
-                                        st.error(f"Unsupported provider: {provider}")
-                                        st.stop()
-                                    
-                                    # Extract code using autogen
-                                    extracted_code = extract_code(response_text)
-                                    
-                                    if not extracted_code:
-                                        st.error("No code block found in AI response")
-                                        st.stop()
-                                    
-                                    # Get the first Python code block
-                                    improved_code = None
-                                    for lang, code_block in extracted_code:
-                                        if lang.lower() in ['python', 'py', '']:
-                                            improved_code = code_block
-                                            break
-                                    
-                                    if not improved_code:
-                                        st.error("No Python code block found in AI response")
-                                        st.stop()
-                                    
-                                    st.session_state["generated_code"] = improved_code
-                                    st.session_state["current_code"] = improved_code
-                                    st.session_state.pop("code_analysis", None)  # Clear old analysis
-                                    st.session_state.pop("validated_code", None)  # Need to revalidate
-                                    st.success("Code regenerated successfully!")
-                                    return "reload"
-                                    
-                                except Exception as e:
-                                    st.error(f"Error regenerating code: {str(e)}")
-                        else:
-                            st.warning("Please provide feedback to guide code regeneration.")
-                    st.markdown('</div>', unsafe_allow_html=True)
+                # Checkbox expanders for simple and technical analysis
+                simple_analysis = st.checkbox("Simple Analysis", value=False)
+                if simple_analysis:
+                    # Check if we have a cached analysis
+                    if "simple_analysis" in st.session_state:
+                        st.markdown(st.session_state["simple_analysis"])
+                    else:
+                        with st.spinner("Generating simple analysis..."):
+                            try:
+                                node = st.session_state.get("node")
+                                if not node:
+                                    st.error("Session expired. Please start over.")
+                                    st.stop()
+                                
+                                simple_analysis_prompt = f"""
+                                Provide a very short, simple explanation of this Python code in relation to the hypothesis:
+                                
+                                Hypothesis: {hypothesis_text}
+                                
+                                Code:
+                                ```python
+                                {code_for_analysis}
+                                ```
+                                
+                                In 3-5 sentences, explain:
+                                1. What this code is trying to do in simple terms
+                                2. The main strengths of this code
+                                3. Any limitations or weaknesses
+                                
+                                Use non-technical language that a layperson would understand.
+                                """
+                                
+                                # Generate response
+                                provider = st.session_state.get("provider", "anthropic")
+                                
+                                if provider.lower() == "anthropic":
+                                    message = node.client.messages.create(
+                                        model=node.model,
+                                        max_tokens=500,
+                                        temperature=0,
+                                        messages=[{
+                                            "role": "user",
+                                            "content": simple_analysis_prompt
+                                        }]
+                                    )
+                                    simple_analysis_text = node._get_message_text(message)
+                                elif provider.lower() in ["gpt", "deepseek"]:
+                                    response = node.client.chat.completions.create(
+                                        model=node.model,
+                                        max_tokens=500,
+                                        temperature=0,
+                                        messages=[{"role": "user", "content": simple_analysis_prompt}]
+                                    )
+                                    simple_analysis_text = response.choices[0].message.content
+                                else:
+                                    simple_analysis_text = "Analysis not available for this provider."
+                                
+                                st.session_state["simple_analysis"] = simple_analysis_text
+                                st.markdown(simple_analysis_text)
+                                
+                            except Exception as e:
+                                st.error(f"Error generating analysis: {str(e)}")
                 
-                with analyze_tab:
-                    # Store the current code for analysis
-                    code_for_analysis = edited_code if code_changed else current_code
-                    
-                    # Simple analysis (layman's terms)
-                    with st.expander("Simple Analysis", expanded=True):
-                        if st.button("Generate Simple Analysis"):
-                            with st.spinner("Generating simple analysis..."):
-                                try:
-                                    node = st.session_state.get("node")
-                                    if not node:
-                                        st.error("Session expired. Please start over.")
-                                        st.stop()
-                                    
-                                    simple_analysis_prompt = f"""
-                                    Provide a very short, simple explanation of this Python code in relation to the hypothesis:
-                                    
-                                    Hypothesis: {hypothesis_text}
-                                    
-                                    Code:
-                                    ```python
-                                    {code_for_analysis}
-                                    ```
-                                    
-                                    In 3-5 sentences, explain:
-                                    1. What this code is trying to do in simple terms
-                                    2. The main strengths of this code
-                                    3. Any limitations or weaknesses
-                                    
-                                    Use non-technical language that a layperson would understand.
-                                    """
-                                    
-                                    # Generate response
-                                    provider = st.session_state.get("provider", "anthropic")
-                                    
-                                    if provider.lower() == "anthropic":
-                                        message = node.client.messages.create(
-                                            model=node.model,
-                                            max_tokens=500,
-                                            temperature=0,
-                                            messages=[{
-                                                "role": "user",
-                                                "content": simple_analysis_prompt
-                                            }]
-                                        )
-                                        simple_analysis = node._get_message_text(message)
-                                    elif provider.lower() in ["gpt", "deepseek"]:
-                                        response = node.client.chat.completions.create(
-                                            model=node.model,
-                                            max_tokens=500,
-                                            temperature=0,
-                                            messages=[{"role": "user", "content": simple_analysis_prompt}]
-                                        )
-                                        simple_analysis = response.choices[0].message.content
-                                    else:
-                                        simple_analysis = "Analysis not available for this provider."
-                                    
-                                    st.session_state["simple_analysis"] = simple_analysis
-                                    st.markdown(simple_analysis)
-                                    
-                                except Exception as e:
-                                    st.error(f"Error generating analysis: {str(e)}")
-                        elif "simple_analysis" in st.session_state:
-                            st.markdown(st.session_state["simple_analysis"])
-                        else:
-                            st.info("Click to generate a simple analysis of the code.")
-                    
-                    # Technical analysis (for developers)
-                    with st.expander("Technical Analysis", expanded=False):
-                        if st.button("Generate Technical Analysis"):
-                            with st.spinner("Analyzing code quality and Bayesian implementation..."):
-                                try:
-                                    node = st.session_state.get("node")
-                                    if not node:
-                                        st.error("Session expired. Please start over.")
-                                        st.stop()
-                                    
-                                    tech_analysis_prompt = f"""
-                                    Provide a detailed technical analysis of this Python code implementing Bayesian analysis:
-                                    
-                                    ```python
-                                    {code_for_analysis}
-                                    ```
-                                    
-                                    Focus on:
-                                    1. Correct implementation of Bayesian log-likelihood calculation (l_plus, l_minus)
-                                    2. Statistical validity of assumptions
-                                    3. Numerical stability concerns
-                                    4. Edge case handling
-                                    5. Efficiency of implementation
-                                    
-                                    For the hypothesis: "{hypothesis_text}"
-                                    
-                                    Keep your response developer-focused, identifying specific technical issues.
-                                    """
-                                    
-                                    # Generate response
-                                    provider = st.session_state.get("provider", "anthropic")
-                                    
-                                    if provider.lower() == "anthropic":
-                                        message = node.client.messages.create(
-                                            model=node.model,
-                                            max_tokens=1500,
-                                            temperature=0,
-                                            messages=[{
-                                                "role": "user",
-                                                "content": tech_analysis_prompt
-                                            }]
-                                        )
-                                        tech_analysis = node._get_message_text(message)
-                                    elif provider.lower() in ["gpt", "deepseek"]:
-                                        response = node.client.chat.completions.create(
-                                            model=node.model,
-                                            max_tokens=1500,
-                                            temperature=0,
-                                            messages=[{"role": "user", "content": tech_analysis_prompt}]
-                                        )
-                                        tech_analysis = response.choices[0].message.content
-                                    else:
-                                        tech_analysis = "Technical analysis not available for this provider."
-                                    
-                                    st.session_state["tech_analysis"] = tech_analysis
-                                    st.markdown(tech_analysis)
-                                    
-                                except Exception as e:
-                                    st.error(f"Error generating technical analysis: {str(e)}")
-                        elif "tech_analysis" in st.session_state:
-                            st.markdown(st.session_state["tech_analysis"])
-                        else:
-                            st.info("Click to generate a technical analysis of the code.")
+                tech_analysis = st.checkbox("Technical Analysis", value=False)
+                if tech_analysis:
+                    # Check if we have a cached analysis
+                    if "tech_analysis" in st.session_state:
+                        st.markdown(st.session_state["tech_analysis"])
+                    else:
+                        with st.spinner("Generating technical analysis..."):
+                            try:
+                                node = st.session_state.get("node")
+                                if not node:
+                                    st.error("Session expired. Please start over.")
+                                    st.stop()
+                                
+                                tech_analysis_prompt = f"""
+                                Provide a detailed technical analysis of this Python code implementing Bayesian analysis:
+                                
+                                ```python
+                                {code_for_analysis}
+                                ```
+                                
+                                Focus on:
+                                1. Correct implementation of Bayesian log-likelihood calculation (l_plus, l_minus)
+                                2. Statistical validity of assumptions
+                                3. Numerical stability concerns
+                                4. Edge case handling
+                                5. Efficiency of implementation
+                                
+                                For the hypothesis: "{hypothesis_text}"
+                                
+                                Keep your response developer-focused, identifying specific technical issues.
+                                """
+                                
+                                # Generate response
+                                provider = st.session_state.get("provider", "anthropic")
+                                
+                                if provider.lower() == "anthropic":
+                                    message = node.client.messages.create(
+                                        model=node.model,
+                                        max_tokens=1500,
+                                        temperature=0,
+                                        messages=[{
+                                            "role": "user",
+                                            "content": tech_analysis_prompt
+                                        }]
+                                    )
+                                    tech_analysis_text = node._get_message_text(message)
+                                elif provider.lower() in ["gpt", "deepseek"]:
+                                    response = node.client.chat.completions.create(
+                                        model=node.model,
+                                        max_tokens=1500,
+                                        temperature=0,
+                                        messages=[{"role": "user", "content": tech_analysis_prompt}]
+                                    )
+                                    tech_analysis_text = response.choices[0].message.content
+                                else:
+                                    tech_analysis_text = "Technical analysis not available for this provider."
+                                
+                                st.session_state["tech_analysis"] = tech_analysis_text
+                                st.markdown(tech_analysis_text)
+                                
+                            except Exception as e:
+                                st.error(f"Error generating technical analysis: {str(e)}")
             
             # Validation section - always visible
-            st.markdown("### Validate Code")
+            st.markdown("### :orange[Validate and Test Code]")
             
             # Show validation status
             if "validated_code" in st.session_state:
@@ -537,51 +555,53 @@ def display_code_review_step(db, fs, hypothesis_collection):
                 st.info("Code needs to be validated before proceeding")
             
             # Validation button and results
-            validate_col, _ = st.columns([1, 3])
-            with validate_col:
-                if st.button("Test Code"):
-                    with st.spinner("Testing code execution..."):
-                        try:
-                            # Get the node
-                            node = st.session_state.get("node")
-                            if not node:
-                                st.error("Session expired. Please start over.")
-                                st.stop()
-                            
-                            # Get the current code
-                            if edit_mode and "edit_mode" in st.session_state:
-                                if code_changed:
-                                    st.warning("Testing unsaved code changes.")
-                                code_to_test = edited_code
-                            else:
-                                code_to_test = current_code
-                            
-                            # Execute code
-                            l_plus, l_minus = node.execute_analysis_code(code_to_test, parsed_data)
-                            
-                            st.session_state["l_plus"] = l_plus
-                            st.session_state["l_minus"] = l_minus
-                            st.session_state["validated_code"] = code_to_test
-                            
-                            # Convert log odds to probability for display
-                            p_h_given_d = 1 / (1 + math.exp(-l_plus + l_minus))
-                            
-                            st.success("Code executed successfully!")
-                            
-                            # Display results
-                            st.markdown("#### Analysis Results")
-                            st.write(f"**l_plus (log P(data | hypothesis)):** {l_plus:.4f}")
-                            st.write(f"**l_minus (log P(data | not hypothesis)):** {l_minus:.4f}")
-                            st.write(f"**Probability of hypothesis given this data:** {p_h_given_d:.2%}")
-                            
-                            # If we were in edit mode, exit it after validation
-                            if edit_mode:
-                                st.session_state["edit_mode"] = False
-                                return "reload"
-                            
-                        except Exception as e:
-                            st.error(f"Code execution failed: {str(e)}")
-                            st.info("Please revise the code and try again.")
+            if st.button("Test Code"):
+                with st.spinner("Testing code execution..."):
+                    try:
+                        # Get the node
+                        node = st.session_state.get("node")
+                        if not node:
+                            st.error("Session expired. Please start over.")
+                            st.stop()
+                        
+                        # Get the current code
+                        if edit_mode and "edit_mode" in st.session_state:
+                            if code_changed:
+                                st.warning("Testing unsaved code changes.")
+                            code_to_test = edited_code
+                        else:
+                            code_to_test = current_code
+                        
+                        # Execute code
+                        l_plus, l_minus = node.execute_analysis_code(code_to_test, parsed_data)
+                        
+                        st.session_state["l_plus"] = l_plus
+                        st.session_state["l_minus"] = l_minus
+                        st.session_state["validated_code"] = code_to_test
+                        
+                        # Convert log odds to probability for display
+                        p_h_given_d = 1 / (1 + math.exp(-l_plus + l_minus))
+                        
+                        st.success("Code executed successfully!")
+                        
+                        # Show validated code in an expander
+                        with st.expander("Finalized Analysis Code", expanded=True):
+                            st.code(code_to_test, language="python")
+                        
+                        # Display results
+                        st.markdown("#### Analysis Results")
+                        st.write(f"**l_plus (log P(data | hypothesis)):** {l_plus:.4f}")
+                        st.write(f"**l_minus (log P(data | not hypothesis)):** {l_minus:.4f}")
+                        st.write(f"**Probability of hypothesis given this data:** {p_h_given_d:.2%}")
+                        
+                        # If we were in edit mode, exit it after validation
+                        if edit_mode:
+                            st.session_state["edit_mode"] = False
+                            return "reload"
+                        
+                    except Exception as e:
+                        st.error(f"Code execution failed: {str(e)}")
+                        st.info("Please revise the code and try again.")
             
             # Navigation buttons
             st.divider()
