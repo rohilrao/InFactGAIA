@@ -1,3 +1,19 @@
+import streamlit as st
+import os
+import tempfile
+from bson.objectid import ObjectId
+import math
+from autogen.code_utils import extract_code
+
+def ensure_object_id(id_value):
+    """Convert string IDs to ObjectId if needed."""
+    if isinstance(id_value, str) and ObjectId.is_valid(id_value):
+        try:
+            return ObjectId(id_value)
+        except:
+            return id_value
+    return id_value
+
 def display_code_review_step(db, fs, hypothesis_collection):
     """
     Handles Step 5: Interactive Code Review
