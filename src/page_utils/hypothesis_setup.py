@@ -28,6 +28,14 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
         st.session_state["chat_id"] = str(uuid.uuid4())
     if "user_question" not in st.session_state:
         st.session_state["user_question"] = ""
+        
+    # Ensure the sections_expanded dictionary has all required keys
+    if "background" not in st.session_state["sections_expanded"]:
+        st.session_state["sections_expanded"]["background"] = False
+    if "chat" not in st.session_state["sections_expanded"]:
+        st.session_state["sections_expanded"]["chat"] = False
+    if "description" not in st.session_state["sections_expanded"]:
+        st.session_state["sections_expanded"]["description"] = True
 
     # CSS for dark mode compatible chat interface
     st.markdown("""
@@ -300,7 +308,13 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     # 4. BACKGROUND SUMMARY SECTION
     st.markdown("### :orange[Detailed Background Summary]")
     
-    show_summary = st.checkbox("Show detailed background", value=st.session_state["sections_expanded"]["background"])
+    # Get the background expanded state with a default of False if not set
+    background_expanded = st.session_state["sections_expanded"].get("background", False)
+    
+    # Use the safely retrieved value
+    show_summary = st.checkbox("Show detailed background", value=background_expanded)
+    
+    # Update the session state
     st.session_state["sections_expanded"]["background"] = show_summary
     
     if show_summary:
@@ -347,7 +361,9 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     # 5. CHAT WITH BACKGROUND SECTION
     st.markdown("### :orange[Chat with Background Knowledge]")
     
-    show_chat = st.checkbox("Show chat interface", value=st.session_state["sections_expanded"]["chat"])
+    # Similar safe approach for chat expanded state
+    chat_expanded = st.session_state["sections_expanded"].get("chat", False)
+    show_chat = st.checkbox("Show chat interface", value=chat_expanded)
     st.session_state["sections_expanded"]["chat"] = show_chat
     
     if show_chat:
@@ -355,6 +371,38 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
         if "pending_question" in st.session_state and st.session_state["pending_question"]:
             with st.spinner("Generating response..."):
                 user_question = st.session_state["pending_question"]
+                
+                # Ensure auto_summary exists before using it
+                if "auto_summary" not in hypothesis_doc or hypothesis_doc["auto_summary"] is None:
+                    # Generate summary if not available
+                    with st.spinner("Generating background knowledge first..."):
+                        prompt_summary = (
+                            f"Given this yes/no hypothesis question:\n\n'{hypothesis_doc['text']}'\n\n"
+                            "Create a comprehensive background summary with the following structure:\n\n"
+                            "## Current State of Knowledge\n"
+                            "Provide a detailed paragraph summarizing what is currently known about this topic.\n\n"
+                            "## Key Controversies\n"
+                            "List 2-3 main points of debate in the field regarding this question.\n\n"
+                            "## Relevant Evidence\n"
+                            "Summarize supporting and opposing evidence.\n\n"
+                            "Keep it concise but informative."
+                        )
+                        
+                        llm_response = call_llm(
+                            provider=st.session_state["provider"],
+                            model=st.session_state["model"],
+                            api_key=st.session_state["api_key"],
+                            prompt_text=prompt_summary
+                        )
+                        
+                        hypothesis_collection.update_one(
+                            {"_id": active_id},
+                            {"$set": {"auto_summary": llm_response}}
+                        )
+                        
+                        # Refresh the data
+                        hypothesis_doc["auto_summary"] = llm_response
+                
                 context = hypothesis_doc["text"] + "\n\n" + hypothesis_doc["auto_summary"]
                 
                 prompt_chat = (
