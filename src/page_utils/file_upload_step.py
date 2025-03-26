@@ -49,130 +49,131 @@ def delete_file(db, fs, file_id):
 
 def render_parsed_data(parsed_data, filename):
     """
-    Renders parsed data using the InFactRenderer.
-    
-    This function can be imported from your existing code or 
-    implemented here based on your needs.
+    Renders parsed data using a Jinja2 template with an expandable JSON view.
     """
     import streamlit.components.v1 as components
     from jinja2 import Template
     
-    # Render the formatted view first
-    TEMPLATE = """
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            width: 90%;
-            max-width: 700px;
-            margin: 20px auto;
-            padding: 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        h3 {
-            color: #333;
-            text-align: center;
-        }
-        h4 {
-            color: #0056b3;
-        }
-        .confidence-score {
-            font-weight: bold;
-        }
-        .confidence-high { color: green; }
-        .confidence-medium { color: orange; }
-        .confidence-low { color: red; }
-        pre {
-            background-color: #eef;
-            padding: 10px;
-            border-radius: 5px;
-            white-space: pre-wrap;
-        }
-        .issues, .confidence-box {
-            padding: 15px;
-            border-radius: 8px;
-        }
-        .confidence-box { background: #eef5ff; }
-        .issues { background: #ffecec; }
-    </style>
+    # Create tabs for different views
+    summary_tab, raw_data_tab = st.tabs(["Summary View", "Raw JSON Data"])
+    
+    with summary_tab:
+        # Render the formatted view
+        TEMPLATE = """
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f4;
+                margin: 0;
+                padding: 0;
+            }
+            .container {
+                width: 90%;
+                max-width: 700px;
+                margin: 20px auto;
+                padding: 20px;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+            }
+            h3 {
+                color: #333;
+                text-align: center;
+            }
+            h4 {
+                color: #0056b3;
+            }
+            .confidence-score {
+                font-weight: bold;
+            }
+            .confidence-high { color: green; }
+            .confidence-medium { color: orange; }
+            .confidence-low { color: red; }
+            pre {
+                background-color: #eef;
+                padding: 10px;
+                border-radius: 5px;
+                white-space: pre-wrap;
+            }
+            .issues, .confidence-box {
+                padding: 15px;
+                border-radius: 8px;
+            }
+            .confidence-box { background: #eef5ff; }
+            .issues { background: #ffecec; }
+        </style>
 
-    <div class="container">
-        <h3>Parsed Data for {{ filename }}</h3>
+        <div class="container">
+            <h3>Parsed Data for {{ filename }}</h3>
 
-        {% if data.confidence_assessment %}
-            <div class="confidence-box">
-                <h4>Confidence Assessment</h4>
-                <p><strong>Score:</strong> 
-                    <span class="confidence-score 
-                        {% if data.confidence_assessment.confidence_score >= 0.75 %} confidence-high
-                        {% elif data.confidence_assessment.confidence_score >= 0.5 %} confidence-medium
-                        {% else %} confidence-low
-                        {% endif %}">
-                        {{ (data.confidence_assessment.confidence_score * 100)|round(2) }}%
-                    </span>
-                </p>
-                <p><strong>Explanation:</strong> {{ data.confidence_assessment.explanation }}</p>
+            {% if data.confidence_assessment %}
+                <div class="confidence-box">
+                    <h4>Confidence Assessment</h4>
+                    <p><strong>Score:</strong> 
+                        <span class="confidence-score 
+                            {% if data.confidence_assessment.confidence_score >= 0.75 %} confidence-high
+                            {% elif data.confidence_assessment.confidence_score >= 0.5 %} confidence-medium
+                            {% else %} confidence-low
+                            {% endif %}">
+                            {{ (data.confidence_assessment.confidence_score * 100)|round(2) }}%
+                        </span>
+                    </p>
+                    <p><strong>Explanation:</strong> {{ data.confidence_assessment.explanation }}</p>
 
-                {% if data.confidence_assessment.key_strengths %}
-                    <h4>Key Strengths</h4>
+                    {% if data.confidence_assessment.key_strengths %}
+                        <h4>Key Strengths</h4>
+                        <ul>
+                            {% for strength in data.confidence_assessment.key_strengths %}
+                            <li>{{ strength }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+
+                    {% if data.confidence_assessment.key_limitations %}
+                        <h4>Key Limitations</h4>
+                        <ul>
+                            {% for limitation in data.confidence_assessment.key_limitations %}
+                            <li>{{ limitation }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {% if data.numerical_values %}
+                <h4>Numerical Values</h4>
+                <pre>{{ data.numerical_values | join(", ") }}</pre>
+            {% endif %}
+
+            {% if data.metadata %}
+                <h4>Metadata</h4>
+                <pre>{{ data.metadata | tojson(indent=2) }}</pre>
+            {% endif %}
+
+            {% if data.issues %}
+                <div class="issues">
+                    <h4>Issues</h4>
                     <ul>
-                        {% for strength in data.confidence_assessment.key_strengths %}
-                        <li>{{ strength }}</li>
+                        {% for issue in data.issues %}
+                        <li>{{ issue }}</li>
                         {% endfor %}
                     </ul>
-                {% endif %}
-
-                {% if data.confidence_assessment.key_limitations %}
-                    <h4>Key Limitations</h4>
-                    <ul>
-                        {% for limitation in data.confidence_assessment.key_limitations %}
-                        <li>{{ limitation }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-            </div>
-        {% endif %}
-
-        {% if data.numerical_values %}
-            <h4>Numerical Values</h4>
-            <pre>{{ data.numerical_values | join(", ") }}</pre>
-        {% endif %}
-
-        {% if data.metadata %}
-            <h4>Metadata</h4>
-            <pre>{{ data.metadata | tojson(indent=2) }}</pre>
-        {% endif %}
-
-        {% if data.issues %}
-            <div class="issues">
-                <h4>Issues</h4>
-                <ul>
-                    {% for issue in data.issues %}
-                    <li>{{ issue }}</li>
-                    {% endfor %}
-                </ul>
-            </div>
-        {% endif %}
-    </div>
-    """
-    
-    template = Template(TEMPLATE)
-    rendered_html = template.render(data=parsed_data, filename=filename)
-
-    # Ensure Streamlit renders full HTML properly
-    components.html(rendered_html, height=600, scrolling=True)
-    
-    # Add expandable section for raw JSON data
-    with st.expander("View Raw JSON Data"):
-        st.caption("This shows the complete data structure returned by the parser")
-        st.json(parsed_data)
+                </div>
+            {% endif %}
+        </div>
+        """
         
+        template = Template(TEMPLATE)
+        rendered_html = template.render(data=parsed_data, filename=filename)
+
+        # Ensure Streamlit renders full HTML properly
+        components.html(rendered_html, height=500, scrolling=True)
+    
+    # Raw JSON data in a separate tab
+    with raw_data_tab:
+        st.caption("Complete data structure returned by the parser")
+        st.json(parsed_data)
+
 def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     """
     Handles Step 4: File Upload and Processing
