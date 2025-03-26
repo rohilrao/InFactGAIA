@@ -193,9 +193,6 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     # Get hypothesis information 
     hypothesis_id = st.session_state.get("hypothesis_id", None)
     
-    # Debug session state
-    # st.write("DEBUG - Session state keys:", list(st.session_state.keys()))
-    
     # Check if we have hypothesis_id in session state
     if not hypothesis_id:
         # Also check hypothesis_id_input as fallback
@@ -237,8 +234,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     existing_files = list(db.fs.files.find({"metadata.hypothesis_id": hypothesis_id}))
     
     # Check for unprocessed or ready_for_analysis files
-    unprocessed_files = [f for f in existing_files if f.get("status") == "unprocessed" or 
-                         (f.get("status") == "ready_for_analysis" and not f.get("parsing_complete", False))]
+    unprocessed_files = [f for f in existing_files if f.get("status") == "unprocessed"]
     processed_files = [f for f in existing_files if f.get("status") == "ready_for_analysis" and 
                       f.get("parsing_complete", False)]
     
@@ -290,8 +286,10 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     # Track if we're currently parsing
     is_parsing = st.session_state.get("is_parsing", False)
     
-    # Check for unprocessed files first before allowing new uploads
-    if unprocessed_files:
+    # Only show the "Process Existing File" flow if we have unprocessed files
+    # AND we're not already parsing a file AND we're not showing file upload yet
+    show_file_upload = True
+    if unprocessed_files and not is_parsing and not st.session_state.get("show_upload_form", False):
         st.warning(f"You have {len(unprocessed_files)} unprocessed file(s). Please process them before uploading new files.")
         
         # Show option to process existing unprocessed files
@@ -302,8 +300,14 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             st.session_state["current_filename"] = file_to_process["filename"]
             st.session_state["is_parsing"] = True
             st.rerun()
+        # Don't show file upload in this case
+        show_file_upload = False
     else:
-        # Allow file upload only if no files are currently being processed
+        # Set the flag to show we're past the unprocessed files step
+        st.session_state["show_upload_form"] = True
+    
+    # Allow file upload only if no files are currently being processed and we should show the upload form
+    if show_file_upload:
         if is_parsing:
             st.info("Processing a file. Please wait until processing completes.")
         else:
@@ -406,18 +410,13 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
                 render_parsed_data(parsed_data, filename)
                 parsed_data_displayed = True
                 
-                # Mark parsing as complete but don't rerun here to avoid hover issues
+                # Mark parsing as complete
                 st.session_state["is_parsing"] = False
                 
-                # Add option to delete if not satisfied
-                if st.button("Delete This File", key="delete_current"):
-                    if delete_file(db, fs, file_id):
-                        # Clean up session state
-                        for key in ["is_parsing", "current_file_id", "current_filename"]:
-                            if key in st.session_state:
-                                del st.session_state[key]
-                        # Force refresh
-                        st.rerun()
+                # Set a flag to trigger a single rerun after successful parsing
+                if not st.session_state.get("parsed_data_rerun", False):
+                    st.session_state["parsed_data_rerun"] = True
+                    st.rerun()
                 
             except Exception as e:
                 print(f"DEBUG - ERROR processing file '{filename}': {str(e)}")
@@ -439,6 +438,10 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
                                 del st.session_state[key]
                         # Force refresh
                         st.rerun()
+    
+    # Reset rerun flag to prevent continuous reruns
+    if st.session_state.get("parsed_data_rerun", False):
+        st.session_state["parsed_data_rerun"] = False
     
     # 5. DISPLAY MOST RECENT FILE'S PARSED DATA (if no current parsing)
     if not parsed_data_displayed and not is_parsing and existing_files:
@@ -462,7 +465,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     with col1:
         if st.button("← Back"):
             # Clean up session state
-            for key in ["is_parsing", "current_file_id", "current_filename"]:
+            for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
                 if key in st.session_state:
                     del st.session_state[key]
                     
@@ -471,7 +474,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     with col2:
         if st.button("Next →"):
             # Clean up any temporary processing state
-            for key in ["is_parsing", "current_file_id", "current_filename"]:
+            for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
                 if key in st.session_state:
                     del st.session_state[key]
                     
