@@ -10,8 +10,9 @@ def ensure_object_id(id_value):
     if isinstance(id_value, str) and ObjectId.is_valid(id_value):
         try:
             return ObjectId(id_value)
-        except:
-            return id_value
+        except Exception:
+            pass  # Fall through to the return below
+    # Return the original value if conversion failed or wasn't needed
     return id_value
 
 def display_code_review_step(db, fs, hypothesis_collection):
