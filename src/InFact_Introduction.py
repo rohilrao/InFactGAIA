@@ -1,6 +1,6 @@
 import streamlit as st 
 
-st.set_page_config(page_title="InFactGAIA", page_icon="📂", layout="wide")
+st.set_page_config(page_title="InFactGAIAV3", page_icon="📂", layout="wide")
 
 # Custom CSS for improved readability in **dark mode**
 st.markdown("""
