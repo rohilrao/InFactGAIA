@@ -105,7 +105,7 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     # Add explanatory text above the text input
     st.markdown("""
     Please enter a unique **Hypothesis ID** to identify your hypothesis. This ID will be used to associate all results and files with your hypothesis.  
-    You can retrieve existing IDs from the [Hypotheses Explorer](pages/hypotheses_explorer.py).  
+    You can retrieve existing IDs from the [Hypotheses Explorer](../pages/2_hypotheses_explorer.py).  
 
     For example, if you want to test a hypothesis like *'Is the earth flat?'*, you could use an ID like `hyp_flat_earth`.  
     If the ID already exists, the associated hypothesis will be loaded. Otherwise, a new hypothesis will be created.
