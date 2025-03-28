@@ -101,7 +101,7 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
             st.session_state["user_question"] = ""
 
     # 1. HYPOTHESIS SETUP SECTION
-    st.markdown("### :orange[Hypothesis Setup]")
+    st.markdown("### :orange[Step 2: Hypothesis Setup]")
     
     with st.container():
         st.text_input(
@@ -200,7 +200,7 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     st.divider()
     
     # 2. HYPOTHESIS REFINEMENT SECTION
-    st.markdown("### :orange[Hypothesis Refinement]")
+    st.markdown("### :orange[Hypothesis:]")   
     
     # Process for Yes/No reformulation if needed
     need_reformulation = False
@@ -250,7 +250,7 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     st.divider()
     
     # 3. EDITABLE SHORT DESCRIPTION SECTION
-    st.markdown("### :orange[Editable Short Description]")
+    st.markdown("### :orange[Hypothesis Short Description]")
     
     # Get existing description or generate a new one if needed
     description = hypothesis_doc.get("short_description", "")
@@ -283,7 +283,7 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
             hypothesis_doc["short_description"] = description
     
     # Display editable text area for description
-    st.caption("Edit the short description below:")
+    st.caption("You can edit the short description below:")
     new_description = st.text_area(
         "Edit Description",
         value=description,

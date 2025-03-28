@@ -5,8 +5,7 @@ def display_setup_step():
     Handles Step 1: AI Model Configuration
     Returns True if user proceeds to next step, False otherwise
     """
-    st.header(":orange[Step 1: AI Model Configuration]")
-    
+    st.markdown("### :orange[Step 1: AI Model Configuration]")
     #st.markdown("### :orange[Upload Files for Your Hypothesis]")
 
     provider = st.selectbox("Select Provider:", ["GPT", "Anthropic"])  # Only GPT or Anthropic

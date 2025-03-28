@@ -38,6 +38,36 @@ def display_code_review_step(db, fs, hypothesis_collection):
         border-radius: 4px;
         padding: 8px;
     }
+    
+    /* Python syntax highlighting */
+    .code-editor .keyword { color: #569cd6; } /* if, def, for, etc. */
+    .code-editor .function { color: #dcdcaa; } /* function names */
+    .code-editor .string { color: #ce9178; } /* string literals */
+    .code-editor .number { color: #b5cea8; } /* numeric literals */
+    .code-editor .comment { color: #6a9955; font-style: italic; } /* comments */
+    .code-editor .operator { color: #d4d4d4; } /* operators */
+    .code-editor .builtin { color: #4ec9b0; } /* built-in functions */
+    .code-editor .class-name { color: #4ec9b0; } /* class names */
+    .code-editor .decorator { color: #dcdcaa; } /* decorators */
+    
+    /* Additional styling for improved editor experience */
+    .code-editor pre {
+        padding: 0;
+        margin: 0;
+    }
+    .code-editor::selection {
+        background-color: #264f78;
+    }
+    .code-editor:focus {
+        outline: 1px solid #3c5a78;
+    }
+    .code-editor-line-numbers {
+        color: #858585;
+        padding-right: 8px;
+        text-align: right;
+        user-select: none;
+    }
+    
     .analysis-box {
         height: 150px;
         overflow-y: auto;
@@ -82,6 +112,15 @@ def display_code_review_step(db, fs, hypothesis_collection):
         font-size: 0.9em;
         color: #aaa;
         margin-bottom: 5px;
+    }
+    
+    /* Make the streamlit code blocks look more like the VS Code editor */
+    .stCodeBlock {
+        background-color: #1e1e1e !important;
+    }
+    div.stCodeBlock pre {
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+        line-height: 1.5 !important;
     }
     </style>
     """, unsafe_allow_html=True)
