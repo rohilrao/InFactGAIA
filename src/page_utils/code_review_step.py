@@ -314,106 +314,121 @@ def display_code_review_step(db, fs, hypothesis_collection):
             improve_tab, analyze_tab = st.tabs(["Improve Code", "Scrutinize Generated Code"])
             
             with improve_tab:
-                st.markdown('<div class="chat-input">', unsafe_allow_html=True)
-                feedback = st.text_area(
-                    "Describe what you'd like to change in the code",
-                    placeholder="Describe improvements or changes needed...",
-                    height=80
-                )
+                # Replace the problematic div with a container
+                feedback_container = st.container()
                 
-                if st.button("Apply Changes"):
-                    if feedback:
-                        with st.spinner("Regenerating code based on feedback..."):
-                            try:
-                                # Get the node and provider
-                                node = st.session_state.get("node")
-                                provider = st.session_state.get("provider", "anthropic")
-                                
-                                if not node:
-                                    st.error("Session expired. Please start over.")
-                                    st.stop()
-                                
-                                # Get current code (edited or saved)
-                                code_to_improve = edited_code if (edit_mode and code_changed) else current_code
-                                
-                                # Generate new code with feedback
-                                feedback_prompt = f"""
-                                Here is the original code:
-                                
-                                ```python
-                                {code_to_improve}
-                                ```
-                                
-                                User feedback:
-                                {feedback}
-                                
-                                Please improve the code based on this feedback. The code should still:
-                                1. Be a function named `calculate_log_likelihoods`
-                                2. Take a single dict parameter and return a tuple of (l_plus, l_minus)
-                                3. Calculate log likelihoods for the hypothesis: "{hypothesis_text}"
-                                4. Be ready to execute as-is
-                                
-                                Return only the improved Python code.
-                                """
-                                
-                                # Generate response using the appropriate provider
-                                response_text = ""
-                                if provider.lower() == "anthropic":
-                                    message = node.client.messages.create(
-                                        model=node.model,
-                                        max_tokens=8192,
-                                        temperature=0.1,
-                                        messages=[{
-                                            "role": "user",
-                                            "content": feedback_prompt
-                                        }]
-                                    )
-                                    response_text = node._get_message_text(message)
-                                elif provider.lower() in ["gpt", "deepseek"]:
-                                    response = node.client.chat.completions.create(
-                                        model=node.model,
-                                        max_tokens=8192,
-                                        temperature=0.1,
-                                        messages=[{"role": "user", "content": feedback_prompt}]
-                                    )
-                                    response_text = response.choices[0].message.content
-                                else:
-                                    st.error(f"Unsupported provider: {provider}")
-                                    st.stop()
-                                
-                                # Extract code using autogen
-                                extracted_code = extract_code(response_text)
-                                
-                                if not extracted_code:
-                                    st.error("No code block found in AI response")
-                                    st.stop()
-                                
-                                # Get the first Python code block
-                                improved_code = None
-                                for lang, code_block in extracted_code:
-                                    if lang.lower() in ['python', 'py', '']:
-                                        improved_code = code_block
-                                        break
-                                
-                                if not improved_code:
-                                    st.error("No Python code block found in AI response")
-                                    st.stop()
-                                
-                                st.session_state["generated_code"] = improved_code
-                                st.session_state["current_code"] = improved_code
-                                st.session_state.pop("code_analysis", None)  # Clear old analysis
-                                st.session_state.pop("validated_code", None)  # Need to revalidate
-                                st.session_state.pop("simple_analysis", None)  # Clear old analysis
-                                st.session_state.pop("tech_analysis", None)  # Clear old analysis
-                                st.session_state["edit_mode"] = False  # Exit edit mode
-                                st.success("Code regenerated successfully!")
-                                return "reload"
-                                
-                            except Exception as e:
-                                st.error(f"Error regenerating code: {str(e)}")
-                    else:
-                        st.warning("Please provide feedback to guide code regeneration.")
-                st.markdown('</div>', unsafe_allow_html=True)
+                # Apply styling with CSS class to the container
+                st.markdown("""
+                <style>
+                [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"]:nth-child(1) {
+                    border-left: 3px solid #0078D7;
+                    background-color: rgba(0, 120, 215, 0.1);
+                    padding: 10px;
+                    border-radius: 5px;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                # Add the elements inside the container
+                with feedback_container:
+                    feedback = st.text_area(
+                        "Describe what you'd like to change in the code",
+                        placeholder="Describe improvements or changes needed...",
+                        height=80
+                    )
+                    if st.button("Apply Changes"):
+                        if feedback:
+                            with st.spinner("Regenerating code based on feedback..."):
+                                try:
+                                    # Get the node and provider
+                                    node = st.session_state.get("node")
+                                    provider = st.session_state.get("provider", "anthropic")
+                                    
+                                    if not node:
+                                        st.error("Session expired. Please start over.")
+                                        st.stop()
+                                    
+                                    # Get current code (edited or saved)
+                                    code_to_improve = edited_code if (edit_mode and code_changed) else current_code
+                                    
+                                    # Generate new code with feedback
+                                    feedback_prompt = f"""
+                                    Here is the original code:
+                                    
+                                    ```python
+                                    {code_to_improve}
+                                    ```
+                                    
+                                    User feedback:
+                                    {feedback}
+                                    
+                                    Please improve the code based on this feedback. The code should still:
+                                    1. Be a function named `calculate_log_likelihoods`
+                                    2. Take a single dict parameter and return a tuple of (l_plus, l_minus)
+                                    3. Calculate log likelihoods for the hypothesis: "{hypothesis_text}"
+                                    4. Be ready to execute as-is
+                                    
+                                    Return only the improved Python code.
+                                    """
+                                    
+                                    # Generate response using the appropriate provider
+                                    response_text = ""
+                                    if provider.lower() == "anthropic":
+                                        message = node.client.messages.create(
+                                            model=node.model,
+                                            max_tokens=8192,
+                                            temperature=0.1,
+                                            messages=[{
+                                                "role": "user",
+                                                "content": feedback_prompt
+                                            }]
+                                        )
+                                        response_text = node._get_message_text(message)
+                                    elif provider.lower() in ["gpt", "deepseek"]:
+                                        response = node.client.chat.completions.create(
+                                            model=node.model,
+                                            max_tokens=8192,
+                                            temperature=0.1,
+                                            messages=[{"role": "user", "content": feedback_prompt}]
+                                        )
+                                        response_text = response.choices[0].message.content
+                                    else:
+                                        st.error(f"Unsupported provider: {provider}")
+                                        st.stop()
+                                    
+                                    # Extract code using autogen
+                                    extracted_code = extract_code(response_text)
+                                    
+                                    if not extracted_code:
+                                        st.error("No code block found in AI response")
+                                        st.stop()
+                                    
+                                    # Get the first Python code block
+                                    improved_code = None
+                                    for lang, code_block in extracted_code:
+                                        if lang.lower() in ['python', 'py', '']:
+                                            improved_code = code_block
+                                            break
+                                    
+                                    if not improved_code:
+                                        st.error("No Python code block found in AI response")
+                                        st.stop()
+                                    
+                                    st.session_state["generated_code"] = improved_code
+                                    st.session_state["current_code"] = improved_code
+                                    st.session_state.pop("code_analysis", None)  # Clear old analysis
+                                    st.session_state.pop("validated_code", None)  # Need to revalidate
+                                    st.session_state.pop("simple_analysis", None)  # Clear old analysis
+                                    st.session_state.pop("tech_analysis", None)  # Clear old analysis
+                                    st.session_state["edit_mode"] = False  # Exit edit mode
+                                    st.success("Code regenerated successfully!")
+                                    return "reload"
+                                    
+                                except Exception as e:
+                                    st.error(f"Error regenerating code: {str(e)}")
+                        else:
+                            st.warning("Please provide feedback to guide code regeneration.")
+                    #st.markdown('</div>', unsafe_allow_html=True)
             
             with analyze_tab:
                 # Get the code to analyze (edited or current)
