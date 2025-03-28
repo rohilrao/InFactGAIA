@@ -43,8 +43,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Title & Subtitle
-st.markdown('<h1 class="big-title">InFact Demo: Building Trust in Science through Collaborative Evaluation</h1>', unsafe_allow_html=True)
-st.markdown('<h2 class="subtitle">A Gaia Lab Project</h2>', unsafe_allow_html=True)
+st.markdown('<h1 class="big-title">:orange[InFact Demo: Building Trust in Science through Collaborative Evaluation]</h1>', unsafe_allow_html=True)
+st.markdown('<h2 class="subtitle">:orange[A Gaia Lab Project]</h2>', unsafe_allow_html=True)
 
 
 
@@ -57,7 +57,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Introduction
-st.markdown('<p class="section-header">Introduction</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">:orange[Introduction]</p>', unsafe_allow_html=True)
 st.markdown("""
 <div class="content-box">
 The <b>InFact Project</b> is our attempt to realize this vision. We're building a prototype for a decentralized system 
@@ -70,7 +70,7 @@ This is the core idea behind InFact.
 """, unsafe_allow_html=True)
 
 # Section: How does InFact work?
-st.markdown('<p class="section-header">How does InFact work?</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">:orange[How does InFact work?]</p>', unsafe_allow_html=True)
 
 st.markdown("""
 At its heart, InFact uses a <b>network of interconnected nodes</b>. Each node focuses on a specific scientific question, such as:
@@ -84,7 +84,7 @@ Within each node, an <b>inference engine</b> analyzes data related to the questi
 """, unsafe_allow_html=True)
 
 # Section: Challenges in Scientific Evaluation
-st.markdown('<p class="section-header">Challenges in Scientific Evaluation</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">:orange[Challenges in Scientific Evaluation]</p>', unsafe_allow_html=True)
 
 st.markdown("""
 <div class="content-box">
@@ -97,7 +97,7 @@ allowing it to analyze different study formats with precision.
 """, unsafe_allow_html=True)
 
 # Section: Beyond the Prototype
-st.markdown('<p class="section-header">Beyond the Prototype</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">:orange[Beyond the Prototype]</p>', unsafe_allow_html=True)
 
 st.markdown("""
 To address this, our team is developing a <b>hybrid analysis framework</b> that blends:
@@ -108,7 +108,7 @@ This will result in a <b>robust, bias-resistant system</b> for evaluating scient
 """, unsafe_allow_html=True)
 
 # Section: InFact in Action
-st.markdown('<p class="section-header">InFact in Action</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">:orange[InFact in Action]</p>', unsafe_allow_html=True)
 
 st.markdown("""
 Our goal is to build a <b>user-friendly platform</b> that presents complex scientific evidence in an <b>accessible format</b>.
@@ -118,7 +118,7 @@ Our goal is to build a <b>user-friendly platform</b> that presents complex scien
 """, unsafe_allow_html=True)
 
 # Section: The Future of Scientific Confidence
-st.markdown('<p class="section-header">The Future of Scientific Confidence</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">:orange[The Future of Scientific Confidence]</p>', unsafe_allow_html=True)
 
 st.markdown("""
 <b>InFact is not just a tool—it's a movement towards a more transparent scientific process.</b>  
@@ -127,7 +127,7 @@ we aim to <b>increase public trust in science and improve evidence-based decisio
 """, unsafe_allow_html=True)
 
 # Section: The Gaia Network
-st.markdown('<p class="section-header">The Gaia Network</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-header">:orange[The Gaia Network]</p>', unsafe_allow_html=True)
 st.markdown("""
 InFact is also envisioned as a <b>demonstration of the capabilities of the</b> 
 <a href="https://gaia-lab.de"><b>Gaia Network Protocol</b></a>, the <b>Gaia Lab's main project</b>.  

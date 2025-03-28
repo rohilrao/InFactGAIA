@@ -15,13 +15,13 @@ fs = gridfs.GridFS(db)  # For file storage
 hypothesis_collection = db["hypotheses"]
 
 # 📌 Hypothesis Explorer Page
-st.title("Hypothesis Explorer")
+st.markdown("### :orange[Hypothesis Explorer]")
 
 # 📡 Fetch all stored hypotheses
 hypotheses = list(hypothesis_collection.find({}))
 
 if hypotheses:
-    st.write(f"**Total Hypotheses Currently Stored:** {len(hypotheses)}")
+    st.write(f"**Total Number of Hypotheses Currently Stored:** {len(hypotheses)}")
 
     for hypothesis in hypotheses:
         hypothesis_id = hypothesis["_id"]
