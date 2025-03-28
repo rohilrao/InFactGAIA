@@ -102,10 +102,17 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
 
     # 1. HYPOTHESIS SETUP SECTION
     st.markdown("### :orange[Step 2: Hypothesis Setup]")
-    
+    # Add explanatory text above the text input
+    st.markdown("""
+    Please enter a unique **Hypothesis ID** to identify your hypothesis. This ID will be used to associate all results and files with your hypothesis.  
+    You can retrieve existing IDs from the [Hypotheses Explorer](pages/hypotheses_explorer.py).  
+
+    For example, if you want to test a hypothesis like *'Is the earth flat?'*, you could use an ID like `hyp_flat_earth`.  
+    If the ID already exists, the associated hypothesis will be loaded. Otherwise, a new hypothesis will be created.
+    """)
     with st.container():
         st.text_input(
-            "Hypothesis ID (short name)",
+            "Hypothesis ID (please enter a unique short name as an identifier)",
             key="hypothesis_id_input",
             on_change=check_hypothesis_id
         )
