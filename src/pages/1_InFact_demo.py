@@ -2,8 +2,17 @@ import streamlit as st
 import sys
 import os
 
-# Ensure the src directory is in the Python path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Make sure we have consistent path resolution
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(PROJECT_ROOT)
+
+# Store the project root in session state for other modules to access
+if "project_root" not in st.session_state:
+    st.session_state["project_root"] = PROJECT_ROOT
+
+# Create directories if they don't exist
+node_states_dir = os.path.join(PROJECT_ROOT, "node_states")
+os.makedirs(node_states_dir, exist_ok=True)
 
 # Import utility modules
 from page_utils.step_utils import initialize_session_state, show_step_progress
@@ -15,10 +24,7 @@ from page_utils.step4_code_review import display_code_review_step
 from page_utils.evidence_step import display_evidence_step
 from page_utils.step5_results import display_results_step
 
-
 # Import other necessary modules for remaining steps
-from anthropic import Anthropic
-import openai
 import datetime
 import json
 import tempfile
@@ -26,11 +32,13 @@ from pathlib import Path
 import pandas as pd
 from bson.objectid import ObjectId
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))  # Adds "src" to path
+# Add infact to the path
+infact_path = os.path.abspath(os.path.join(PROJECT_ROOT, "infact"))
+sys.path.append(infact_path)
 
+# Import from utils
 from utils import parse_data 
 from jinja2 import Template
-
 
 # Initialize session state for tracking progress
 initialize_session_state()
@@ -60,6 +68,7 @@ def call_llm(provider, model, api_key, prompt_text):
     """
     # For GPT
     if provider == "GPT":
+        import openai
         openai.api_key = api_key
         response = openai.chat.completions.create(
             model=model,
@@ -71,6 +80,7 @@ def call_llm(provider, model, api_key, prompt_text):
 
     # For Anthropic
     elif provider == "Anthropic":
+        from anthropic import Anthropic
         client = Anthropic(api_key=api_key)
         message = client.messages.create(
             model=model,

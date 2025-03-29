@@ -6,13 +6,27 @@ import json
 import sys
 from pathlib import Path
 
-# Ensure the root directory is in the Python path to access infact
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+# Get project root from session state (set in the main app file)
+def get_project_root():
+    if "project_root" in st.session_state:
+        return st.session_state["project_root"]
+    else:
+        # Fallback if not set
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
-# Import our InFactNode and providers
-from infact import InFactNode
-from infact.providers import AnthropicProvider, OpenAIProvider
+# Add the infact module to path
+project_root = get_project_root()
+infact_path = os.path.join(project_root, "infact")
+if infact_path not in sys.path:
+    sys.path.append(infact_path)
 
+# Import InFactNode and providers
+try:
+    from infact import InFactNode
+    from infact.providers import AnthropicProvider, OpenAIProvider
+except ImportError:
+    st.error("Could not import InFactNode modules. Please ensure the infact package is installed correctly.")
+    
 
 def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     """
@@ -226,47 +240,51 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                         st.stop()
 
                     # Create node state directory if it doesn't exist
-                    node_states_dir = Path("node_states")
-                    node_states_dir.mkdir(exist_ok=True)
+                    node_states_dir = os.path.join(get_project_root(), "node_states")
+                    os.makedirs(node_states_dir, exist_ok=True)
                     
                     # Define the path for the node state file
-                    node_state_path = str(node_states_dir / f"{hypothesis_id}_state.json")
+                    node_state_path = os.path.join(node_states_dir, f"{hypothesis_id}_state.json")
                     
                     # Create a new InFactNode for this hypothesis
-                    llm_provider = create_llm_provider()
-                    
-                    new_node = InFactNode(
-                        hypothesis=new_text,
-                        llm_provider=llm_provider,
-                        prior_log_odds=0.0  # Start with neutral prior
-                    )
-                    
-                    # Save the initial node state
-                    new_node.save(node_state_path)
-                    
-                    # Store the node in session state
-                    st.session_state["infact_node"] = new_node
-                    
-                    # Insert new doc with node state path
-                    hypothesis_collection.insert_one({
-                        "_id": hypothesis_id,
-                        "original_text": new_text,
-                        "text": new_text,
-                        "short_description": "",  # New field for editable description
-                        "auto_summary": None,
-                        "node_state_path": node_state_path  # Store the path to the node state file
-                    })
+                    try:
+                        llm_provider = create_llm_provider()
+                        
+                        new_node = InFactNode(
+                            hypothesis=new_text,
+                            llm_provider=llm_provider,
+                            prior_log_odds=0.0  # Start with neutral prior
+                        )
+                        
+                        # Save the initial node state
+                        new_node.save(node_state_path)
+                        
+                        # Store the node in session state
+                        st.session_state["infact_node"] = new_node
+                        
+                        # Insert new doc with node state path
+                        hypothesis_collection.insert_one({
+                            "_id": hypothesis_id,
+                            "original_text": new_text,
+                            "text": new_text,
+                            "short_description": "",  # New field for editable description
+                            "auto_summary": None,
+                            "node_state_path": node_state_path  # Store the path to the node state file
+                        })
 
-                    # Mark as created and store in session
-                    st.session_state["hypothesis_id"] = hypothesis_id
-                    st.session_state["hypothesis_text"] = new_text
+                        # Mark as created and store in session
+                        st.session_state["hypothesis_id"] = hypothesis_id
+                        st.session_state["hypothesis_text"] = new_text
 
-                    # Force check so button disappears on rerun
-                    check_hypothesis_id()
+                        # Force check so button disappears on rerun
+                        check_hypothesis_id()
 
-                    st.success(f"✅ Created new hypothesis with ID '{hypothesis_id}'")
-                    time.sleep(1)
-                    st.rerun()
+                        st.success(f"✅ Created new hypothesis with ID '{hypothesis_id}'")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error creating InFactNode: {str(e)}")
+                        st.stop()
 
     # Only continue if we have a valid hypothesis
     can_proceed = (st.session_state["id_exists"] is True and hypothesis_id) or \
@@ -294,35 +312,38 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     # Get or create InFactNode
     infact_node = st.session_state.get("infact_node")
     if not infact_node:
-        # Create a new provider
-        llm_provider = create_llm_provider()
-        
-        # Get the hypothesis text
-        hypothesis_text = hypothesis_doc.get("text", "")
-        
-        # Create new node
-        infact_node = InFactNode(
-            hypothesis=hypothesis_text,
-            llm_provider=llm_provider,
-            prior_log_odds=0.0  # Start with neutral prior
-        )
-        
-        # Define path for node state
-        node_states_dir = Path("node_states")
-        node_states_dir.mkdir(exist_ok=True)
-        node_state_path = str(node_states_dir / f"{active_id}_state.json")
-        
-        # Save initial state
-        infact_node.save(node_state_path)
-        
-        # Update the document with the node state path
-        hypothesis_collection.update_one(
-            {"_id": active_id},
-            {"$set": {"node_state_path": node_state_path}}
-        )
-        
-        # Store in session state
-        st.session_state["infact_node"] = infact_node
+        try:
+            # Create a new provider
+            llm_provider = create_llm_provider()
+            
+            # Get the hypothesis text
+            hypothesis_text = hypothesis_doc.get("text", "")
+            
+            # Create new node
+            infact_node = InFactNode(
+                hypothesis=hypothesis_text,
+                llm_provider=llm_provider,
+                prior_log_odds=0.0  # Start with neutral prior
+            )
+            
+            # Define path for node state
+            node_states_dir = os.path.join(get_project_root(), "node_states")
+            os.makedirs(node_states_dir, exist_ok=True)
+            node_state_path = os.path.join(node_states_dir, f"{active_id}_state.json")
+            
+            # Save initial state
+            infact_node.save(node_state_path)
+            
+            # Update the document with the node state path
+            hypothesis_collection.update_one(
+                {"_id": active_id},
+                {"$set": {"node_state_path": node_state_path}}
+            )
+            
+            # Store in session state
+            st.session_state["infact_node"] = infact_node
+        except Exception as e:
+            st.error(f"Error creating or retrieving InFactNode: {str(e)}")
 
     st.divider()
     
@@ -345,35 +366,48 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                 "Keep your response brief — ONLY return the reformulated question, nothing else."
             )
             
-            # Use the InFactNode provider instead of call_llm
-            llm_provider = st.session_state["infact_node"].llm_provider
-            yes_no_formulation = llm_provider.send_message(prompt_reformulate).strip()
-            
-            # Validate the response
-            if not yes_no_formulation.endswith('?'):
-                yes_no_formulation = yes_no_formulation.rstrip('.') + '?'
-            
-            # Update DB
-            hypothesis_collection.update_one(
-                {"_id": active_id},
-                {"$set": {
-                    "original_text": original_text,
-                    "text": yes_no_formulation
-                }}
-            )
-            
-            # Refresh the data
-            hypothesis_doc["original_text"] = original_text
-            hypothesis_doc["text"] = yes_no_formulation
-            st.session_state["hypothesis_text"] = yes_no_formulation
-            
-            # Update the InFactNode hypothesis
-            st.session_state["infact_node"].hypothesis = yes_no_formulation
-            
-            # Re-save the node state
-            node_state_path = hypothesis_doc.get("node_state_path")
-            if node_state_path:
-                st.session_state["infact_node"].save(node_state_path)
+            try:
+                # Use the InFactNode provider instead of call_llm
+                if st.session_state["infact_node"]:
+                    llm_provider = st.session_state["infact_node"].llm_provider
+                    yes_no_formulation = llm_provider.send_message(prompt_reformulate).strip()
+                else:
+                    # Fall back to call_llm if InFactNode isn't available
+                    yes_no_formulation = call_llm(
+                        provider=st.session_state["provider"],
+                        model=st.session_state["model"],
+                        api_key=st.session_state["api_key"],
+                        prompt_text=prompt_reformulate
+                    ).strip()
+                
+                # Validate the response
+                if not yes_no_formulation.endswith('?'):
+                    yes_no_formulation = yes_no_formulation.rstrip('.') + '?'
+                
+                # Update DB
+                hypothesis_collection.update_one(
+                    {"_id": active_id},
+                    {"$set": {
+                        "original_text": original_text,
+                        "text": yes_no_formulation
+                    }}
+                )
+                
+                # Refresh the data
+                hypothesis_doc["original_text"] = original_text
+                hypothesis_doc["text"] = yes_no_formulation
+                st.session_state["hypothesis_text"] = yes_no_formulation
+                
+                # Update the InFactNode hypothesis if available
+                if st.session_state["infact_node"]:
+                    st.session_state["infact_node"].hypothesis = yes_no_formulation
+                    
+                    # Re-save the node state
+                    node_state_path = hypothesis_doc.get("node_state_path")
+                    if node_state_path:
+                        st.session_state["infact_node"].save(node_state_path)
+            except Exception as e:
+                st.error(f"Error reformulating hypothesis: {str(e)}")
     
     # Display the refined hypothesis
     st.info(f"**Refined Question:** {hypothesis_doc['text']}")
@@ -397,18 +431,31 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                 "Make it clear and succinct, suitable as a hypothesis description that a researcher might write."
             )
             
-            # Use the InFactNode provider instead of call_llm
-            llm_provider = st.session_state["infact_node"].llm_provider
-            description = llm_provider.send_message(prompt_description).strip()
-            
-            # Update DB with suggested description
-            hypothesis_collection.update_one(
-                {"_id": active_id},
-                {"$set": {"short_description": description}}
-            )
-            
-            # Update local copy
-            hypothesis_doc["short_description"] = description
+            try:
+                # Use the InFactNode provider instead of call_llm
+                if st.session_state["infact_node"]:
+                    llm_provider = st.session_state["infact_node"].llm_provider
+                    description = llm_provider.send_message(prompt_description).strip()
+                else:
+                    # Fall back to call_llm if InFactNode isn't available
+                    description = call_llm(
+                        provider=st.session_state["provider"],
+                        model=st.session_state["model"],
+                        api_key=st.session_state["api_key"],
+                        prompt_text=prompt_description
+                    ).strip()
+                
+                # Update DB with suggested description
+                hypothesis_collection.update_one(
+                    {"_id": active_id},
+                    {"$set": {"short_description": description}}
+                )
+                
+                # Update local copy
+                hypothesis_doc["short_description"] = description
+            except Exception as e:
+                st.error(f"Error generating description: {str(e)}")
+                description = "Error generating description. Please try again later."
     
     # Display editable text area for description
     st.caption("You can edit the short description below:")
@@ -466,20 +513,36 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                     "Make your response well-structured and include detailed citations. Use minimal formatting and avoid overuse of emojis or decorative elements."
                 )
                 
-                # Use the InFactNode provider
-                llm_provider = st.session_state["infact_node"].llm_provider
-                llm_response = llm_provider.send_message(prompt_summary)
-                
-                hypothesis_collection.update_one(
-                    {"_id": active_id},
-                    {"$set": {"auto_summary": llm_response}}
-                )
-                
-                # Refresh the data
-                hypothesis_doc["auto_summary"] = llm_response
+                                        try:
+                            # Use the InFactNode provider
+                            if st.session_state["infact_node"]:
+                                llm_provider = st.session_state["infact_node"].llm_provider
+                                llm_response = llm_provider.send_message(prompt_summary)
+                            else:
+                                # Fall back to call_llm if InFactNode isn't available
+                                llm_response = call_llm(
+                                    provider=st.session_state["provider"],
+                                    model=st.session_state["model"],
+                                    api_key=st.session_state["api_key"],
+                                    prompt_text=prompt_summary
+                                )
+                            
+                            hypothesis_collection.update_one(
+                                {"_id": active_id},
+                                {"$set": {"auto_summary": llm_response}}
+                            )
+                            
+                            # Refresh the data
+                            hypothesis_doc["auto_summary"] = llm_response
+                        except Exception as e:
+                            st.error(f"Error generating summary: {str(e)}")
+                            st.warning("Could not generate summary. Please try again later.")
         
         # Display the summary
-        st.markdown(hypothesis_doc["auto_summary"])
+        if hypothesis_doc.get("auto_summary"):
+            st.markdown(hypothesis_doc["auto_summary"])
+        else:
+            st.warning("Summary not available")
     
     st.divider()
     
