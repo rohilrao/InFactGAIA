@@ -3,7 +3,7 @@ import streamlit as st
 process_steps = {
     1: "Setup",
     2: "Hypothesis Setup", 
-    3: "Uploaded Files",
+    3: "Add Evidence",
     4: "Code Analysis",
     5: "Process Evidence",
     6: "Results"
