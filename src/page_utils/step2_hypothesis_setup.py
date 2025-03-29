@@ -15,7 +15,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 # Import InFactNode and providers
 try:
     from infact import InFactNode
-    from infact.providers import AnthropicProvider, OpenAIProvider
+    from infact.providers.anthropic_provider import AnthropicProvider
+    from infact.providers.openai_provider import OpenAIProvider
+    
 except ImportError:
     st.error("Could not import InFactNode modules. Please ensure the infact package is installed correctly.")
 
