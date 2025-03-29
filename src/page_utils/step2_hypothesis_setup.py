@@ -353,34 +353,24 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
             hypothesis_doc = hypothesis_collection.find_one({"_id": hypothesis_id})
             
             if hypothesis_doc and "node_state" in hypothesis_doc and hypothesis_doc["node_state"]:
-                try:
-                    # Load the existing node state from the database
-                    node_state_json = hypothesis_doc["node_state"]
-                    provider_name = st.session_state["provider"]
-                    api_key = st.session_state["api_key"]
-                    
-                    # Create a temporary file with the node state data
-                    temp_node_file = create_temp_node_file(node_state_json)
-                    
-                    # Load the InFactNode from the temporary file
-                    infact_node = InFactNode.load(
-                        filename=temp_node_file,
-                        provider_type=provider_name,
-                        api_key=api_key,
-                        model=st.session_state["model"]
-                    )
-                    st.info(f"Loaded existing InFactNode state for hypothesis '{hypothesis_id}'.")
-                except Exception as inner_e:
-                    st.error(f"Failed to load existing node state: {str(inner_e)}")
-                    # Fall back to creating a new node
-                    st.info("Creating a new InFactNode.")
-                    llm_provider = create_llm_provider()
-                    hypothesis_text = hypothesis_doc.get("text", "")
-                    infact_node = InFactNode(
-                        hypothesis=hypothesis_text,
-                        llm_provider=llm_provider,
-                        prior_log_odds=0.0
-                    )
+                
+                # Load the existing node state from the database
+                node_state_json = hypothesis_doc["node_state"]
+                provider_name = st.session_state["provider"]
+                api_key = st.session_state["api_key"]
+                
+                # Create a temporary file with the node state data
+                temp_node_file = create_temp_node_file(node_state_json)
+                
+                # Load the InFactNode from the temporary file
+                infact_node = InFactNode.load(
+                    filename=temp_node_file,
+                    provider_type=provider_name,
+                    api_key=api_key,
+                    model=st.session_state["model"]
+                )
+                st.info(f"Loaded existing InFactNode state for hypothesis '{hypothesis_id}'.")
+                
             else:
                 # No existing node state, create a new InFactNode - this is normal for new hypotheses
                 st.info(f"No existing node state found for hypothesis '{hypothesis_id}'. Creating a new one.")
