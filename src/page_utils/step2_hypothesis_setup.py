@@ -25,19 +25,7 @@ try:
 except ImportError as e:
     st.error(f"Could not import InFactNode modules: {str(e)}. Please ensure the package is installed correctly.")
 
-# Import the hypothesis utilities
-from hypothesis_setup_utils import (
-    initialize_session_state,
-    setup_ui_styles,
-    render_hypothesis_setup,
-    render_hypothesis_refinement,
-    render_description_section,
-    render_background_section,
-    render_chat_section,
-    render_current_state,
-    render_navigation_buttons,
-    get_or_create_infact_node
-)
+
 
 def display_combined_hypothesis_step(hypothesis_collection, call_llm=None):
     """
