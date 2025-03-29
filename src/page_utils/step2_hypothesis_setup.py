@@ -15,7 +15,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 # Import InFactNode and providers
 # Import InFactNode and providers
 try:
-    from InFact import InFactNode
+    from InFact.infact_node import InFactNode
     from InFact.providers.anthropic_provider import AnthropicProvider
     from InFact.providers.openai_provider import OpenAIProvider
 except ImportError as e:
