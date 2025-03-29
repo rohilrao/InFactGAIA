@@ -11,6 +11,17 @@ try:
     from InFact.infact_node import InFactNode
     from InFact.providers.anthropic_provider import AnthropicProvider
     from InFact.providers.openai_provider import OpenAIProvider
+    from hypothesis_setup_utils import initialize_session_state
+    from hypothesis_setup_utils import setup_ui_styles
+    from hypothesis_setup_utils import render_hypothesis_setup
+    from hypothesis_setup_utils import render_hypothesis_refinement
+    from hypothesis_setup_utils import render_description_section
+    from hypothesis_setup_utils import render_background_section
+    from hypothesis_setup_utils import render_chat_section
+    from hypothesis_setup_utils import render_current_state
+    from hypothesis_setup_utils import render_navigation_buttons
+    from hypothesis_setup_utils import get_or_create_infact_node
+
 except ImportError as e:
     st.error(f"Could not import InFactNode modules: {str(e)}. Please ensure the package is installed correctly.")
 
