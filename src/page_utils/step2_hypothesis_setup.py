@@ -13,13 +13,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Import InFactNode and providers
+# Import InFactNode and providers
 try:
-    from infact import InFactNode
-    from infact.providers.anthropic_provider import AnthropicProvider
-    from infact.providers.openai_provider import OpenAIProvider
-    
-except ImportError:
-    st.error("Could not import InFactNode modules. Please ensure the infact package is installed correctly.")
+    from InFact import InFactNode
+    from InFact.providers.anthropic_provider import AnthropicProvider
+    from InFact.providers.openai_provider import OpenAIProvider
+except ImportError as e:
+    st.error(f"Could not import InFactNode modules: {str(e)}. Please ensure the package is installed correctly.")
 
 def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     """
