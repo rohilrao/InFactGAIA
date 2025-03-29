@@ -103,12 +103,21 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
         model = st.session_state["model"]
         api_key = st.session_state["api_key"]
         
-        if provider_name == "Anthropic":
-            return AnthropicProvider(api_key=api_key, model=model)
-        elif provider_name == "GPT":
-            return OpenAIProvider(api_key=api_key, model=model)
-        else:
-            raise ValueError(f"Unsupported provider: {provider_name}")
+        try:
+            if provider_name == "Anthropic":
+                return AnthropicProvider(api_key=api_key, model=model)
+            elif provider_name == "GPT":
+                # Check if OpenAIProvider exists in the current scope
+                if 'OpenAIProvider' not in globals():
+                    raise NameError("OpenAIProvider class is not defined. Import might have failed.")
+                return OpenAIProvider(api_key=api_key, model=model)
+            else:
+                raise ValueError(f"Unsupported provider: {provider_name}")
+        except Exception as e:
+            # More detailed error message
+            st.error(f"Error creating provider '{provider_name}': {str(e)}")
+            # Re-raise to be caught by the outer try-except
+            raise
 
     # Function to create a temporary file from a node state JSON
     def create_temp_node_file(node_state_json):
@@ -344,39 +353,60 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
             hypothesis_doc = hypothesis_collection.find_one({"_id": hypothesis_id})
             
             if hypothesis_doc and "node_state" in hypothesis_doc and hypothesis_doc["node_state"]:
-                # Load the existing node state from the database
-                node_state_json = hypothesis_doc["node_state"]
-                provider_name = st.session_state["provider"]
-                api_key = st.session_state["api_key"]
-                
-                # Create a temporary file with the node state data
-                temp_node_file = create_temp_node_file(node_state_json)
-                
-                # Load the InFactNode from the temporary file
-                infact_node = InFactNode.load(
-                    filename=temp_node_file,
-                    provider_type=provider_name,
-                    api_key=api_key,
-                    model=st.session_state["model"]
-                )
-                st.info(f"Loaded existing InFactNode state for hypothesis '{hypothesis_id}'.")
+                try:
+                    # Load the existing node state from the database
+                    node_state_json = hypothesis_doc["node_state"]
+                    provider_name = st.session_state["provider"]
+                    api_key = st.session_state["api_key"]
+                    
+                    # Create a temporary file with the node state data
+                    temp_node_file = create_temp_node_file(node_state_json)
+                    
+                    # Load the InFactNode from the temporary file
+                    infact_node = InFactNode.load(
+                        filename=temp_node_file,
+                        provider_type=provider_name,
+                        api_key=api_key,
+                        model=st.session_state["model"]
+                    )
+                    st.info(f"Loaded existing InFactNode state for hypothesis '{hypothesis_id}'.")
+                except Exception as inner_e:
+                    st.error(f"Failed to load existing node state: {str(inner_e)}")
+                    # Fall back to creating a new node
+                    st.warning("Falling back to creating a new InFactNode.")
+                    llm_provider = create_llm_provider()
+                    hypothesis_text = hypothesis_doc.get("text", "")
+                    infact_node = InFactNode(
+                        hypothesis=hypothesis_text,
+                        llm_provider=llm_provider,
+                        prior_log_odds=0.0
+                    )
             else:
                 # No existing node state, create a new InFactNode
-                llm_provider = create_llm_provider()
-                hypothesis_text = hypothesis_doc.get("text", "") if hypothesis_doc else ""
+                try:
+                    llm_provider = create_llm_provider()
+                    hypothesis_text = hypothesis_doc.get("text", "") if hypothesis_doc else ""
+                    
+                    infact_node = InFactNode(
+                        hypothesis=hypothesis_text,
+                        llm_provider=llm_provider,
+                        prior_log_odds=0.0  # Start with neutral prior
+                    )
+                    st.info(f"Created a new InFactNode for hypothesis '{hypothesis_id}'.")
+                except NameError as name_err:
+                    st.error(f"Provider class not found: {str(name_err)}")
+                    st.info("Please check that you've selected a valid provider in the settings.")
+                    return None
+                except Exception as provider_err:
+                    st.error(f"Failed to create provider: {str(provider_err)}")
+                    return None
                 
-                infact_node = InFactNode(
-                    hypothesis=hypothesis_text,
-                    llm_provider=llm_provider,
-                    prior_log_odds=0.0  # Start with neutral prior
-                )
-                st.info(f"Created a new InFactNode for hypothesis '{hypothesis_id}'.")
-            
             # Store the node in session state for future use
             st.session_state["infact_node"] = infact_node
         except Exception as e:
             st.error(f"Error creating or retrieving InFactNode: {str(e)}")
-
+            import traceback
+            st.error(f"Error details: {traceback.format_exc()}")
     st.divider()
     
     # 2. HYPOTHESIS REFINEMENT SECTION
