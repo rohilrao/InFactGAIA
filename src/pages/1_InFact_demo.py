@@ -9,13 +9,12 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from page_utils.step_utils import initialize_session_state, show_step_progress
 from page_utils.db_utils import initialize_db
 from page_utils.step1_setup import display_setup_step
-from page_utils.hypothesis_step import display_hypothesis_step
-from page_utils.summary_step import display_summary_step
+from page_utils.step2_hypothesis_setup import display_combined_hypothesis_step
 from page_utils.step3_add_evidence import display_file_upload_step
 from page_utils.step4_code_review import display_code_review_step
 from page_utils.evidence_step import display_evidence_step
 from page_utils.step5_results import display_results_step
-from page_utils.step2_hypothesis_setup import display_combined_hypothesis_step
+
 
 # Import other necessary modules for remaining steps
 from anthropic import Anthropic
