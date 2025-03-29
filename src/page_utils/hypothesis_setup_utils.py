@@ -1,63 +1,31 @@
 import streamlit as st
-import time
-import uuid
 import os
 import json
-import sys
 import tempfile
-from pathlib import Path
-import bson
 
-# Add the necessary paths to sys.path if not already done in the main file
 try:
     from InFact.infact_node import InFactNode
-    from InFact.providers.anthropic_provider import AnthropicProvider
-    from InFact.providers.openai_provider import OpenAIProvider
-except ImportError as e:
-    pass  # Error will be handled in the main file
-
-# ========== HELPER FUNCTIONS ==========
-
-def create_llm_provider():
-    """Create an LLM provider based on session settings."""
-    provider_name = st.session_state["provider"]
-    model = st.session_state["model"]
-    api_key = st.session_state["api_key"]
-    
-    try:
-        if provider_name == "anthropic":
-            return AnthropicProvider(api_key=api_key, model=model)
-        elif provider_name == "openai":
-            return OpenAIProvider(api_key=api_key, model=model)
-        else:
-            raise ValueError(f"Unsupported provider: {provider_name}")
-    except Exception as e:
-        st.error(f"Error creating provider '{provider_name}': {str(e)}")
-        raise
+except ImportError:
+    pass  # Handle this in your main app
 
 def create_temp_node_file(node_state_json):
     """Create a temporary file from a node state JSON."""
-    # Clean up old temporary file if it exists
     if st.session_state.get("temp_node_file") and os.path.exists(st.session_state["temp_node_file"]):
         try:
             os.remove(st.session_state["temp_node_file"])
         except Exception as e:
-            print(f"Failed to remove old temporary file: {e}")
+            print(f"Failed to remove old temp file: {e}")
     
-    # Create a new temporary file
     fd, temp_path = tempfile.mkstemp(suffix='.json', prefix='node_state_')
     os.close(fd)
-    
-    # Write the node state JSON to the temporary file
+
     with open(temp_path, 'w') as f:
         if isinstance(node_state_json, dict):
             json.dump(node_state_json, f, indent=2)
         else:
             f.write(node_state_json)
-    
-    # Store the path in session state
+
     st.session_state["temp_node_file"] = temp_path
-    
     return temp_path
 
 def load_infact_node(node_state_json):
@@ -66,11 +34,8 @@ def load_infact_node(node_state_json):
         provider_name = st.session_state["provider"]
         api_key = st.session_state["api_key"]
         model = st.session_state["model"]
-        
-        # Create a temporary file with the node state data
+
         temp_node_file = create_temp_node_file(node_state_json)
-        
-        # Load the InFactNode from the temporary file
         infact_node = InFactNode.load(
             filename=temp_node_file,
             provider_type=provider_name,
@@ -79,130 +44,31 @@ def load_infact_node(node_state_json):
         )
         return infact_node
     except Exception as e:
-        st.error(f"Failed to load InFactNode state: {str(e)}")
+        st.error(f"Failed to load InFactNode: {str(e)}")
         return None
 
-def create_new_infact_node(hypothesis_text):
-    """Create a new InFactNode with the given hypothesis text."""
-    try:
-        llm_provider = create_llm_provider()
-        
-        infact_node = InFactNode(
-            hypothesis=hypothesis_text,
-            llm_provider=llm_provider,
-            prior_log_odds=0.0  # Start with neutral prior
-        )
-        return infact_node
-    except Exception as e:
-        st.error(f"Error creating InFactNode: {str(e)}")
-        return None
-
-def save_infact_node_state(infact_node, hypothesis_id, hypothesis_collection):
-    """Save the InFactNode state to MongoDB."""
-    if not infact_node:
-        return None
-    
-    # Create a temporary file for saving
-    temp_file = tempfile.mktemp(suffix='.json')
-    
-    # Save the node state
-    infact_node.save(temp_file)
-    
-    # Read the temporary file and get its content
-    with open(temp_file, 'r') as f:
-        node_state_json = json.load(f)
-    
-    # Remove the temporary file
-    os.remove(temp_file)
-    
-    # Update MongoDB with the new node state
-    hypothesis_collection.update_one(
-        {"_id": hypothesis_id},
-        {"$set": {"node_state": node_state_json}},
-        upsert=True
-    )
-    
-    return node_state_json
-
-def get_or_create_infact_node(hypothesis_id, hypothesis_doc, hypothesis_collection):
-    """Get an existing InFactNode or create a new one."""
-    # First check if there's one in session state
-    infact_node = st.session_state.get("infact_node")
-    if infact_node:
-        return infact_node
-    
-    # No InFactNode in session state, try to load from database
-    if hypothesis_doc and "node_state" in hypothesis_doc and hypothesis_doc["node_state"]:
-        # Load existing node state
-        node_state_json = hypothesis_doc["node_state"]
-        infact_node = load_infact_node(node_state_json)
-        if infact_node:
-            st.info(f"Loaded existing InFactNode state for hypothesis '{hypothesis_id}'.")
-            st.session_state["infact_node"] = infact_node
-            return infact_node
-    
-    # No existing node state or loading failed, create a new one
-    st.info(f"Creating a new InFactNode for hypothesis '{hypothesis_id}'.")
-    hypothesis_text = hypothesis_doc.get("text", "") if hypothesis_doc else ""
-    infact_node = create_new_infact_node(hypothesis_text)
-    if infact_node:
-        st.session_state["infact_node"] = infact_node
-        save_infact_node_state(infact_node, hypothesis_id, hypothesis_collection)
-    
-    return infact_node
-
-def check_hypothesis_id(hypothesis_collection):
-    """Check if a hypothesis ID exists in the database and handle loading."""
-    _id = st.session_state.get("hypothesis_id_input", "").strip()
+def check_and_load_hypothesis(hypothesis_collection):
+    """Check if hypothesis ID exists and try loading node state if present."""
+    _id = st.text_input("Enter Hypothesis ID")
     if not _id:
-        st.session_state["id_exists"] = None
-        st.session_state["infact_node"] = None
-        return None, None
-    
-    # Look up in DB
-    existing = hypothesis_collection.find_one({"_id": _id})
-    st.session_state["id_exists"] = True if existing else False
-    
-    if existing:
-        # Try to load the InFactNode if node state exists
-        if "node_state" in existing and existing["node_state"]:
-            node_state_json = existing["node_state"]
+        return
+
+    doc = hypothesis_collection.find_one({"_id": _id})
+    if doc:
+        st.session_state["id_exists"] = True
+        if "node_state" in doc and doc["node_state"]:
+            node_state_json = doc["node_state"]
             infact_node = load_infact_node(node_state_json)
             if infact_node:
                 st.session_state["infact_node"] = infact_node
-                st.info(f"Loaded existing InFactNode state for hypothesis {_id}")
-    
-    return _id, existing
-
-def create_hypothesis(hypothesis_id, hypothesis_text, hypothesis_collection):
-    """Create a new hypothesis in the database and initialize an InFactNode."""
-    # Create a new InFactNode
-    infact_node = create_new_infact_node(hypothesis_text)
-    if not infact_node:
-        st.error("Failed to create InFactNode.")
-        return False
-    
-    # Save the node state
-    node_state_json = save_infact_node_state(infact_node, hypothesis_id, hypothesis_collection)
-    
-    # Store the node in session state
-    st.session_state["infact_node"] = infact_node
-    
-    # Insert new doc with node state JSON
-    hypothesis_collection.insert_one({
-        "_id": hypothesis_id,
-        "original_text": hypothesis_text,
-        "text": hypothesis_text,
-        "short_description": "",
-        "auto_summary": None,
-        "node_state": node_state_json
-    })
-    
-    # Mark as created and store in session
-    st.session_state["hypothesis_id"] = hypothesis_id
-    st.session_state["hypothesis_text"] = hypothesis_text
-    
-    return True
+                st.success(f"Loaded existing node state for hypothesis ID: {_id}")
+            else:
+                st.warning(f"Node state exists for {_id}, but failed to load.")
+        else:
+            st.info(f"Hypothesis '{_id}' exists, but no node state found. A new one will be created later.")
+    else:
+        st.session_state["id_exists"] = False
+        st.info(f"No entry found for hypothesis ID '{_id}'. A new node will be created later.")
 
 # ========== FUNCTIONAL COMPONENTS ==========
 

@@ -70,7 +70,7 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm=None):
         return None
     
     # Get or create InFactNode if not already done
-    get_or_create_infact_node(active_id, hypothesis_doc, hypothesis_collection)
+    check_hypothesis_id(hypothesis_collection)
     
     # Render hypothesis refinement section
     updated_doc = render_hypothesis_refinement(active_id, hypothesis_doc, hypothesis_collection, call_llm)
