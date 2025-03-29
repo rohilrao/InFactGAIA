@@ -10,8 +10,8 @@ def display_setup_step():
 
     provider = st.selectbox("Select Provider:", ["GPT", "Anthropic"])  # Only GPT or Anthropic
     model_options = {
-        "GPT": ["gpt-4o", "chatgpt-4o-latest"],   # Example GPT models
-        "Anthropic": ["claude-3-5-sonnet"]   # Example Anthropic model
+        "openai": ["gpt-4o", "chatgpt-4o-latest"],   # Example GPT models
+        "anthropic": ["claude-3-5-sonnet"]   # Example Anthropic model
     }
     model = st.selectbox("Select Model:", model_options[provider])
     api_key = st.text_input("Enter API Key:", type="password")
