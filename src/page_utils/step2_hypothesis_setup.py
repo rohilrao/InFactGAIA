@@ -8,19 +8,9 @@ import tempfile
 from pathlib import Path
 import bson
 
-# Get project root from session state (set in the main app file)
-def get_project_root():
-    if "project_root" in st.session_state:
-        return st.session_state["project_root"]
-    else:
-        # Fallback if not set
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-
-# Add the infact module to path
-project_root = get_project_root()
-infact_path = os.path.join(project_root, "infact")
-if infact_path not in sys.path:
-    sys.path.append(infact_path)
+# Add the necessary paths to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Import InFactNode and providers
 try:
@@ -28,7 +18,6 @@ try:
     from infact.providers import AnthropicProvider, OpenAIProvider
 except ImportError:
     st.error("Could not import InFactNode modules. Please ensure the infact package is installed correctly.")
-    
 
 def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     """
