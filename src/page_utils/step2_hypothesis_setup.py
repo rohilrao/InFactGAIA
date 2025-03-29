@@ -4,7 +4,9 @@ import uuid
 import os
 import json
 import sys
+import tempfile
 from pathlib import Path
+import bson
 
 # Get project root from session state (set in the main app file)
 def get_project_root():
@@ -57,6 +59,8 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
         st.session_state["user_question"] = ""
     if "infact_node" not in st.session_state:
         st.session_state["infact_node"] = None
+    if "temp_node_file" not in st.session_state:
+        st.session_state["temp_node_file"] = None
         
     # Ensure the sections_expanded dictionary has all required keys
     if "background" not in st.session_state["sections_expanded"]:
@@ -115,7 +119,32 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
         else:
             raise ValueError(f"Unsupported provider: {provider_name}")
 
-    # Function to check if ID exists in database and if there's an associated InFactNode
+    # Function to create a temporary file from a node state JSON
+    def create_temp_node_file(node_state_json):
+        # Clean up old temporary file if it exists
+        if st.session_state["temp_node_file"] and os.path.exists(st.session_state["temp_node_file"]):
+            try:
+                os.remove(st.session_state["temp_node_file"])
+            except Exception as e:
+                print(f"Failed to remove old temporary file: {e}")
+        
+        # Create a new temporary file
+        fd, temp_path = tempfile.mkstemp(suffix='.json', prefix='node_state_')
+        os.close(fd)
+        
+        # Write the node state JSON to the temporary file
+        with open(temp_path, 'w') as f:
+            if isinstance(node_state_json, dict):
+                json.dump(node_state_json, f, indent=2)
+            else:
+                f.write(node_state_json)
+        
+        # Store the path in session state
+        st.session_state["temp_node_file"] = temp_path
+        
+        return temp_path
+
+    # Function to check if ID exists in database and load the node state if available
     def check_hypothesis_id():
         _id = st.session_state.get("hypothesis_id_input", "").strip()
         if not _id:
@@ -128,18 +157,20 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
         st.session_state["id_exists"] = True if existing else False
         
         if existing:
-            # Check if there's an existing InFactNode state file
-            node_state_path = existing.get("node_state_path")
-            
-            if node_state_path and os.path.exists(node_state_path):
+            # Check if there's node state data in MongoDB
+            if "node_state" in existing and existing["node_state"]:
                 try:
                     # Get provider info
                     provider_name = st.session_state["provider"]
                     api_key = st.session_state["api_key"]
                     
-                    # Load the existing node state
+                    # Create a temporary file with the node state data from MongoDB
+                    node_state_json = existing["node_state"]
+                    temp_node_file = create_temp_node_file(node_state_json)
+                    
+                    # Load the existing node state from the temporary file
                     st.session_state["infact_node"] = InFactNode.load(
-                        filename=node_state_path,
+                        filename=temp_node_file,
                         provider_type=provider_name,
                         api_key=api_key,
                         model=st.session_state["model"]
@@ -238,13 +269,6 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                     if not new_text:
                         st.warning("⚠️ Please enter text before creating a new hypothesis.")
                         st.stop()
-
-                    # Create node state directory if it doesn't exist
-                    node_states_dir = os.path.join(get_project_root(), "node_states")
-                    os.makedirs(node_states_dir, exist_ok=True)
-                    
-                    # Define the path for the node state file
-                    node_state_path = os.path.join(node_states_dir, f"{hypothesis_id}_state.json")
                     
                     # Create a new InFactNode for this hypothesis
                     try:
@@ -256,20 +280,30 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                             prior_log_odds=0.0  # Start with neutral prior
                         )
                         
+                        # Create a temporary file for saving
+                        temp_file = tempfile.mktemp(suffix='.json')
+                        
                         # Save the initial node state
-                        new_node.save(node_state_path)
+                        new_node.save(temp_file)
+                        
+                        # Read the temporary file and store its content in MongoDB
+                        with open(temp_file, 'r') as f:
+                            node_state_json = json.load(f)
+                        
+                        # Remove the temporary file
+                        os.remove(temp_file)
                         
                         # Store the node in session state
                         st.session_state["infact_node"] = new_node
                         
-                        # Insert new doc with node state path
+                        # Insert new doc with node state JSON
                         hypothesis_collection.insert_one({
                             "_id": hypothesis_id,
                             "original_text": new_text,
                             "text": new_text,
                             "short_description": "",  # New field for editable description
                             "auto_summary": None,
-                            "node_state_path": node_state_path  # Store the path to the node state file
+                            "node_state": node_state_json  # Store the node state JSON directly in MongoDB
                         })
 
                         # Mark as created and store in session
@@ -326,18 +360,23 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                 prior_log_odds=0.0  # Start with neutral prior
             )
             
-            # Define path for node state
-            node_states_dir = os.path.join(get_project_root(), "node_states")
-            os.makedirs(node_states_dir, exist_ok=True)
-            node_state_path = os.path.join(node_states_dir, f"{active_id}_state.json")
+            # Create a temporary file for saving
+            temp_file = tempfile.mktemp(suffix='.json')
             
             # Save initial state
-            infact_node.save(node_state_path)
+            infact_node.save(temp_file)
             
-            # Update the document with the node state path
+            # Read the temporary file and store its content in MongoDB
+            with open(temp_file, 'r') as f:
+                node_state_json = json.load(f)
+            
+            # Remove the temporary file
+            os.remove(temp_file)
+            
+            # Update the document with the node state JSON
             hypothesis_collection.update_one(
                 {"_id": active_id},
-                {"$set": {"node_state_path": node_state_path}}
+                {"$set": {"node_state": node_state_json}}
             )
             
             # Store in session state
@@ -402,10 +441,22 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                 if st.session_state["infact_node"]:
                     st.session_state["infact_node"].hypothesis = yes_no_formulation
                     
-                    # Re-save the node state
-                    node_state_path = hypothesis_doc.get("node_state_path")
-                    if node_state_path:
-                        st.session_state["infact_node"].save(node_state_path)
+                    # Save the node state to a temporary file
+                    temp_file = tempfile.mktemp(suffix='.json')
+                    st.session_state["infact_node"].save(temp_file)
+                    
+                    # Read the temporary file and update the MongoDB document
+                    with open(temp_file, 'r') as f:
+                        node_state_json = json.load(f)
+                    
+                    # Update MongoDB with new node state
+                    hypothesis_collection.update_one(
+                        {"_id": active_id},
+                        {"$set": {"node_state": node_state_json}}
+                    )
+                    
+                    # Remove the temporary file
+                    os.remove(temp_file)
             except Exception as e:
                 st.error(f"Error reformulating hypothesis: {str(e)}")
     
@@ -513,30 +564,30 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                     "Make your response well-structured and include detailed citations. Use minimal formatting and avoid overuse of emojis or decorative elements."
                 )
                 
-                                        try:
-                            # Use the InFactNode provider
-                            if st.session_state["infact_node"]:
-                                llm_provider = st.session_state["infact_node"].llm_provider
-                                llm_response = llm_provider.send_message(prompt_summary)
-                            else:
-                                # Fall back to call_llm if InFactNode isn't available
-                                llm_response = call_llm(
-                                    provider=st.session_state["provider"],
-                                    model=st.session_state["model"],
-                                    api_key=st.session_state["api_key"],
-                                    prompt_text=prompt_summary
-                                )
-                            
-                            hypothesis_collection.update_one(
-                                {"_id": active_id},
-                                {"$set": {"auto_summary": llm_response}}
-                            )
-                            
-                            # Refresh the data
-                            hypothesis_doc["auto_summary"] = llm_response
-                        except Exception as e:
-                            st.error(f"Error generating summary: {str(e)}")
-                            st.warning("Could not generate summary. Please try again later.")
+                try:
+                    # Use the InFactNode provider
+                    if st.session_state["infact_node"]:
+                        llm_provider = st.session_state["infact_node"].llm_provider
+                        llm_response = llm_provider.send_message(prompt_summary)
+                    else:
+                        # Fall back to call_llm if InFactNode isn't available
+                        llm_response = call_llm(
+                            provider=st.session_state["provider"],
+                            model=st.session_state["model"],
+                            api_key=st.session_state["api_key"],
+                            prompt_text=prompt_summary
+                        )
+                    
+                    hypothesis_collection.update_one(
+                        {"_id": active_id},
+                        {"$set": {"auto_summary": llm_response}}
+                    )
+                    
+                    # Refresh the data
+                    hypothesis_doc["auto_summary"] = llm_response
+                except Exception as e:
+                    st.error(f"Error generating summary: {str(e)}")
+                    st.warning("Could not generate summary. Please try again later.")
         
         # Display the summary
         if hypothesis_doc.get("auto_summary"):
@@ -690,8 +741,6 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                             st.write("**Key limitations:**")
                             for limitation in confidence['key_limitations']:
                                 st.write(f"- {limitation}")
-    else:
-        st.warning("No InFactNode instance available. Please create or load a hypothesis first.")
     
     st.divider()
     
