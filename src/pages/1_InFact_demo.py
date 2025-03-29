@@ -91,31 +91,6 @@ if st.session_state.process_step == 1:
         st.session_state.process_step = 2
         st.rerun()
 
-# Commented out original steps 2 and 3
-# # Step 2: Hypothesis Setup
-# elif st.session_state.process_step == 2:
-#     result = display_hypothesis_step(hypothesis_collection)
-#     
-#     if result == "next":
-#         st.session_state.process_step = 3
-#         st.rerun()
-#     elif result == "back":
-#         st.session_state.process_step = 1
-#         st.rerun()
-#     elif result == "reload":
-#         st.rerun()
-# 
-# # Step 3: Hypothesis Refinement & Summary
-# elif st.session_state.process_step == 3:
-#     result = display_summary_step(hypothesis_collection, call_llm)
-#     
-#     if result == "next":
-#         st.session_state.process_step = 4
-#         st.rerun()
-#     elif result == "back":
-#         st.session_state.process_step = 2
-#         st.rerun()
-
 #Step 2
 # Replace the individual step calls with this:
 elif st.session_state.process_step == 2:

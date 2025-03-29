@@ -137,54 +137,6 @@ class AnthropicInFactNode:
         
         return node
 
-    '''
-
-    def save(self, filename: str):
-        """Save node's data to a JSON file."""
-        data = {
-            'hypothesis': self.hypothesis,
-            'prior_log_odds': self.prior_log_odds,
-            'current_posterior': self.current_posterior,
-            'data_points': [
-                {
-                    'metadata': dp['metadata'],
-                    'raw_data': dp['raw_data'],
-                    'l_plus': dp['l_plus'],
-                    'l_minus': dp['l_minus'],
-                    'posterior': dp['posterior'],
-                    'confidence_assessment': dp.get('confidence_assessment', {}),
-                    'analysis_rationale': dp.get('analysis_rationale', '')
-                }
-                for dp in self.data_points
-            ]
-        }
-
-        self.logger.info(f"Saving node data to {filename}")
-        with open(filename, 'w') as f:
-            json.dump(data, f, indent=2)
-
-    @classmethod
-    def load(cls, filename: str, model: str, api_key: str = None):
-        """Load node from a JSON file."""
-        with open(filename, 'r') as f:
-            data = json.load(f)
-
-        # Create new node
-        node = cls(
-            hypothesis=data['hypothesis'],
-            api_key=api_key,
-            model = model,
-            prior_log_odds=data['prior_log_odds']
-        )
-
-        # Restore state
-        node.current_posterior = data['current_posterior']
-        node.data_points = data['data_points']
-        node.confidence_intervals = data['confidence_intervals']
-        
-        node.logger.info(f"Loaded node data from {filename}")
-        return node
-    '''
     def process_data(self, data_file: str) -> Tuple[float, Tuple[float, float]]:
         """Process a new data file and update beliefs."""
         self.logger.info(f"Processing data file: {data_file}")
