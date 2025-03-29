@@ -237,7 +237,7 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                 Number of data points: {len(infact_node.data_points)}
                 """)
             else:
-                st.success(f"Loaded existing hypothesis with ID '{hypothesis_id}'.")
+                st.success(f"Hypothesis created with ID '{hypothesis_id}'.")
         else:
             st.error("Inconsistent state: ID exists but not found in DB.")
             st.stop()
