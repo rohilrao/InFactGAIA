@@ -336,41 +336,43 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
 
     # Get or create InFactNode
     infact_node = st.session_state.get("infact_node")
+
     if not infact_node:
         try:
-            # Create a new provider
-            llm_provider = create_llm_provider()
+            # Check if node state exists in the database
+            hypothesis_id = st.session_state.get("hypothesis_id_input", "").strip()
+            hypothesis_doc = hypothesis_collection.find_one({"_id": hypothesis_id})
             
-            # Get the hypothesis text
-            hypothesis_text = hypothesis_doc.get("text", "")
+            if hypothesis_doc and "node_state" in hypothesis_doc and hypothesis_doc["node_state"]:
+                # Load the existing node state from the database
+                node_state_json = hypothesis_doc["node_state"]
+                provider_name = st.session_state["provider"]
+                api_key = st.session_state["api_key"]
+                
+                # Create a temporary file with the node state data
+                temp_node_file = create_temp_node_file(node_state_json)
+                
+                # Load the InFactNode from the temporary file
+                infact_node = InFactNode.load(
+                    filename=temp_node_file,
+                    provider_type=provider_name,
+                    api_key=api_key,
+                    model=st.session_state["model"]
+                )
+                st.info(f"Loaded existing InFactNode state for hypothesis '{hypothesis_id}'.")
+            else:
+                # No existing node state, create a new InFactNode
+                llm_provider = create_llm_provider()
+                hypothesis_text = hypothesis_doc.get("text", "") if hypothesis_doc else ""
+                
+                infact_node = InFactNode(
+                    hypothesis=hypothesis_text,
+                    llm_provider=llm_provider,
+                    prior_log_odds=0.0  # Start with neutral prior
+                )
+                st.info(f"Created a new InFactNode for hypothesis '{hypothesis_id}'.")
             
-            # Create new node
-            infact_node = InFactNode(
-                hypothesis=hypothesis_text,
-                llm_provider=llm_provider,
-                prior_log_odds=0.0  # Start with neutral prior
-            )
-            
-            # Create a temporary file for saving
-            temp_file = tempfile.mktemp(suffix='.json')
-            
-            # Save initial state
-            infact_node.save(temp_file)
-            
-            # Read the temporary file and store its content in MongoDB
-            with open(temp_file, 'r') as f:
-                node_state_json = json.load(f)
-            
-            # Remove the temporary file
-            os.remove(temp_file)
-            
-            # Update the document with the node state JSON
-            hypothesis_collection.update_one(
-                {"_id": active_id},
-                {"$set": {"node_state": node_state_json}}
-            )
-            
-            # Store in session state
+            # Store the node in session state for future use
             st.session_state["infact_node"] = infact_node
         except Exception as e:
             st.error(f"Error creating or retrieving InFactNode: {str(e)}")
