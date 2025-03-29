@@ -25,9 +25,9 @@ def create_llm_provider():
     api_key = st.session_state["api_key"]
     
     try:
-        if provider_name == "Anthropic":
+        if provider_name == "anthropic":
             return AnthropicProvider(api_key=api_key, model=model)
-        elif provider_name == "GPT":
+        elif provider_name == "openai":
             return OpenAIProvider(api_key=api_key, model=model)
         else:
             raise ValueError(f"Unsupported provider: {provider_name}")
