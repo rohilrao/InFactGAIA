@@ -67,7 +67,7 @@ def call_llm(provider, model, api_key, prompt_text):
     Function to call GPT or Anthropic.
     """
     # For GPT
-    if provider == "GPT":
+    if provider == "openai":
         import openai
         openai.api_key = api_key
         response = openai.chat.completions.create(
@@ -79,7 +79,7 @@ def call_llm(provider, model, api_key, prompt_text):
         return response.choices[0].message.content
 
     # For Anthropic
-    elif provider == "Anthropic":
+    elif provider == "anthropic":
         from anthropic import Anthropic
         client = Anthropic(api_key=api_key)
         message = client.messages.create(
