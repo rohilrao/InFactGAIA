@@ -8,7 +8,7 @@ def display_setup_step():
     st.markdown("### :orange[Step 1: AI Model Configuration]")
     #st.markdown("### :orange[Upload Files for Your Hypothesis]")
 
-    provider = st.selectbox("Select Provider:", ["GPT", "Anthropic"])  # Only GPT or Anthropic
+    provider = st.selectbox("Select Provider:", ["openai", "anthropic"])  # Only GPT or Anthropic
     model_options = {
         "openai": ["gpt-4o", "chatgpt-4o-latest"],   # Example GPT models
         "anthropic": ["claude-3-5-sonnet"]   # Example Anthropic model
