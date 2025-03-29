@@ -373,7 +373,7 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                 except Exception as inner_e:
                     st.error(f"Failed to load existing node state: {str(inner_e)}")
                     # Fall back to creating a new node
-                    st.warning("Falling back to creating a new InFactNode.")
+                    st.info("Creating a new InFactNode.")
                     llm_provider = create_llm_provider()
                     hypothesis_text = hypothesis_doc.get("text", "")
                     infact_node = InFactNode(
@@ -382,7 +382,8 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                         prior_log_odds=0.0
                     )
             else:
-                # No existing node state, create a new InFactNode
+                # No existing node state, create a new InFactNode - this is normal for new hypotheses
+                st.info(f"No existing node state found for hypothesis '{hypothesis_id}'. Creating a new one.")
                 try:
                     llm_provider = create_llm_provider()
                     hypothesis_text = hypothesis_doc.get("text", "") if hypothesis_doc else ""
@@ -392,7 +393,6 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                         llm_provider=llm_provider,
                         prior_log_odds=0.0  # Start with neutral prior
                     )
-                    st.info(f"Created a new InFactNode for hypothesis '{hypothesis_id}'.")
                 except NameError as name_err:
                     st.error(f"Provider class not found: {str(name_err)}")
                     st.info("Please check that you've selected a valid provider in the settings.")
