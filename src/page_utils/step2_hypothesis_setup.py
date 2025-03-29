@@ -1,14 +1,27 @@
 import streamlit as st
 import time
 import uuid
+import os
+import json
+import sys
+from pathlib import Path
+
+# Ensure the root directory is in the Python path to access infact
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
+# Import our InFactNode and providers
+from infact import InFactNode
+from infact.providers import AnthropicProvider, OpenAIProvider
+
 
 def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     """
     Combined function for hypothesis setup, description, summary and chat in a single step.
+    Now integrates with InFactNode for state management.
     
     Args:
         hypothesis_collection: MongoDB collection for hypotheses
-        call_llm: Function to call LLM API
+        call_llm: Function to call LLM API (will be replaced with InFactNode providers)
         
     Returns:
         str: Navigation action - "back", "next", or None
@@ -28,6 +41,8 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
         st.session_state["chat_id"] = str(uuid.uuid4())
     if "user_question" not in st.session_state:
         st.session_state["user_question"] = ""
+    if "infact_node" not in st.session_state:
+        st.session_state["infact_node"] = None
         
     # Ensure the sections_expanded dictionary has all required keys
     if "background" not in st.session_state["sections_expanded"]:
@@ -73,16 +88,54 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     </style>
     """, unsafe_allow_html=True)
 
-    # Function to check if ID exists in database
+    # Helper function to create InFactNode provider based on user settings
+    def create_llm_provider():
+        provider_name = st.session_state["provider"]
+        model = st.session_state["model"]
+        api_key = st.session_state["api_key"]
+        
+        if provider_name == "Anthropic":
+            return AnthropicProvider(api_key=api_key, model=model)
+        elif provider_name == "GPT":
+            return OpenAIProvider(api_key=api_key, model=model)
+        else:
+            raise ValueError(f"Unsupported provider: {provider_name}")
+
+    # Function to check if ID exists in database and if there's an associated InFactNode
     def check_hypothesis_id():
         _id = st.session_state.get("hypothesis_id_input", "").strip()
         if not _id:
             st.session_state["id_exists"] = None
+            st.session_state["infact_node"] = None
             return
 
         # Look up in DB
         existing = hypothesis_collection.find_one({"_id": _id})
         st.session_state["id_exists"] = True if existing else False
+        
+        if existing:
+            # Check if there's an existing InFactNode state file
+            node_state_path = existing.get("node_state_path")
+            
+            if node_state_path and os.path.exists(node_state_path):
+                try:
+                    # Get provider info
+                    provider_name = st.session_state["provider"]
+                    api_key = st.session_state["api_key"]
+                    
+                    # Load the existing node state
+                    st.session_state["infact_node"] = InFactNode.load(
+                        filename=node_state_path,
+                        provider_type=provider_name,
+                        api_key=api_key,
+                        model=st.session_state["model"]
+                    )
+                    st.info(f"Loaded existing InFactNode state for hypothesis {_id}")
+                except Exception as e:
+                    st.warning(f"Failed to load existing InFactNode state: {str(e)}")
+                    st.session_state["infact_node"] = None
+            else:
+                st.session_state["infact_node"] = None
 
     # Function to handle chat submission
     def handle_chat_submit():
@@ -128,7 +181,18 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
         if hypothesis_doc:
             loaded_text = hypothesis_doc["text"]
             st.session_state["hypothesis_text_input"] = loaded_text
-            st.success(f"Loaded existing hypothesis with ID '{hypothesis_id}'.")
+            
+            # Show InFactNode state info if it exists
+            if st.session_state["infact_node"]:
+                infact_node = st.session_state["infact_node"]
+                current_prob = 1 / (1 + 2.71828 ** -infact_node.current_posterior)
+                st.success(f"""
+                Loaded existing hypothesis with ID '{hypothesis_id}'.
+                Current probability: {current_prob:.2%}
+                Number of data points: {len(infact_node.data_points)}
+                """)
+            else:
+                st.success(f"Loaded existing hypothesis with ID '{hypothesis_id}'.")
         else:
             st.error("Inconsistent state: ID exists but not found in DB.")
             st.stop()
@@ -161,13 +225,36 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                         st.warning("⚠️ Please enter text before creating a new hypothesis.")
                         st.stop()
 
-                    # Insert new doc
+                    # Create node state directory if it doesn't exist
+                    node_states_dir = Path("node_states")
+                    node_states_dir.mkdir(exist_ok=True)
+                    
+                    # Define the path for the node state file
+                    node_state_path = str(node_states_dir / f"{hypothesis_id}_state.json")
+                    
+                    # Create a new InFactNode for this hypothesis
+                    llm_provider = create_llm_provider()
+                    
+                    new_node = InFactNode(
+                        hypothesis=new_text,
+                        llm_provider=llm_provider,
+                        prior_log_odds=0.0  # Start with neutral prior
+                    )
+                    
+                    # Save the initial node state
+                    new_node.save(node_state_path)
+                    
+                    # Store the node in session state
+                    st.session_state["infact_node"] = new_node
+                    
+                    # Insert new doc with node state path
                     hypothesis_collection.insert_one({
                         "_id": hypothesis_id,
                         "original_text": new_text,
                         "text": new_text,
                         "short_description": "",  # New field for editable description
-                        "auto_summary": None
+                        "auto_summary": None,
+                        "node_state_path": node_state_path  # Store the path to the node state file
                     })
 
                     # Mark as created and store in session
@@ -204,6 +291,39 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
         st.error("Could not retrieve hypothesis data.")
         return None
 
+    # Get or create InFactNode
+    infact_node = st.session_state.get("infact_node")
+    if not infact_node:
+        # Create a new provider
+        llm_provider = create_llm_provider()
+        
+        # Get the hypothesis text
+        hypothesis_text = hypothesis_doc.get("text", "")
+        
+        # Create new node
+        infact_node = InFactNode(
+            hypothesis=hypothesis_text,
+            llm_provider=llm_provider,
+            prior_log_odds=0.0  # Start with neutral prior
+        )
+        
+        # Define path for node state
+        node_states_dir = Path("node_states")
+        node_states_dir.mkdir(exist_ok=True)
+        node_state_path = str(node_states_dir / f"{active_id}_state.json")
+        
+        # Save initial state
+        infact_node.save(node_state_path)
+        
+        # Update the document with the node state path
+        hypothesis_collection.update_one(
+            {"_id": active_id},
+            {"$set": {"node_state_path": node_state_path}}
+        )
+        
+        # Store in session state
+        st.session_state["infact_node"] = infact_node
+
     st.divider()
     
     # 2. HYPOTHESIS REFINEMENT SECTION
@@ -225,13 +345,9 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                 "Keep your response brief — ONLY return the reformulated question, nothing else."
             )
             
-            # Call LLM
-            yes_no_formulation = call_llm(
-                provider=st.session_state["provider"],
-                model=st.session_state["model"],
-                api_key=st.session_state["api_key"],
-                prompt_text=prompt_reformulate
-            ).strip()
+            # Use the InFactNode provider instead of call_llm
+            llm_provider = st.session_state["infact_node"].llm_provider
+            yes_no_formulation = llm_provider.send_message(prompt_reformulate).strip()
             
             # Validate the response
             if not yes_no_formulation.endswith('?'):
@@ -250,6 +366,14 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
             hypothesis_doc["original_text"] = original_text
             hypothesis_doc["text"] = yes_no_formulation
             st.session_state["hypothesis_text"] = yes_no_formulation
+            
+            # Update the InFactNode hypothesis
+            st.session_state["infact_node"].hypothesis = yes_no_formulation
+            
+            # Re-save the node state
+            node_state_path = hypothesis_doc.get("node_state_path")
+            if node_state_path:
+                st.session_state["infact_node"].save(node_state_path)
     
     # Display the refined hypothesis
     st.info(f"**Refined Question:** {hypothesis_doc['text']}")
@@ -273,12 +397,9 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                 "Make it clear and succinct, suitable as a hypothesis description that a researcher might write."
             )
             
-            description = call_llm(
-                provider=st.session_state["provider"],
-                model=st.session_state["model"],
-                api_key=st.session_state["api_key"],
-                prompt_text=prompt_description
-            ).strip()
+            # Use the InFactNode provider instead of call_llm
+            llm_provider = st.session_state["infact_node"].llm_provider
+            description = llm_provider.send_message(prompt_description).strip()
             
             # Update DB with suggested description
             hypothesis_collection.update_one(
@@ -345,12 +466,9 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                     "Make your response well-structured and include detailed citations. Use minimal formatting and avoid overuse of emojis or decorative elements."
                 )
                 
-                llm_response = call_llm(
-                    provider=st.session_state["provider"],
-                    model=st.session_state["model"],
-                    api_key=st.session_state["api_key"],
-                    prompt_text=prompt_summary
-                )
+                # Use the InFactNode provider
+                llm_provider = st.session_state["infact_node"].llm_provider
+                llm_response = llm_provider.send_message(prompt_summary)
                 
                 hypothesis_collection.update_one(
                     {"_id": active_id},
@@ -395,12 +513,9 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                             "Keep it concise but informative."
                         )
                         
-                        llm_response = call_llm(
-                            provider=st.session_state["provider"],
-                            model=st.session_state["model"],
-                            api_key=st.session_state["api_key"],
-                            prompt_text=prompt_summary
-                        )
+                        # Use the InFactNode provider
+                        llm_provider = st.session_state["infact_node"].llm_provider
+                        llm_response = llm_provider.send_message(prompt_summary)
                         
                         hypothesis_collection.update_one(
                             {"_id": active_id},
@@ -422,12 +537,9 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
                     f"and suggest what kinds of information might be needed to address the question."
                 )
                 
-                ai_response = call_llm(
-                    provider=st.session_state["provider"],
-                    model=st.session_state["model"],
-                    api_key=st.session_state["api_key"],
-                    prompt_text=prompt_chat
-                )
+                # Use the InFactNode provider
+                llm_provider = st.session_state["infact_node"].llm_provider
+                ai_response = llm_provider.send_message(prompt_chat)
                 
                 # Add AI response to chat history
                 st.session_state["chat_history"].append({
@@ -475,6 +587,51 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
     
     st.divider()
     
+    # Add a new section to display InFactNode state information
+    st.markdown("### :orange[Hypothesis Current State]")
+    if st.session_state["infact_node"]:
+        node = st.session_state["infact_node"]
+        current_prob = 1 / (1 + 2.71828 ** -node.current_posterior)
+        
+        # Calculate confidence interval
+        lower, upper = node._calculate_uncertainty()
+        
+        st.metric("Current Probability", f"{current_prob:.2%}")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Lower Bound (95% CI)", f"{lower:.2%}")
+        with col2:
+            st.metric("Upper Bound (95% CI)", f"{upper:.2%}")
+        
+        st.write(f"**Number of data points evaluated:** {len(node.data_points)}")
+        
+        # Display evidence summary if there are data points
+        if node.data_points:
+            st.markdown("#### Evidence Summary")
+            for i, dp in enumerate(node.data_points):
+                with st.expander(f"Evidence {i+1}"):
+                    st.write(f"**Log likelihood ratio:** {dp['l_plus'] - dp['l_minus']:.2f}")
+                    
+                    if 'confidence_assessment' in dp and dp['confidence_assessment']:
+                        confidence = dp['confidence_assessment']
+                        st.write(f"**Confidence score:** {confidence.get('confidence_score', 'N/A')}")
+                        st.write(f"**Explanation:** {confidence.get('explanation', 'No explanation provided')}")
+                        
+                        if 'key_strengths' in confidence and confidence['key_strengths']:
+                            st.write("**Key strengths:**")
+                            for strength in confidence['key_strengths']:
+                                st.write(f"- {strength}")
+                        
+                        if 'key_limitations' in confidence and confidence['key_limitations']:
+                            st.write("**Key limitations:**")
+                            for limitation in confidence['key_limitations']:
+                                st.write(f"- {limitation}")
+    else:
+        st.warning("No InFactNode instance available. Please create or load a hypothesis first.")
+    
+    st.divider()
+    
     # 6. NAVIGATION BUTTONS
     col1, col2 = st.columns([1, 1])
 
@@ -494,5 +651,11 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm):
             if hypothesis_doc:
                 st.session_state["hypothesis_text"] = hypothesis_doc["text"]
                 print(f"DEBUG - Storing hypothesis text in session: {hypothesis_doc['text'][:30]}...")
+            
+            # Ensure the InFactNode is saved before proceeding
+            if st.session_state["infact_node"]:
+                node_state_path = hypothesis_doc.get("node_state_path")
+                if node_state_path:
+                    st.session_state["infact_node"].save(node_state_path)
             
             return "next"
