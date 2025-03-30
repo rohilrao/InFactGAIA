@@ -2,7 +2,7 @@
 from pathlib import Path
 import math
 from jinja2 import Environment, FileSystemLoader, BaseLoader, Template
-from UItemplate import TEMPLATE
+from InFact.utils.UItemplate import TEMPLATE
 
 
 class InFactRenderer:

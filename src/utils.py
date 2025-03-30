@@ -7,7 +7,7 @@ from pathlib import Path
 from AnthropicInFactNode import AnthropicInFactNode
 from GptInFactNode import GptInFactNode
 from DeepSeekInFactNode import DeepSeekInFactNode
-from InFactRenderer import InFactRenderer
+from InFact.utils.InFactRenderer import InFactRenderer
 from IPython.display import HTML, display
 from openai import OpenAI
 

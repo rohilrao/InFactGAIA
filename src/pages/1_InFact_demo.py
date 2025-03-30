@@ -138,29 +138,13 @@ elif st.session_state.process_step == 4:
     elif result == "reload":
         st.rerun()
 
-# Step 5: Evidence Processing
-elif st.session_state.process_step == 5:
-    result = display_evidence_step(db, fs, hypothesis_collection)
-    
-    if result == "next":
-        st.session_state.process_step = 6
-        st.rerun()
-    elif result == "back":
-        st.session_state.process_step = 4
-        st.rerun()
-    elif result == "back_to_step4":
-        # Special case to go back to step 4 but keep node state
-        st.session_state.process_step = 4
-        st.rerun()
-    elif result == "reload":
-        st.rerun()
 
 # Step 6: View Results
-elif st.session_state.process_step == 6:
+elif st.session_state.process_step == 5:
     result = display_results_step(db, fs, hypothesis_collection)
     
     if result == "back":
-        st.session_state.process_step = 5
+        st.session_state.process_step = 4
         st.rerun()
     elif result == "home":
         # Reset to start

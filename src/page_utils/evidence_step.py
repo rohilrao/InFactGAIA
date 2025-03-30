@@ -96,7 +96,7 @@ def display_evidence_step(db, fs, hypothesis_collection):
     st.write(f"**Probability of hypothesis given this data:** {p_h_given_d:.2%}")
     
     # Import InFactRenderer
-    from InFactRenderer import InFactRenderer
+    from InFact.utils.InFactRenderer import InFactRenderer
     
     # Check if we've already processed the file
     if st.session_state.get("file_processed", False):
