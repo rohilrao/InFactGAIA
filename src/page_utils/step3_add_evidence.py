@@ -498,26 +498,18 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
                 
                 print(f"DEBUG - Parsing file '{filename}' with provider '{provider}' and model '{model}'")
                 
-                # Parse data using the enhanced parser from InFact.utils.data_parser
-                # We'll use the llm_provider from the InFactNode if available
-                if "infact_node" in st.session_state:
-                    infact_node = st.session_state["infact_node"]
-                    parsed_data = parse_data(
-                        temp_file_path, 
-                        hypothesis_text, 
-                        infact_node.llm_provider, 
-                        infact_node.logger
-                    )
-                else:
-                    # Fallback to direct parsing without node
-                    from InFact.utils.data_parser import parse_standalone
-                    parsed_data = parse_standalone(
-                        temp_file_path,
-                        hypothesis_text,
-                        provider,
-                        model,
-                        api_key
-                    )
+                # Parse data using the enhanced parser
+                # Since we're importing parse_data directly from the module,
+                # we need to ensure we pass all the required arguments
+                from InFact.utils.data_parser import parse_standalone
+                
+                parsed_data = parse_standalone(
+                    temp_file_path,
+                    hypothesis_text,
+                    provider,
+                    model,
+                    api_key
+                )
                 
                 # Save parsed data to file record
                 print(f"DEBUG - Saving parsed data for file '{filename}'")
