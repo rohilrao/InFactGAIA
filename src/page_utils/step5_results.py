@@ -52,7 +52,7 @@ def node_state_to_json(node):
     
     return json.dumps(data, indent=2, default=json_serialize_with_datetime)
 
-def display_process_results_step(db, fs, hypothesis_collection):
+def display_results_step(db, fs, hypothesis_collection):
     """
     Handles Step 5: Process Results and Visualization
     
