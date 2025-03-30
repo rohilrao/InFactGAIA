@@ -5,7 +5,7 @@ import datetime
 import json
 from bson.objectid import ObjectId
 from pathlib import Path
-from InFact.utils.data_parser import parse_data
+from InFact.utils.data_parser import parse_standalone
 from InFact.infact_node import InFactNode
 
 def ensure_object_id(id_value):
@@ -259,6 +259,49 @@ def load_or_create_infact_node(db, hypothesis_id, provider, model, api_key):
         st.error(traceback.format_exc())
         raise
 
+def save_infact_node(db, node, node_path, hypothesis_id, provider):
+    """
+    Saves the InFactNode state to both a file and MongoDB.
+    
+    Args:
+        db: MongoDB database connection
+        node: InFactNode instance
+        node_path: Path to the node state file
+        hypothesis_id: The ID of the hypothesis
+        provider: LLM provider name
+    """
+    try:
+        # Save node to file
+        node.save(node_path)
+        
+        # Read the saved state
+        with open(node_path, "r") as f:
+            node_state = json.load(f)
+        
+        # Update or insert into MongoDB
+        db.node_states.update_one(
+            {
+                "hypothesis_id": str(hypothesis_id),
+                "provider": provider
+            },
+            {
+                "$set": {
+                    "hypothesis_id": str(hypothesis_id),
+                    "provider": provider,
+                    "state": node_state,
+                    "updated_at": datetime.datetime.now()
+                }
+            },
+            upsert=True
+        )
+        
+        st.success(f"✅ {provider.capitalize()} node state saved")
+        
+    except Exception as e:
+        st.error(f"Error saving InFactNode: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
+
 def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     """
     Handles Step 4: File Upload and Processing
@@ -311,28 +354,6 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     st.write(f"**Hypothesis ID:** `{hypothesis_id}`")
     st.write(f"**Hypothesis:** {hypothesis_text}")
     st.divider()
-
-    # Get or create InFactNode (only once per session)
-    if "infact_node" not in st.session_state:
-        provider = st.session_state.get("provider", "anthropic")  # Default to anthropic if not set
-        model = st.session_state.get("model", "claude-3-5-sonnet")  # Default model
-        api_key = st.session_state.get("api_key", "")
-        
-        try:
-            # Load or create InFactNode
-            node, temp_file_path = load_or_create_infact_node(
-                db=db,
-                hypothesis_id=hypothesis_id,
-                provider=provider,
-                model=model,
-                api_key=api_key
-            )
-            # Store in session state
-            st.session_state["infact_node"] = node
-            st.session_state["node_temp_path"] = temp_file_path
-            st.success(f"Successfully loaded {provider.capitalize()} model for analysis")
-        except Exception as e:
-            st.error(f"Failed to initialize {provider} model: {str(e)}")
 
     # 2. FILE LISTING SECTION
     st.markdown("### :orange[Current Files]")
@@ -461,150 +482,3 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
                         
                         # Rerun to reflect state changes
                         st.rerun()
-    
-    # 4. FILE PROCESSING SECTION
-    parsed_data_displayed = False
-    if is_parsing and "current_file_id" in st.session_state:
-        st.divider()
-        st.markdown("### :orange[Processing File]")
-        
-        file_id = st.session_state["current_file_id"]
-        filename = st.session_state["current_filename"]
-        print(f"DEBUG - Beginning to process file '{filename}' with ID {file_id}")
-        
-        # Show processing indicator
-        with st.spinner(f"Processing file '{filename}'... Please wait"):
-            # Create temporary file
-            temp_dir = tempfile.gettempdir()
-            temp_file_path = os.path.join(temp_dir, filename)
-            
-            # Get file content
-            with open(temp_file_path, "wb") as f:
-                f.write(fs.get(ensure_object_id(file_id)).read())
-            
-            print(f"DEBUG - Created temporary file at '{temp_file_path}'")
-            
-            # Process the file
-            try:
-                provider = st.session_state.get("provider")
-                model = st.session_state.get("model")
-                api_key = st.session_state.get("api_key")
-                
-                # Update DB to mark file as processing
-                db.fs.files.update_one(
-                    {"_id": ensure_object_id(file_id)},
-                    {"$set": {"status": "processing"}}
-                )
-                
-                print(f"DEBUG - Parsing file '{filename}' with provider '{provider}' and model '{model}'")
-                
-                # Parse data using the enhanced parser from InFact.utils.data_parser
-                # We'll use the llm_provider from the InFactNode if available
-                if "infact_node" in st.session_state:
-                    infact_node = st.session_state["infact_node"]
-                    parsed_data = parse_data(
-                        temp_file_path, 
-                        hypothesis_text, 
-                        infact_node.llm_provider, 
-                        infact_node.logger
-                    )
-                else:
-                    # Fallback to direct parsing without node
-                    from InFact.utils.data_parser import parse_standalone
-                    parsed_data = parse_standalone(
-                        temp_file_path,
-                        hypothesis_text,
-                        provider,
-                        model,
-                        api_key
-                    )
-                
-                # Save parsed data to file record
-                print(f"DEBUG - Saving parsed data for file '{filename}'")
-                if save_parsed_data_to_file(db, file_id, parsed_data):
-                    st.success(f"File '{filename}' is now ready for analysis")
-                
-                # Clean up
-                try:
-                    os.remove(temp_file_path)
-                    print(f"DEBUG - Removed temporary file '{temp_file_path}'")
-                except Exception as e:
-                    print(f"DEBUG - Failed to remove temp file: {str(e)}")
-                
-                # Display parsed data
-                st.divider()
-                st.markdown("### :orange[Parsed Data]")
-                render_parsed_data(parsed_data, filename)
-                parsed_data_displayed = True
-                
-                # Mark parsing as complete
-                st.session_state["is_parsing"] = False
-                
-                # Set a flag to trigger a single rerun after successful parsing
-                if not st.session_state.get("parsed_data_rerun", False):
-                    st.session_state["parsed_data_rerun"] = True
-                    st.rerun()
-                
-            except Exception as e:
-                print(f"DEBUG - ERROR processing file '{filename}': {str(e)}")
-                st.error(f"Error processing file: {str(e)}")
-                st.session_state["is_parsing"] = False
-                
-                # Update DB to mark file as unprocessed again
-                db.fs.files.update_one(
-                    {"_id": ensure_object_id(file_id)},
-                    {"$set": {"status": "unprocessed"}}
-                )
-                
-                # Add option to delete if error occurred
-                if st.button("Delete This File", key="delete_error"):
-                    if delete_file(db, fs, file_id):
-                        # Clean up session state
-                        for key in ["is_parsing", "current_file_id", "current_filename"]:
-                            if key in st.session_state:
-                                del st.session_state[key]
-                        # Force refresh
-                        st.rerun()
-    
-    # Reset rerun flag to prevent continuous reruns
-    if st.session_state.get("parsed_data_rerun", False):
-        st.session_state["parsed_data_rerun"] = False
-    
-    # 5. DISPLAY MOST RECENT FILE'S PARSED DATA (if no current parsing)
-    if not parsed_data_displayed and not is_parsing and existing_files:
-        # Find the most recently uploaded file that has parsed data
-        recent_files = [f for f in existing_files if f.get("parsing_complete", False)]
-        
-        if recent_files:
-            # Sort by upload date (newest first)
-            recent_files.sort(key=lambda x: x.get("upload_date", ""), reverse=False)
-            most_recent = recent_files[0]
-            
-            if "parsed_data" in most_recent:
-                st.divider()
-                st.markdown("### :orange[Most Recent Parsed Data]")
-                st.caption(f"Showing data for: {most_recent['filename']}")
-                render_parsed_data(most_recent["parsed_data"], most_recent["filename"])
-    
-    # 6. NAVIGATION
-    st.divider()
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if st.button("← Back"):
-            # Clean up session state
-            for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-                    
-            return "back"
-            
-    with col2:
-        if st.button("Next →"):
-            # Clean up any temporary processing state
-            for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-                    
-            return "next"
-            
-    return None  # No action taken
