@@ -488,6 +488,32 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         st.session_state["l_minus"] = l_minus
                         st.session_state["validated_code"] = code_to_test
                         
+                        # Calculate the new posterior by adding to current posterior
+                        current_posterior = node.current_posterior
+                        new_posterior = current_posterior + l_plus - l_minus
+
+                        # Use node's methods to calculate probability and uncertainty
+                        probability = node._to_probability(new_posterior)
+                        lower, upper = node._calculate_uncertainty()
+
+                        st.success("Code executed successfully!")
+
+                        # Show validated code in an expander
+                        with st.expander("Finalized Analysis Code", expanded=False):
+                            st.code(code_to_test, language="python")
+
+                        # Display results
+                        st.markdown("#### Analysis Results")
+                        st.write(f"**l_plus (log P(data | hypothesis)):** {l_plus:.4f}")
+                        st.write(f"**l_minus (log P(data | not hypothesis)):** {l_minus:.4f}")
+                        st.write(f"**Current posterior log odds:** {current_posterior:.4f}")
+                        st.write(f"**New posterior log odds:** {new_posterior:.4f}")
+                        st.write(f"**Probability of hypothesis given this data:** {probability:.2%}")
+                        st.write(f"**Confidence interval (95%):** ({lower:.2%}, {upper:.2%})")
+
+                        # Store the new posterior in the session state for later use
+                        st.session_state["new_posterior"] = new_posterior
+
                         # Update the database with validation results
                         db.fs.files.update_one(
                             {"_id": ensure_object_id(file_id)},
@@ -495,26 +521,15 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 "analysis_code": code_to_test,
                                 "analysis_results": {
                                     "l_plus": l_plus,
-                                    "l_minus": l_minus
+                                    "l_minus": l_minus,
+                                    "current_posterior": current_posterior,
+                                    "new_posterior": new_posterior,
+                                    "probability": probability,
+                                    "confidence_lower": lower,
+                                    "confidence_upper": upper
                                 }
                             }}
                         )
-                        
-                        # Convert log odds to probability for display
-                        p_h_given_d = 1 / (1 + math.exp(-l_plus + l_minus))
-                        
-                        st.success("Code executed successfully!")
-                        
-                        # Show validated code in an expander
-                        with st.expander("Finalized Analysis Code", expanded=True):
-                            st.code(code_to_test, language="python")
-                        
-                        # Display results
-                        st.markdown("#### Analysis Results")
-                        st.write(f"**l_plus (log P(data | hypothesis)):** {l_plus:.4f}")
-                        st.write(f"**l_minus (log P(data | not hypothesis)):** {l_minus:.4f}")
-                        st.write(f"**Probability of hypothesis given this data:** {p_h_given_d:.2%}")
-                        
                         # Exit edit mode after validation if we're in it
                         if edit_mode:
                             st.session_state["edit_mode"] = False
