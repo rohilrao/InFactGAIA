@@ -6,6 +6,7 @@ import json
 from bson.objectid import ObjectId
 from pathlib import Path
 from InFact.utils.data_parser import parse_data
+from InFact.utils.data_parser import parse_standalone
 from InFact.infact_node import InFactNode
 
 def ensure_object_id(id_value):
@@ -501,7 +502,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
                 # Parse data using the enhanced parser
                 # Since we're importing parse_data directly from the module,
                 # we need to ensure we pass all the required arguments
-                from InFact.utils.data_parser import parse_standalone
+                
                 
                 parsed_data = parse_standalone(
                     temp_file_path,
