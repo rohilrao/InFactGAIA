@@ -19,6 +19,39 @@ def ensure_object_id(id_value):
     # Return the original value if conversion failed or wasn't needed
     return id_value
 
+def json_serialize_with_datetime(obj):
+    """Custom JSON serializer that handles datetime objects."""
+    from datetime import datetime
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")
+
+def node_state_to_json(node):
+    """Convert node state to JSON string with datetime handling."""
+    data = {
+        'hypothesis': node.hypothesis,
+        'prior_log_odds': node.prior_log_odds,
+        'current_posterior': node.current_posterior,
+        'provider_info': {
+            'type': node.llm_provider.__class__.__name__,
+            'model': node.llm_provider.model,
+        },
+        'data_points': [
+            {
+                'metadata': dp['metadata'],
+                'raw_data': dp['raw_data'],
+                'l_plus': dp['l_plus'],
+                'l_minus': dp['l_minus'],
+                'posterior': dp['posterior'],
+                'confidence_assessment': dp.get('confidence_assessment', {}),
+                'analysis_rationale': dp.get('analysis_rationale', '')
+            }
+            for dp in node.data_points
+        ]
+    }
+    
+    return json.dumps(data, indent=2, default=json_serialize_with_datetime)
+
 def display_results_step(db, fs, hypothesis_collection):
     """
     Handles Step 5: Process Results and Visualization
@@ -190,15 +223,18 @@ def display_results_step(db, fs, hypothesis_collection):
                 hypothesis_state_path = os.path.join(temp_dir, f"hypothesis_{hypothesis_id}.json")
                 file_state_path = os.path.join(temp_dir, f"file_{file_id}.json")
                 
-                # Save node state to temporary files
-                node.save(hypothesis_state_path)
-                
-                # Read the node state content
-                with open(hypothesis_state_path, 'r', encoding='utf-8') as f:
-                    node_state_content = f.read()
-                    # Also store in session state for download button
-                    st.session_state["node_state_json"] = node_state_content
-                
+                # Use this direct approach:
+                node_state_content = node_state_to_json(node)
+                st.session_state["node_state_json"] = node_state_content
+
+                # And when saving to GridFS, use this content directly:
+                hypothesis_state_id = fs.put(
+                    node_state_content.encode(),
+                    filename=f"node_state_hypothesis_{hypothesis_id}.json",
+                    content_type="application/json",
+                    metadata=hypothesis_state_metadata
+                )
+                                
                 # Mark any previous "latest" node states as not latest
                 if existing_node_state:
                     db.fs.files.update_many(
