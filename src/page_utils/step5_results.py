@@ -52,7 +52,7 @@ def node_state_to_json(node):
     
     return json.dumps(data, indent=2, default=json_serialize_with_datetime)
 
-def display_results_step(db, fs, hypothesis_collection):
+def display_process_results_step(db, fs, hypothesis_collection):
     """
     Handles Step 5: Process Results and Visualization
     
@@ -101,7 +101,7 @@ def display_results_step(db, fs, hypothesis_collection):
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("### :orange[Process Results and Visualization]")
+    st.markdown("### :green[Process Results and Visualization]")
     
     # Get hypothesis information
     hypothesis_id = st.session_state.get("hypothesis_id", None)
@@ -209,7 +209,12 @@ def display_results_step(db, fs, hypothesis_collection):
             probability = node._to_probability(new_posterior)
             lower, upper = node._calculate_uncertainty()
             
-            # === UPDATED: Create temporary files and save to GridFS ===
+            # === Handle node state and HTML rendering ===
+            
+            # Create the node state JSON directly
+            node_state_content = node_state_to_json(node)
+            st.session_state["node_state_json"] = node_state_content
+            
             # Check if we already have a node state for this hypothesis
             existing_node_state = db.fs.files.find_one({
                 "metadata.type": "node_state",
@@ -217,80 +222,66 @@ def display_results_step(db, fs, hypothesis_collection):
                 "metadata.is_latest": True
             })
             
-            # Create a temporary directory to work with files
+            # Mark any previous "latest" node states as not latest
+            if existing_node_state:
+                db.fs.files.update_many(
+                    {"metadata.type": "node_state", "metadata.hypothesis_id": str(hypothesis_id)},
+                    {"$set": {"metadata.is_latest": False}}
+                )
+            
+            # Define the metadata for hypothesis state
+            hypothesis_state_metadata = {
+                "type": "node_state",
+                "hypothesis_id": str(hypothesis_id),
+                "file_id": str(file_id),  # The file that triggered this update
+                "is_latest": True
+            }
+            
+            # Upload the node state to GridFS for the hypothesis
+            hypothesis_state_id = fs.put(
+                node_state_content.encode(),
+                filename=f"node_state_hypothesis_{hypothesis_id}.json",
+                content_type="application/json",
+                metadata=hypothesis_state_metadata
+            )
+            
+            # Define metadata for file-specific state
+            file_state_metadata = {
+                "type": "node_state",
+                "hypothesis_id": str(hypothesis_id),
+                "file_id": str(file_id),
+                "is_latest": False  # This is a file-specific snapshot
+            }
+            
+            # Upload a file-specific state
+            file_state_id = fs.put(
+                node_state_content.encode(),
+                filename=f"node_state_file_{file_id}.json",
+                content_type="application/json",
+                metadata=file_state_metadata
+            )
+            
+            # Update the file record to reference this node state
+            db.fs.files.update_one(
+                {"_id": ensure_object_id(file_id)},
+                {"$set": {"node_state_file_id": str(file_state_id)}}
+            )
+            
+            # Now handle the HTML rendering with a temporary directory
             with tempfile.TemporaryDirectory() as temp_dir:
-                # Create temporary node state files
-                hypothesis_state_path = os.path.join(temp_dir, f"hypothesis_{hypothesis_id}.json")
-                file_state_path = os.path.join(temp_dir, f"file_{file_id}.json")
-                
-                # Use this direct approach:
-                node_state_content = node_state_to_json(node)
-                st.session_state["node_state_json"] = node_state_content
-
-                # And when saving to GridFS, use this content directly:
-                hypothesis_state_id = fs.put(
-                    node_state_content.encode(),
-                    filename=f"node_state_hypothesis_{hypothesis_id}.json",
-                    content_type="application/json",
-                    metadata=hypothesis_state_metadata
-                )
-                                
-                # Mark any previous "latest" node states as not latest
-                if existing_node_state:
-                    db.fs.files.update_many(
-                        {"metadata.type": "node_state", "metadata.hypothesis_id": str(hypothesis_id)},
-                        {"$set": {"metadata.is_latest": False}}
-                    )
-                
-                # Upload the node state to GridFS for the hypothesis
-                hypothesis_state_metadata = {
-                    "type": "node_state",
-                    "hypothesis_id": str(hypothesis_id),
-                    "file_id": str(file_id),  # The file that triggered this update
-                    "is_latest": True
-                }
-                
-                hypothesis_state_id = fs.put(
-                    node_state_content.encode(),
-                    filename=f"node_state_hypothesis_{hypothesis_id}.json",
-                    content_type="application/json",
-                    metadata=hypothesis_state_metadata
-                )
-                
-                # Upload a file-specific state if desired (with is_latest=False)
-                file_state_metadata = {
-                    "type": "node_state",
-                    "hypothesis_id": str(hypothesis_id),
-                    "file_id": str(file_id),
-                    "is_latest": False  # This is a file-specific snapshot
-                }
-                
-                file_state_id = fs.put(
-                    node_state_content.encode(),
-                    filename=f"node_state_file_{file_id}.json",
-                    content_type="application/json",
-                    metadata=file_state_metadata
-                )
-                
-                # Also update the file record to reference this node state
-                db.fs.files.update_one(
-                    {"_id": ensure_object_id(file_id)},
-                    {"$set": {"node_state_file_id": str(file_state_id)}}
-                )
-                
                 # Render HTML visualization
                 renderer = InFactRenderer()
                 html_output = renderer.render_analysis(node)
+                
+                # Store HTML in session state for display and download
+                st.session_state["html_output"] = html_output
                 
                 # Save HTML to a temporary file
                 html_temp_path = os.path.join(temp_dir, f"hypothesis_{hypothesis_id}.html")
                 with open(html_temp_path, 'w', encoding='utf-8') as f:
                     f.write(html_output)
                 
-                # Store HTML in session state for display and download
-                st.session_state["html_output"] = html_output
-                
-                # Upload the HTML to GridFS
+                # Define HTML metadata
                 html_metadata = {
                     "type": "rendered_html",
                     "hypothesis_id": str(hypothesis_id),
@@ -312,25 +303,20 @@ def display_results_step(db, fs, hypothesis_collection):
                         content_type="text/html",
                         metadata=html_metadata
                     )
-                
-                # Update the file and hypothesis records to reference this HTML
-                db.fs.files.update_one(
-                    {"_id": ensure_object_id(file_id)},
-                    {"$set": {"rendered_html_id": str(html_file_id)}}
-                )
-                
-                hypothesis_collection.update_one(
-                    {"_id": hypothesis_id},
-                    {"$set": {
-                        "latest_node_state_id": str(hypothesis_state_id),
-                        "latest_html_id": str(html_file_id),
-                        "latest_file_processed": str(file_id),
-                        "current_posterior": new_posterior,
-                        "probability": probability,
-                        "confidence_interval": [lower, upper],
-                        "last_updated": file_obj.get("uploadDate", "Unknown date")
-                    }}
-                )
+            
+            # Update the hypothesis collection with latest information
+            hypothesis_collection.update_one(
+                {"_id": hypothesis_id},
+                {"$set": {
+                    "latest_node_state_id": str(hypothesis_state_id),
+                    "latest_html_id": str(html_file_id),
+                    "latest_file_processed": str(file_id),
+                    "current_posterior": new_posterior,
+                    "probability": probability,
+                    "confidence_interval": [lower, upper],
+                    "last_updated": file_obj.get("uploadDate", "Unknown date")
+                }}
+            )
             
             # Display results
             st.markdown('<div class="results-container">', unsafe_allow_html=True)
