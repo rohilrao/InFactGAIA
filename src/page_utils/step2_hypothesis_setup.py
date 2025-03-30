@@ -7,9 +7,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".")))
 
-# Import InFactNode and providers
+# Import necessary modules
 try:
-    from InFact.infact_node import InFactNode
     from InFact.providers.anthropic_provider import AnthropicProvider
     from InFact.providers.openai_provider import OpenAIProvider
     from hypothesis_setup_utils import initialize_session_state
@@ -21,12 +20,10 @@ try:
     from hypothesis_setup_utils import render_chat_section
     from hypothesis_setup_utils import render_current_state
     from hypothesis_setup_utils import render_navigation_buttons
-    from hypothesis_setup_utils import get_or_create_infact_node
+    from hypothesis_setup_utils import check_hypothesis_id
 
 except ImportError as e:
-    st.error(f"Could not import InFactNode modules: {str(e)}. Please ensure the package is installed correctly.")
-
-
+    st.error(f"Could not import required modules: {str(e)}. Please ensure the packages are installed correctly.")
 
 def display_combined_hypothesis_step(hypothesis_collection, call_llm=None):
     """
@@ -34,7 +31,7 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm=None):
     
     Args:
         hypothesis_collection: MongoDB collection for hypotheses
-        call_llm: Function to call LLM API (optional, now replaced with InFactNode providers)
+        call_llm: Function to call LLM API (optional, for external LLM calls)
         
     Returns:
         str: Navigation action - "back", "next", or None
@@ -69,7 +66,7 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm=None):
         st.error("Could not retrieve hypothesis data.")
         return None
     
-    # Get or create InFactNode if not already done
+    # Make sure the hypothesis ID status is up to date
     check_hypothesis_id(hypothesis_collection)
     
     # Render hypothesis refinement section

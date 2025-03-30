@@ -1,54 +1,11 @@
 import streamlit as st
 import os
 import json
-import tempfile
-
-try:
-    from InFact.infact_node import InFactNode
-except ImportError:
-    pass  # Handle this in your main app
-
-def create_temp_node_file(node_state_json):
-    """Create a temporary file from a node state JSON."""
-    if st.session_state.get("temp_node_file") and os.path.exists(st.session_state["temp_node_file"]):
-        try:
-            os.remove(st.session_state["temp_node_file"])
-        except Exception as e:
-            print(f"Failed to remove old temp file: {e}")
-    
-    fd, temp_path = tempfile.mkstemp(suffix='.json', prefix='node_state_')
-    os.close(fd)
-
-    with open(temp_path, 'w') as f:
-        if isinstance(node_state_json, dict):
-            json.dump(node_state_json, f, indent=2)
-        else:
-            f.write(node_state_json)
-
-    st.session_state["temp_node_file"] = temp_path
-    return temp_path
-
-def load_infact_node(node_state_json):
-    """Load an InFactNode from a node state JSON."""
-    try:
-        provider_name = st.session_state["provider"]
-        api_key = st.session_state["api_key"]
-        model = st.session_state["model"]
-
-        temp_node_file = create_temp_node_file(node_state_json)
-        infact_node = InFactNode.load(
-            filename=temp_node_file,
-            provider_type=provider_name,
-            api_key=api_key,
-            model=model
-        )
-        return infact_node
-    except Exception as e:
-        st.error(f"Failed to load InFactNode: {str(e)}")
-        return None
+import uuid
+import time
 
 def check_and_load_hypothesis(hypothesis_collection):
-    """Check if hypothesis ID exists and try loading node state if present."""
+    """Check if hypothesis ID exists and load its data if present."""
     _id = st.text_input("Enter Hypothesis ID")
     if not _id:
         return
@@ -56,61 +13,54 @@ def check_and_load_hypothesis(hypothesis_collection):
     doc = hypothesis_collection.find_one({"_id": _id})
     if doc:
         st.session_state["id_exists"] = True
-        if "node_state" in doc and doc["node_state"]:
-            node_state_json = doc["node_state"]
-            infact_node = load_infact_node(node_state_json)
-            if infact_node:
-                st.session_state["infact_node"] = infact_node
-                st.success(f"Loaded existing node state for hypothesis ID: {_id}")
-            else:
-                st.warning(f"Node state exists for {_id}, but failed to load.")
-        else:
-            st.info(f"Hypothesis '{_id}' exists, but no node state found. A new one will be created later.")
+        st.success(f"Loaded existing hypothesis ID: {_id}")
     else:
         st.session_state["id_exists"] = False
-        st.info(f"No entry found for hypothesis ID '{_id}'. A new node will be created later.")
+        st.info(f"No entry found for hypothesis ID '{_id}'. A new hypothesis will be created later.")
 
 # ========== FUNCTIONAL COMPONENTS ==========
 
 def reformulate_hypothesis_as_yes_no(original_text, active_id, hypothesis_collection):
     """Reformulate a hypothesis as a yes/no question."""
     try:
-        # Get the InFactNode provider
-        if st.session_state["infact_node"]:
-            llm_provider = st.session_state["infact_node"].llm_provider
-            
-            prompt_reformulate = (
-                f"Given this hypothesis:\n\n'{original_text}'\n\n"
-                "Rewrite/Reformulate it as a clear, concise Yes-No question. " 
-                "The answer to the reformulated question should be either 'Yes' or 'No'. "
-                "Keep your response brief — ONLY return the reformulated question, nothing else."
-            )
-            
-            yes_no_formulation = llm_provider.send_message(prompt_reformulate).strip()
-            
-            # Validate the response
-            if not yes_no_formulation.endswith('?'):
-                yes_no_formulation = yes_no_formulation.rstrip('.') + '?'
-            
-            # Update DB
-            hypothesis_collection.update_one(
-                {"_id": active_id},
-                {"$set": {
-                    "original_text": original_text,
-                    "text": yes_no_formulation
-                }}
-            )
-            
-            # Update the InFactNode hypothesis
-            st.session_state["infact_node"].hypothesis = yes_no_formulation
-            
-            # Save the updated node state
-            save_infact_node_state(st.session_state["infact_node"], active_id, hypothesis_collection)
-            
-            return yes_no_formulation
+        # Use the API directly without InFactNode
+        provider_name = st.session_state["provider"]
+        api_key = st.session_state["api_key"]
+        model = st.session_state["model"]
+        
+        # Import the correct provider based on provider_name
+        if provider_name.lower() == "anthropic":
+            from InFact.providers.anthropic_provider import AnthropicProvider
+            llm_provider = AnthropicProvider(api_key=api_key, model=model)
+        elif provider_name.lower() == "openai":
+            from InFact.providers.openai_provider import OpenAIProvider
+            llm_provider = OpenAIProvider(api_key=api_key, model=model)
         else:
-            st.error("No InFactNode available for reformulation.")
-            return original_text
+            raise ValueError(f"Unsupported provider: {provider_name}")
+        
+        prompt_reformulate = (
+            f"Given this hypothesis:\n\n'{original_text}'\n\n"
+            "Rewrite/Reformulate it as a clear, concise Yes-No question. " 
+            "The answer to the reformulated question should be either 'Yes' or 'No'. "
+            "Keep your response brief — ONLY return the reformulated question, nothing else."
+        )
+        
+        yes_no_formulation = llm_provider.send_message(prompt_reformulate).strip()
+        
+        # Validate the response
+        if not yes_no_formulation.endswith('?'):
+            yes_no_formulation = yes_no_formulation.rstrip('.') + '?'
+        
+        # Update DB
+        hypothesis_collection.update_one(
+            {"_id": active_id},
+            {"$set": {
+                "original_text": original_text,
+                "text": yes_no_formulation
+            }}
+        )
+        
+        return yes_no_formulation
     except Exception as e:
         st.error(f"Error reformulating hypothesis: {str(e)}")
         return original_text
@@ -118,31 +68,41 @@ def reformulate_hypothesis_as_yes_no(original_text, active_id, hypothesis_collec
 def generate_hypothesis_description(hypothesis_text, active_id, hypothesis_collection, call_llm=None):
     """Generate a short description for the hypothesis."""
     try:
-        if st.session_state["infact_node"]:
-            llm_provider = st.session_state["infact_node"].llm_provider
-            
-            prompt_description = (
-                f"Given this yes/no hypothesis question:\n\n'{hypothesis_text}'\n\n"
-                "Create a concise 3-4 sentence description that includes:\n"
-                "1. A restatement of the hypothesis as a yes-no question\n"
-                "2. A brief summary of the current state of knowledge\n"
-                "3. What kind of data would be relevant for evaluating this hypothesis\n\n"
-                "Make it clear and succinct, suitable as a hypothesis description that a researcher might write."
-            )
-            
-            description = llm_provider.send_message(prompt_description).strip()
-        else:
-            # Fall back to call_llm if InFactNode isn't available
-            if not call_llm:
-                return "Error: No LLM provider available."
-                
+        # Use the API directly
+        provider_name = st.session_state["provider"]
+        api_key = st.session_state["api_key"]
+        model = st.session_state["model"]
+        
+        prompt_description = (
+            f"Given this yes/no hypothesis question:\n\n'{hypothesis_text}'\n\n"
+            "Create a concise 3-4 sentence description that includes:\n"
+            "1. A restatement of the hypothesis as a yes-no question\n"
+            "2. A brief summary of the current state of knowledge\n"
+            "3. What kind of data would be relevant for evaluating this hypothesis\n\n"
+            "Make it clear and succinct, suitable as a hypothesis description that a researcher might write."
+        )
+        
+        # Use call_llm if provided, otherwise create a provider
+        if call_llm:
             description = call_llm(
-                provider=st.session_state["provider"],
-                model=st.session_state["model"],
-                api_key=st.session_state["api_key"],
+                provider=provider_name,
+                model=model,
+                api_key=api_key,
                 prompt_text=prompt_description
             ).strip()
-            
+        else:
+            # Import the correct provider based on provider_name
+            if provider_name.lower() == "anthropic":
+                from InFact.providers.anthropic_provider import AnthropicProvider
+                llm_provider = AnthropicProvider(api_key=api_key, model=model)
+            elif provider_name.lower() == "openai":
+                from InFact.providers.openai_provider import OpenAIProvider
+                llm_provider = OpenAIProvider(api_key=api_key, model=model)
+            else:
+                raise ValueError(f"Unsupported provider: {provider_name}")
+                
+            description = llm_provider.send_message(prompt_description).strip()
+        
         # Update DB
         hypothesis_collection.update_one(
             {"_id": active_id},
@@ -175,20 +135,30 @@ def generate_background_summary(hypothesis_text, active_id, hypothesis_collectio
             "Make your response well-structured and include detailed citations. Use minimal formatting and avoid overuse of emojis or decorative elements."
         )
         
-        if st.session_state["infact_node"]:
-            llm_provider = st.session_state["infact_node"].llm_provider
-            summary = llm_provider.send_message(prompt_summary)
-        else:
-            # Fall back to call_llm if InFactNode isn't available
-            if not call_llm:
-                return "Error: No LLM provider available."
-                
+        # Use call_llm if provided, otherwise create a provider
+        if call_llm:
             summary = call_llm(
                 provider=st.session_state["provider"],
                 model=st.session_state["model"],
                 api_key=st.session_state["api_key"],
                 prompt_text=prompt_summary
             )
+        else:
+            provider_name = st.session_state["provider"]
+            api_key = st.session_state["api_key"]
+            model = st.session_state["model"]
+            
+            # Import the correct provider based on provider_name
+            if provider_name.lower() == "anthropic":
+                from InFact.providers.anthropic_provider import AnthropicProvider
+                llm_provider = AnthropicProvider(api_key=api_key, model=model)
+            elif provider_name.lower() == "openai":
+                from InFact.providers.openai_provider import OpenAIProvider
+                llm_provider = OpenAIProvider(api_key=api_key, model=model)
+            else:
+                raise ValueError(f"Unsupported provider: {provider_name}")
+                
+            summary = llm_provider.send_message(prompt_summary)
         
         # Update DB
         hypothesis_collection.update_one(
@@ -215,20 +185,30 @@ def process_chat_message(user_question, hypothesis_text, background_summary, cal
             f"and suggest what kinds of information might be needed to address the question."
         )
         
-        if st.session_state["infact_node"]:
-            llm_provider = st.session_state["infact_node"].llm_provider
-            return llm_provider.send_message(prompt_chat)
-        else:
-            # Fall back to call_llm if InFactNode isn't available
-            if not call_llm:
-                return "Error: No LLM provider available."
-                
+        # Use call_llm if provided, otherwise create a provider
+        if call_llm:
             return call_llm(
                 provider=st.session_state["provider"],
                 model=st.session_state["model"],
                 api_key=st.session_state["api_key"],
                 prompt_text=prompt_chat
             )
+        else:
+            provider_name = st.session_state["provider"]
+            api_key = st.session_state["api_key"]
+            model = st.session_state["model"]
+            
+            # Import the correct provider based on provider_name
+            if provider_name.lower() == "anthropic":
+                from InFact.providers.anthropic_provider import AnthropicProvider
+                llm_provider = AnthropicProvider(api_key=api_key, model=model)
+            elif provider_name.lower() == "openai":
+                from InFact.providers.openai_provider import OpenAIProvider
+                llm_provider = OpenAIProvider(api_key=api_key, model=model)
+            else:
+                raise ValueError(f"Unsupported provider: {provider_name}")
+                
+            return llm_provider.send_message(prompt_chat)
     except Exception as e:
         return f"Error processing your question: {str(e)}"
 
@@ -248,6 +228,34 @@ def handle_chat_submit():
         # Clear the input field
         st.session_state["user_question"] = ""
 
+def check_hypothesis_id(hypothesis_collection):
+    """Check if a hypothesis ID exists in the database."""
+    hypothesis_id = st.session_state.get("hypothesis_id_input", "").strip()
+    if hypothesis_id:
+        doc = hypothesis_collection.find_one({"_id": hypothesis_id})
+        st.session_state["id_exists"] = bool(doc)
+    else:
+        st.session_state["id_exists"] = None
+
+def create_hypothesis(hypothesis_id, hypothesis_text, hypothesis_collection):
+    """Create a new hypothesis in the database."""
+    try:
+        # Create a new hypothesis document
+        hypothesis_doc = {
+            "_id": hypothesis_id,
+            "text": hypothesis_text,
+            "created_at": time.time(),
+            "original_text": hypothesis_text
+        }
+        
+        # Insert into the database
+        hypothesis_collection.insert_one(hypothesis_doc)
+        
+        return True
+    except Exception as e:
+        st.error(f"Error creating hypothesis: {str(e)}")
+        return False
+
 # ========== UI COMPONENTS ==========
 
 def initialize_session_state():
@@ -266,10 +274,6 @@ def initialize_session_state():
         st.session_state["chat_id"] = str(uuid.uuid4())
     if "user_question" not in st.session_state:
         st.session_state["user_question"] = ""
-    if "infact_node" not in st.session_state:
-        st.session_state["infact_node"] = None
-    if "temp_node_file" not in st.session_state:
-        st.session_state["temp_node_file"] = None
         
     # Ensure the sections_expanded dictionary has all required keys
     if "background" not in st.session_state["sections_expanded"]:
@@ -347,18 +351,7 @@ def render_hypothesis_setup(hypothesis_collection):
         if hypothesis_doc:
             loaded_text = hypothesis_doc["text"]
             st.session_state["hypothesis_text_input"] = loaded_text
-            
-            # Show InFactNode state info if it exists
-            if st.session_state["infact_node"]:
-                infact_node = st.session_state["infact_node"]
-                current_prob = 1 / (1 + 2.71828 ** -infact_node.current_posterior)
-                st.success(f"""
-                Loaded existing hypothesis with ID '{hypothesis_id}'.
-                Current probability: {current_prob:.2%}
-                Number of data points: {len(infact_node.data_points)}
-                """)
-            else:
-                st.success(f"Hypothesis loaded with ID '{hypothesis_id}'.")
+            st.success(f"Hypothesis loaded with ID '{hypothesis_id}'.")
         else:
             st.error("Inconsistent state: ID exists but not found in DB.")
             st.stop()
@@ -605,44 +598,9 @@ def render_current_state(hypothesis_id):
     st.divider()
     st.markdown("### :orange[Hypothesis Current State]")
     
-    if st.session_state["infact_node"]:
-        node = st.session_state["infact_node"]
-        current_prob = 1 / (1 + 2.71828 ** -node.current_posterior)
-        
-        # Calculate confidence interval
-        lower, upper = node._calculate_uncertainty()
-        
-        st.metric("Current Probability", f"{current_prob:.2%}")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Lower Bound (95% CI)", f"{lower:.2%}")
-        with col2:
-            st.metric("Upper Bound (95% CI)", f"{upper:.2%}")
-        
-        st.write(f"**Number of data points evaluated:** {len(node.data_points)}")
-        
-        # Display evidence summary if there are data points
-        if node.data_points:
-            st.markdown("#### Evidence Summary")
-            for i, dp in enumerate(node.data_points):
-                with st.expander(f"Evidence {i+1}"):
-                    st.write(f"**Log likelihood ratio:** {dp['l_plus'] - dp['l_minus']:.2f}")
-                    
-                    if 'confidence_assessment' in dp and dp['confidence_assessment']:
-                        confidence = dp['confidence_assessment']
-                        st.write(f"**Confidence score:** {confidence.get('confidence_score', 'N/A')}")
-                        st.write(f"**Explanation:** {confidence.get('explanation', 'No explanation provided')}")
-                        
-                        if 'key_strengths' in confidence and confidence['key_strengths']:
-                            st.write("**Key strengths:**")
-                            for strength in confidence['key_strengths']:
-                                st.write(f"- {strength}")
-                        
-                        if 'key_limitations' in confidence and confidence['key_limitations']:
-                            st.write("**Key limitations:**")
-                            for limitation in confidence['key_limitations']:
-                                st.write(f"- {limitation}")
+    # Display basic information about the hypothesis
+    st.write(f"**Hypothesis ID:** {hypothesis_id}")
+    st.write("No evidence has been evaluated yet. Please proceed to the next step to start evaluating evidence.")
 
 def render_navigation_buttons(active_id, hypothesis_doc):
     """Render navigation buttons."""
@@ -661,12 +619,6 @@ def render_navigation_buttons(active_id, hypothesis_doc):
             # Store the hypothesis text
             if hypothesis_doc:
                 st.session_state["hypothesis_text"] = hypothesis_doc["text"]
-            
-            # Ensure the InFactNode is saved before proceeding
-            if st.session_state["infact_node"]:
-                node_state_path = hypothesis_doc.get("node_state_path")
-                if node_state_path:
-                    st.session_state["infact_node"].save(node_state_path)
             
             return "next"
     
