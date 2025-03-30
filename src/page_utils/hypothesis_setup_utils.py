@@ -3,6 +3,7 @@ import os
 import json
 import uuid
 import time
+from uuid import uuid4
 
 def check_and_load_hypothesis(hypothesis_collection):
     """Check if hypothesis ID exists and load its data if present."""
