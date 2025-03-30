@@ -68,7 +68,7 @@ def display_results_step(db, fs, hypothesis_collection):
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("### :green[Process Results and Visualization]")
+    st.markdown("### :orange[Process Results and Visualization]")
     
     # Get hypothesis information
     hypothesis_id = st.session_state.get("hypothesis_id", None)

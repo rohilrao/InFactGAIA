@@ -5,8 +5,7 @@ process_steps = {
     2: "Hypothesis Setup", 
     3: "Add Evidence",
     4: "Code Analysis",
-    5: "Process Evidence",
-    6: "Results"
+    5: "Process Results"
 }
 
 def initialize_session_state():
