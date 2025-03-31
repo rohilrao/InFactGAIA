@@ -123,12 +123,11 @@ def display_results_step(db, fs, hypothesis_collection):
     hypothesis_description = hypothesis_entry.get("short_description", "No description provided")
     
     # Display hypothesis info
-    st.markdown('<div class="hypothesis-card">', unsafe_allow_html=True)
+    st.markdown("## Hypothesis Information")
     st.write("**Hypothesis ID:**", hypothesis_id)   
     st.write(f"**Hypothesis:** {hypothesis_text}")
-    # Use Streamlit's container to close the hypothesis-card section
-    st.container()
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.write(f"**Description:** {hypothesis_description}")
+    st.markdown("---")
     
     # Get InFactNode and file information from session
     node = st.session_state.get("infact_node", None)
