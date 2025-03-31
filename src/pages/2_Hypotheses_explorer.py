@@ -31,7 +31,7 @@ st.markdown("""
 <style>
     /* Set consistent text properties */
     .streamlit-expanderHeader {
-        font-size: 1rem !important;
+        font-size: 0.95rem !important;
         font-weight: normal !important;
     }
     .stExpander {
@@ -42,27 +42,44 @@ st.markdown("""
         margin-bottom: 0.5rem;
     }
     .file-container {
-        padding: 0.5rem;
         margin-top: 0.5rem;
         margin-bottom: 0.5rem;
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 0.25rem;
+        max-height: 150px;
+        overflow-y: auto;
     }
     .file-item {
-        font-size: 0.95rem;
+        font-size: 0.85rem;
         margin-bottom: 0.2rem;
+        padding: 0.15rem 0.25rem;
         display: flex;
         justify-content: space-between;
     }
     .file-name {
-        color: #d6d6d6;
+        color: #e6e6e6;
     }
-    .status {
-        color: #a0a0a0;
+    .status-processed {
+        color: #27ae60;
+    }
+    .status-ready_for_analysis {
+        color: #f39c12;
+    }
+    .status-unprocessed {
+        color: #95a5a6;
+    }
+    .status-unknown {
+        color: #7f8c8d;
     }
     .section-header {
         font-size: 0.95rem;
         margin-top: 1rem;
         margin-bottom: 0.5rem;
-        color: #d6d6d6;
+        color: #ff8c00;
+    }
+    .stDownloadButton > button {
+        font-size: 0.9rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -92,26 +109,36 @@ if hypotheses:
         # Collapsible Hypothesis Section
         with st.expander(f"Hypothesis ID: {hypothesis_id}", expanded=False):
             # Display Hypothesis Text and File Count with consistent styling
-            st.markdown(f'<div class="hyp-text">Hypothesis: {hypothesis_text}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="hyp-text">Files Attached: {len(all_files)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="section-header">Hypothesis</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="hyp-text">{hypothesis_text}</div>', unsafe_allow_html=True)
+            
+            st.markdown(f'<div class="section-header">Files Attached: {len(all_files)}</div>', unsafe_allow_html=True)
             
             if all_files:
                 # Create a scrollable container for files
-                with st.container(height=150, border=False):
-                    st.markdown('<div class="file-container">', unsafe_allow_html=True)
-                    for file in all_files:
-                        filename = file.get("filename", "unnamed")
-                        status = file.get("status", "unknown")
-                        
-                        # Simplified file display
-                        st.markdown(
-                            f'<div class="file-item">'
-                            f'<span class="file-name">{filename}</span>'
-                            f'<span class="status">{status}</span>'
-                            f'</div>',
-                            unsafe_allow_html=True
-                        )
-                    st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="file-container">', unsafe_allow_html=True)
+                for file in all_files:
+                    filename = file.get("filename", "unnamed")
+                    status = file.get("status", "unknown")
+                    
+                    # Determine status class for color
+                    status_class = "status-unknown"
+                    if status == "processed":
+                        status_class = "status-processed"
+                    elif status == "ready_for_analysis":
+                        status_class = "status-ready_for_analysis"
+                    elif status == "unprocessed":
+                        status_class = "status-unprocessed"
+                    
+                    # Simplified file display with status color
+                    st.markdown(
+                        f'<div class="file-item">'
+                        f'<span class="file-name">{filename}</span>'
+                        f'<span class="{status_class}">{status}</span>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+                st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.write("No files attached to this hypothesis.")
             
