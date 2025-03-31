@@ -114,7 +114,7 @@ elif st.session_state.process_step == 2:
 
 # Step 3: File Upload
 elif st.session_state.process_step == 3:
-    result = display_file_upload_step(db, fs, hypothesis_collection, parse_data)
+    result = display_file_upload_step(db, fs, hypothesis_collection)
     
     if result == "next":
         st.session_state.process_step = 4

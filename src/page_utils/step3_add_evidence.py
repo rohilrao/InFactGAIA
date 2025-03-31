@@ -260,7 +260,7 @@ def load_or_create_infact_node(db, hypothesis_id, provider, model, api_key):
         st.error(traceback.format_exc())
         raise
 
-def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
+def display_file_upload_step(db, fs, hypothesis_collection):
     """
     Handles Step 4: File Upload and Processing
     
