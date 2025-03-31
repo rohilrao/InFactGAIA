@@ -265,12 +265,6 @@ def display_results_step(db, fs, hypothesis_collection):
                 {"_id": ensure_object_id(file_id)},
                 {"$set": {"node_state_file_id": str(file_state_id)}}
             )
-
-            # Update the file status to "Processed"
-            db.fs.files.update_one(
-                {"_id": ensure_object_id(file_id)},
-                {"$set": {"status": "processed"}}
-            )
             
             # Now handle the HTML rendering with a temporary directory
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -321,6 +315,12 @@ def display_results_step(db, fs, hypothesis_collection):
                     "confidence_interval": [lower, upper],
                     "last_updated": file_obj.get("uploadDate", "Unknown date")
                 }}
+            )
+
+            # Update the file status to "Processed"
+            db.fs.files.update_one(
+                {"_id": ensure_object_id(file_id)},
+                {"$set": {"status": "processed"}}
             )
             
             # Display results
