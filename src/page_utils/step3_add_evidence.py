@@ -371,9 +371,11 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                 # Status column
                 with col2:
                     if file.get("status") == "ready_for_analysis" and file.get("parsing_complete", False):
-                        st.markdown("<span style='color:green'>✅ Ready for Analysis</span>", unsafe_allow_html=True)
+                        st.markdown("<span style='color:green'>🔍 Ready for Analysis</span>", unsafe_allow_html=True)
                     elif file.get("status") == "processing":
                         st.markdown("<span style='color:orange'>⏳ Processing</span>", unsafe_allow_html=True)
+                    elif file.get("status") == "processing":
+                        st.markdown("<span style='color:orange'>✅ Processed</span>", unsafe_allow_html=True)
                     else:
                         st.markdown("<span style='color:#888'>⚪ Unprocessed</span>", unsafe_allow_html=True)
 
