@@ -1,640 +1,604 @@
 import streamlit as st
-import os
-import tempfile
-import datetime
-import json
-from bson.objectid import ObjectId
-from pathlib import Path
-from InFact.utils.data_parser import parse_data
-from InFact.utils.data_parser import parse_standalone
-from InFact.infact_node import InFactNode
-
-def ensure_object_id(id_value):
-    """Convert string IDs to ObjectId if needed."""
-    if isinstance(id_value, str) and ObjectId.is_valid(id_value):
-        try:
-            return ObjectId(id_value)
-        except:
-            return id_value
-    return id_value
-
-def save_parsed_data_to_file(db, file_id, parsed_data):
-    """
-    Updates the MongoDB GridFS file entry with parsed data.
-    """
-    try:
-        file_id = ensure_object_id(file_id)
-        db.fs.files.update_one(
-            {"_id": file_id},  # Update file by its unique ID
-            {"$set": {
-                "parsed_data": parsed_data,
-                "parsing_complete": True,
-                "status": "ready_for_analysis"  # Update status to ready for analysis
-            }}
-        )
-        st.success("✅ Parsed data stored successfully")
-        return True
-    except Exception as e:
-        st.error(f"❌ Failed to save parsed data: {str(e)}")
-        return False
-
-def delete_file(db, fs, file_id):
-    """
-    Deletes a file from GridFS.
-    """
-    try:
-        file_id = ensure_object_id(file_id)
-        fs.delete(file_id)
-        db.fs.chunks.delete_many({"files_id": file_id})
-        st.success("✅ File deleted successfully")
-        return True
-    except Exception as e:
-        st.error(f"❌ Failed to delete file: {str(e)}")
-        return False
-
-def render_parsed_data(parsed_data, filename):
-    """
-    Renders parsed data using a Jinja2 template with an expandable JSON view.
-    """
-    import streamlit.components.v1 as components
-    from jinja2 import Template
-    
-    # Create tabs for different views
-    summary_tab, raw_data_tab = st.tabs(["Summary View", "Raw JSON Data"])
-    
-    with summary_tab:
-        # Render the formatted view
-        TEMPLATE = """
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                background-color: #f4f4f4;
-                margin: 0;
-                padding: 0;
-            }
-            .container {
-                width: 90%;
-                max-width: 700px;
-                margin: 20px auto;
-                padding: 20px;
-                background: white;
-                border-radius: 8px;
-                box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
-            }
-            h3 {
-                color: #333;
-                text-align: center;
-            }
-            h4 {
-                color: #0056b3;
-            }
-            .confidence-score {
-                font-weight: bold;
-            }
-            .confidence-high { color: green; }
-            .confidence-medium { color: orange; }
-            .confidence-low { color: red; }
-            pre {
-                background-color: #eef;
-                padding: 10px;
-                border-radius: 5px;
-                white-space: pre-wrap;
-            }
-            .issues, .confidence-box {
-                padding: 15px;
-                border-radius: 8px;
-            }
-            .confidence-box { background: #eef5ff; }
-            .issues { background: #ffecec; }
-        </style>
-
-        <div class="container">
-            <h3>Parsed Data for {{ filename }}</h3>
-
-            {% if data.confidence_assessment %}
-                <div class="confidence-box">
-                    <h4>Confidence Assessment</h4>
-                    <p><strong>Score:</strong> 
-                        <span class="confidence-score 
-                            {% if data.confidence_assessment.confidence_score >= 0.75 %} confidence-high
-                            {% elif data.confidence_assessment.confidence_score >= 0.5 %} confidence-medium
-                            {% else %} confidence-low
-                            {% endif %}">
-                            {{ (data.confidence_assessment.confidence_score * 100)|round(2) }}%
-                        </span>
-                    </p>
-                    <p><strong>Explanation:</strong> {{ data.confidence_assessment.explanation }}</p>
-
-                    {% if data.confidence_assessment.key_strengths %}
-                        <h4>Key Strengths</h4>
-                        <ul>
-                            {% for strength in data.confidence_assessment.key_strengths %}
-                            <li>{{ strength }}</li>
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-
-                    {% if data.confidence_assessment.key_limitations %}
-                        <h4>Key Limitations</h4>
-                        <ul>
-                            {% for limitation in data.confidence_assessment.key_limitations %}
-                            <li>{{ limitation }}</li>
-                            {% endfor %}
-                        </ul>
-                    {% endif %}
-                </div>
-            {% endif %}
-
-            {% if data.numerical_values %}
-                <h4>Numerical Values</h4>
-                <pre>{{ data.numerical_values | join(", ") }}</pre>
-            {% endif %}
-
-            {% if data.metadata %}
-                <h4>Metadata</h4>
-                <pre>{{ data.metadata | tojson(indent=2) }}</pre>
-            {% endif %}
-
-            {% if data.issues %}
-                <div class="issues">
-                    <h4>Issues</h4>
-                    <ul>
-                        {% for issue in data.issues %}
-                        <li>{{ issue }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-        </div>
-        """
-        
-        template = Template(TEMPLATE)
-        rendered_html = template.render(data=parsed_data, filename=filename)
-
-        # Ensure Streamlit renders full HTML properly
-        components.html(rendered_html, height=500, scrolling=True)
-    
-    # Raw JSON data in a separate tab
-    with raw_data_tab:
-        st.caption("Complete data structure returned by the parser")
-        st.json(parsed_data)
-
-def load_or_create_infact_node(db, hypothesis_id, provider, model, api_key):
-    """
-    Loads an existing InFactNode or creates a new one.
-    
-    Args:
-        db: MongoDB database connection
-        hypothesis_id: The ID of the hypothesis
-        provider: LLM provider name ('anthropic', 'gpt', 'deepseek')
-        model: Model name
-        api_key: API key for the provider
-        
-    Returns:
-        tuple: (node, temp_file_path)
-    """
-    try:
-        # Check if a node state exists for this hypothesis
-        node_entry = db.node_states.find_one({
-            "hypothesis_id": str(hypothesis_id),
-            "provider": provider
-        })
-        
-        # Create a temp directory for storing node state
-        temp_dir = tempfile.mkdtemp()
-        temp_file_path = os.path.join(temp_dir, f"node_state_{provider}_{hypothesis_id}.json")
-        
-        if node_entry and "state" in node_entry:
-            # Write node state to temp file
-            st.info(f"Found existing {provider.capitalize()} node for this hypothesis. Loading...")
-            with open(temp_file_path, "w") as f:
-                json.dump(node_entry["state"], f)
-                
-            # Load node from temp file
-            if provider.lower() == "anthropic":
-                node = InFactNode.load(temp_file_path, "anthropic", api_key, model)
-            elif provider.lower() == "gpt" or provider.lower() == "openai":
-                node = InFactNode.load(temp_file_path, "openai", api_key, model)
-            elif provider.lower() == "deepseek":
-                node = InFactNode.load(temp_file_path, "deepseek", api_key, model)
-            else:
-                raise ValueError(f"Unsupported provider: {provider}")
-                
-        else:
-            # Get hypothesis text
-            hypothesis_entry = db.hypotheses.find_one({"_id": hypothesis_id})
-            if not hypothesis_entry:
-                raise ValueError(f"Hypothesis with ID {hypothesis_id} not found")
-                
-            hypothesis_text = hypothesis_entry["text"]
-            st.info(f"Creating new {provider.capitalize()} node for this hypothesis")
-            
-            # Create new node
-            if provider.lower() == "anthropic":
-                node = InFactNode.create_with_anthropic(
-                    hypothesis=hypothesis_text, 
-                    api_key=api_key, 
-                    model=model
-                )
-            elif provider.lower() == "gpt" or provider.lower() == "openai":
-                node = InFactNode.create_with_openai(
-                    hypothesis=hypothesis_text, 
-                    api_key=api_key, 
-                    model=model
-                )
-            elif provider.lower() == "deepseek":
-                from InFact.providers.deepseek_provider import DeepSeekProvider
-                deepseek_provider = DeepSeekProvider(api_key=api_key, model=model)
-                node = InFactNode(
-                    hypothesis=hypothesis_text,
-                    llm_provider=deepseek_provider
-                )
-            else:
-                raise ValueError(f"Unsupported provider: {provider}")
-        
-        return node, temp_file_path
-        
-    except Exception as e:
-        st.error(f"Error loading/creating InFactNode: {str(e)}")
-        import traceback
-        st.error(traceback.format_exc())
-        raise
-
-def display_file_upload_step(db, fs, hypothesis_collection):
-    """
-    Handles Step 4: File Upload and Processing
-    
-    Args:
-        db: MongoDB database connection
-        fs: GridFS instance
-        hypothesis_collection: MongoDB collection for hypotheses
-        parse_data: Function to parse uploaded files
-        
-    Returns:
-        str: Navigation action - "back", "next", or None
-    """
-    # 1. HEADER SECTION
-    st.markdown("### :orange[Upload Files for Your Hypothesis]")
-
-    # Get hypothesis information 
-    hypothesis_id = st.session_state.get("hypothesis_id", None)
-    
-    # Check if we have hypothesis_id in session state
-    if not hypothesis_id:
-        # Also check hypothesis_id_input as fallback
-        hypothesis_id = st.session_state.get("hypothesis_id_input", "").strip()
-        if hypothesis_id:
-            st.warning(f"Using hypothesis ID from input field: {hypothesis_id}")
-            # Save it properly to session state
-            st.session_state["hypothesis_id"] = hypothesis_id
-        else:
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                st.warning("No Hypothesis ID found in session. Please go back to Step 2.")
-                if st.button("← Back to Hypothesis Setup"):
-                    return "back"
-            st.stop()
-    
-    # Get the current hypothesis text from DB
-    hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
-    if not hypothesis_entry:
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.error(f"Could not find hypothesis with ID '{hypothesis_id}' in database.")
-            if st.button("← Back to Hypothesis Setup"):
-                return "back"
-        st.stop()
-
-    hypothesis_text = hypothesis_entry["text"]
-    st.session_state["hypothesis_text"] = hypothesis_text
-    
-    # Simple hypothesis display
-    st.write(f"**Hypothesis ID:** `{hypothesis_id}`")
-    st.write(f"**Hypothesis:** {hypothesis_text}")
-    st.divider()
-
-    # Get or create InFactNode (only once per session)
-    if "infact_node" not in st.session_state:
-        provider = st.session_state.get("provider", "anthropic")  # Default to anthropic if not set
-        model = st.session_state.get("model", "claude-3-5-sonnet")  # Default model
-        api_key = st.session_state.get("api_key", "")
-        
-        try:
-            # Load or create InFactNode
-            node, temp_file_path = load_or_create_infact_node(
-                db=db,
-                hypothesis_id=hypothesis_id,
-                provider=provider,
-                model=model,
-                api_key=api_key
-            )
-            # Store in session state
-            st.session_state["infact_node"] = node
-            st.session_state["node_temp_path"] = temp_file_path
-            st.success(f"Successfully loaded {provider.capitalize()} model for analysis")
-        except Exception as e:
-            st.error(f"Failed to initialize {provider} model: {str(e)}")
-
-    # 2. FILE LISTING SECTION
-    st.markdown("### :orange[Current Files]")
-    
-    # Get existing files for this hypothesis, excluding node state and rendered hypothesis files
-    existing_files = list(db.fs.files.find({
-        "metadata.hypothesis_id": hypothesis_id,
-        "filename": {"$not": {"$regex": "node_state|rendered_hypothesis"}}
-    }))
-    
-    # Check for unprocessed or ready_for_analysis files
-    unprocessed_files = [f for f in existing_files if f.get("status") == "unprocessed"]
-    processed_files = [f for f in existing_files if f.get("status") == "ready_for_analysis" and 
-                      f.get("parsing_complete", False)]
-    
-    if existing_files:
-        st.caption(f"{len(existing_files)} file(s) associated with this hypothesis")
-        
-        # Create a scrollable container
-        file_container = st.container(height=250, border=True)
-        
-        # Display files within the scrollable container
-        with file_container:
-            for idx, file in enumerate(existing_files):
-                file_id = file["_id"]
-                filename = file["filename"]
-                
-                # Create a row for each file
-                col1, col2, col3 = st.columns([3, 3, 1])
-                
-                # File name column
-                with col1:
-                    st.write(f"**{filename}**")
-                
-                # Status column
-                with col2:
-                    if file.get("status") == "ready_for_analysis" and file.get("parsing_complete", False):
-                        st.markdown("<span style='color:green'>✅ Ready for Analysis</span>", unsafe_allow_html=True)
-                    elif file.get("status") == "processing":
-                        st.markdown("<span style='color:orange'>⏳ Processing</span>", unsafe_allow_html=True)
-                    else:
-                        st.markdown("<span style='color:#888'>⚪ Unprocessed</span>", unsafe_allow_html=True)
-                
-                # Action column
-                with col3:
-                    if st.button("Delete", key=f"delete_{idx}", use_container_width=True):
-                        if delete_file(db, fs, file_id):
-                            st.rerun()
-                
-                # Add a separator between files
-                if idx < len(existing_files) - 1:
-                    st.divider()
-    else:
-        st.info("No files uploaded yet. Upload your first file below.")
-    
-    st.divider()
-    
-    # 3. FILE UPLOAD SECTION
-    st.markdown("### :orange[Upload New File]")
-    
-    # Track if we're currently parsing
-    is_parsing = st.session_state.get("is_parsing", False)
-    
-    # Only show the "Process Existing File" flow if we have unprocessed files
-    # AND we're not already parsing a file AND we're not showing file upload yet
-    show_file_upload = True
-    if unprocessed_files and not is_parsing and not st.session_state.get("show_upload_form", False):
-        st.warning(f"You have {len(unprocessed_files)} unprocessed file(s). Please process them before uploading new files.")
-        
-        # Show option to process existing unprocessed files
-        if st.button("Process Existing File", key="process_existing"):
-            # Get the first unprocessed file
-            file_to_process = unprocessed_files[0]
-            st.session_state["current_file_id"] = file_to_process["_id"]
-            st.session_state["current_filename"] = file_to_process["filename"]
-            st.session_state["is_parsing"] = True
-            st.rerun()
-        # Don't show file upload in this case
-        show_file_upload = False
-    else:
-        # Set the flag to show we're past the unprocessed files step
-        st.session_state["show_upload_form"] = True
-    
-    # Allow file upload only if no files are currently being processed and we should show the upload form
-    if show_file_upload:
-        if is_parsing:
-            st.info("Processing a file. Please wait until processing completes.")
-        else:
-            st.write("You can upload one file at a time. Please wait for processing to complete before uploading another file.")
-            # File uploader
-            uploaded_file = st.file_uploader("Select a file to upload", type=["txt", "pdf", "png", "jpg", "html", "csv"])
-            
-            # Logic for handling file upload
-            if uploaded_file:
-                file_name = uploaded_file.name
-                print(f"DEBUG - User selected file: '{file_name}'")
-                
-                # Check if this file already exists for THIS hypothesis
-                existing_filenames = [file["filename"] for file in existing_files]
-                is_duplicate = file_name in existing_filenames
-                
-                if is_duplicate:
-                    st.warning(f"A file named '{file_name}' already exists for this hypothesis. Please choose a different file.")
-                else:
-                    # Show upload button if not a duplicate
-                    if st.button("Upload File", key="upload_button"):
-                        print(f"DEBUG - Uploading file '{file_name}' for hypothesis ID '{hypothesis_id}'")
-                        # Read file content
-                        file_content = uploaded_file.read()
-                        
-                        # Save to GridFS
-                        file_id = fs.put(
-                            file_content,
-                            filename=file_name,
-                            metadata={
-                                "hypothesis_id": hypothesis_id,
-                                "hypothesis_text": hypothesis_text
-                            },
-                            status="unprocessed",  # Initial status
-                            upload_date=str(datetime.datetime.today()),
-                        )
-                        
-                        print(f"DEBUG - File successfully uploaded with ID: {file_id}")
-                        
-                        # Store file ID in session
-                        st.session_state["current_file_id"] = file_id
-                        st.session_state["current_filename"] = file_name
-                        st.session_state["is_parsing"] = True
-                        
-                        # Rerun to reflect state changes
-                        st.rerun()
-    
-    # 4. FILE PROCESSING SECTION
-    parsed_data_displayed = False
-    if is_parsing and "current_file_id" in st.session_state:
-        st.divider()
-        st.markdown("### :orange[Processing File]")
-        
-        file_id = st.session_state["current_file_id"]
-        filename = st.session_state["current_filename"]
-        print(f"DEBUG - Beginning to process file '{filename}' with ID {file_id}")
-        
-        # Show processing indicator
-        with st.spinner(f"Processing file '{filename}'... Please wait"):
-            # Create temporary file
-            temp_dir = tempfile.gettempdir()
-            temp_file_path = os.path.join(temp_dir, filename)
-            
-            # Get file content
-            with open(temp_file_path, "wb") as f:
-                f.write(fs.get(ensure_object_id(file_id)).read())
-            
-            print(f"DEBUG - Created temporary file at '{temp_file_path}'")
-            
-            # Process the file
-            try:
-                provider = st.session_state.get("provider")
-                model = st.session_state.get("model")
-                api_key = st.session_state.get("api_key")
-                
-                # Update DB to mark file as processing
-                db.fs.files.update_one(
-                    {"_id": ensure_object_id(file_id)},
-                    {"$set": {"status": "processing"}}
-                )
-                
-                print(f"DEBUG - Parsing file '{filename}' with provider '{provider}' and model '{model}'")
-                
-                # Parse data using the enhanced parser
-                # Since we're importing parse_data directly from the module,
-                # we need to ensure we pass all the required arguments
-                
-                
-                parsed_data = parse_standalone(
-                    temp_file_path,
-                    hypothesis_text,
-                    provider,
-                    model,
-                    api_key
-                )
-                # Extract metadata
-                from InFact.utils.metadata_extractor import extract_metadata
-                file_metadata = extract_metadata(temp_file_path, node.logger)
-
-                # Add metadata to parsed_data
-                if 'metadata' not in parsed_data:
-                    parsed_data['metadata'] = {}
-                parsed_data['metadata'].update(file_metadata)
-                    
-                # Check for redundancy if we have an infact_node
-                if 'infact_node' in st.session_state and parsed_data:
-                    from InFact.utils.redundancy_checker import is_redundant
-                    node = st.session_state['infact_node']
-                    
-                    # Check if data is redundant with existing data points
-                    if is_redundant(parsed_data, node.data_points, node.llm_provider, node.logger):
-                        st.warning("This file contains redundant information. Please upload a different file.")
-                        
-                        # Mark file as redundant in DB
-                        db.fs.files.update_one(
-                            {"_id": ensure_object_id(file_id)},
-                            {"$set": {"status": "redundant"}}
-                        )
-                        
-                        st.session_state["is_parsing"] = False
-                        
-                        if st.button("Delete Redundant File", key="delete_redundant"):
-                            if delete_file(db, fs, file_id):
-                                for key in ["is_parsing", "current_file_id", "current_filename"]:
-                                    if key in st.session_state:
-                                        del st.session_state[key]
-                                st.rerun()
-                        
-                        st.stop()  # Stop further processing
-                
-                # Save parsed data to file record
-                print(f"DEBUG - Saving parsed data for file '{filename}'")
-                if save_parsed_data_to_file(db, file_id, parsed_data):
-                    st.success(f"File '{filename}' is now ready for analysis")
-                
-                # Clean up
-                try:
-                    os.remove(temp_file_path)
-                    print(f"DEBUG - Removed temporary file '{temp_file_path}'")
-                except Exception as e:
-                    print(f"DEBUG - Failed to remove temp file: {str(e)}")
-                
-                # Display parsed data
-                st.divider()
-                st.markdown("### :orange[Parsed Data]")
-                render_parsed_data(parsed_data, filename)
-                parsed_data_displayed = True
-                
-                # Mark parsing as complete
-                st.session_state["is_parsing"] = False
-                
-                # Set a flag to trigger a single rerun after successful parsing
-                if not st.session_state.get("parsed_data_rerun", False):
-                    st.session_state["parsed_data_rerun"] = True
-                    st.rerun()
-                
-            except Exception as e:
-                print(f"DEBUG - ERROR processing file '{filename}': {str(e)}")
-                st.error(f"Error processing file: {str(e)}")
-                st.session_state["is_parsing"] = False
-                
-                # Update DB to mark file as unprocessed again
-                db.fs.files.update_one(
-                    {"_id": ensure_object_id(file_id)},
-                    {"$set": {"status": "unprocessed"}}
-                )
-                
-                # Add option to delete if error occurred
-                if st.button("Delete This File", key="delete_error"):
-                    if delete_file(db, fs, file_id):
-                        # Clean up session state
-                        for key in ["is_parsing", "current_file_id", "current_filename"]:
-                            if key in st.session_state:
-                                del st.session_state[key]
-                        # Force refresh
-                        st.rerun()
-    
-    # Reset rerun flag to prevent continuous reruns
-    if st.session_state.get("parsed_data_rerun", False):
-        st.session_state["parsed_data_rerun"] = False
-    
-    # 5. DISPLAY MOST RECENT FILE'S PARSED DATA (if no current parsing)
-    if not parsed_data_displayed and not is_parsing and existing_files:
-        # Find the most recently uploaded file that has parsed data
-        recent_files = [f for f in existing_files if f.get("parsing_complete", False)]
-        
-        if recent_files:
-            # Sort by upload date (newest first)
-            recent_files.sort(key=lambda x: x.get("upload_date", ""), reverse=False)
-            most_recent = recent_files[0]
-            
-            if "parsed_data" in most_recent:
-                st.divider()
-                st.markdown("### :orange[Most Recently Parsed Data]")
-                st.markdown(f"#### Showing data for: {most_recent['filename']}")
-                render_parsed_data(most_recent["parsed_data"], most_recent["filename"])
-    
-    # 6. NAVIGATION
-    st.divider()
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if st.button("← Back"):
-            # Clean up session state
-            for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-                    
-            return "back"
-            
-    with col2:
-        if st.button("Next →"):
-            # Clean up any temporary processing state
-            for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-                    
-            return "next"
-            
-    return None  # No action taken
+ import os
+ import tempfile
+ import datetime
+ import json
+ from bson.objectid import ObjectId
+ from pathlib import Path
+ from InFact.utils.data_parser import parse_data
+ from InFact.utils.data_parser import parse_standalone
+ from InFact.infact_node import InFactNode
+ 
+ def ensure_object_id(id_value):
+     """Convert string IDs to ObjectId if needed."""
+     if isinstance(id_value, str) and ObjectId.is_valid(id_value):
+         try:
+             return ObjectId(id_value)
+         except:
+             return id_value
+     return id_value
+ 
+ def save_parsed_data_to_file(db, file_id, parsed_data):
+     """
+     Updates the MongoDB GridFS file entry with parsed data.
+     """
+     try:
+         file_id = ensure_object_id(file_id)
+         db.fs.files.update_one(
+             {"_id": file_id},  # Update file by its unique ID
+             {"$set": {
+                 "parsed_data": parsed_data,
+                 "parsing_complete": True,
+                 "status": "ready_for_analysis"  # Update status to ready for analysis
+             }}
+         )
+         st.success("✅ Parsed data stored successfully")
+         return True
+     except Exception as e:
+         st.error(f"❌ Failed to save parsed data: {str(e)}")
+         return False
+ 
+ def delete_file(db, fs, file_id):
+     """
+     Deletes a file from GridFS.
+     """
+     try:
+         file_id = ensure_object_id(file_id)
+         fs.delete(file_id)
+         db.fs.chunks.delete_many({"files_id": file_id})
+         st.success("✅ File deleted successfully")
+         return True
+     except Exception as e:
+         st.error(f"❌ Failed to delete file: {str(e)}")
+         return False
+ 
+ def render_parsed_data(parsed_data, filename):
+     """
+     Renders parsed data using a Jinja2 template with an expandable JSON view.
+     """
+     import streamlit.components.v1 as components
+     from jinja2 import Template
+ 
+     # Create tabs for different views
+     summary_tab, raw_data_tab = st.tabs(["Summary View", "Raw JSON Data"])
+ 
+     with summary_tab:
+         # Render the formatted view
+         TEMPLATE = """
+         <style>
+             body {
+                 font-family: Arial, sans-serif;
+                 background-color: #f4f4f4;
+                 margin: 0;
+                 padding: 0;
+             }
+             .container {
+                 width: 90%;
+                 max-width: 700px;
+                 margin: 20px auto;
+                 padding: 20px;
+                 background: white;
+                 border-radius: 8px;
+                 box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+             }
+             h3 {
+                 color: #333;
+                 text-align: center;
+             }
+             h4 {
+                 color: #0056b3;
+             }
+             .confidence-score {
+                 font-weight: bold;
+             }
+             .confidence-high { color: green; }
+             .confidence-medium { color: orange; }
+             .confidence-low { color: red; }
+             pre {
+                 background-color: #eef;
+                 padding: 10px;
+                 border-radius: 5px;
+                 white-space: pre-wrap;
+             }
+             .issues, .confidence-box {
+                 padding: 15px;
+                 border-radius: 8px;
+             }
+             .confidence-box { background: #eef5ff; }
+             .issues { background: #ffecec; }
+         </style>
+ 
+         <div class="container">
+             <h3>Parsed Data for {{ filename }}</h3>
+ 
+             {% if data.confidence_assessment %}
+                 <div class="confidence-box">
+                     <h4>Confidence Assessment</h4>
+                     <p><strong>Score:</strong> 
+                         <span class="confidence-score 
+                             {% if data.confidence_assessment.confidence_score >= 0.75 %} confidence-high
+                             {% elif data.confidence_assessment.confidence_score >= 0.5 %} confidence-medium
+                             {% else %} confidence-low
+                             {% endif %}">
+                             {{ (data.confidence_assessment.confidence_score * 100)|round(2) }}%
+                         </span>
+                     </p>
+                     <p><strong>Explanation:</strong> {{ data.confidence_assessment.explanation }}</p>
+ 
+                     {% if data.confidence_assessment.key_strengths %}
+                         <h4>Key Strengths</h4>
+                         <ul>
+                             {% for strength in data.confidence_assessment.key_strengths %}
+                             <li>{{ strength }}</li>
+                             {% endfor %}
+                         </ul>
+                     {% endif %}
+ 
+                     {% if data.confidence_assessment.key_limitations %}
+                         <h4>Key Limitations</h4>
+                         <ul>
+                             {% for limitation in data.confidence_assessment.key_limitations %}
+                             <li>{{ limitation }}</li>
+                             {% endfor %}
+                         </ul>
+                     {% endif %}
+                 </div>
+             {% endif %}
+ 
+             {% if data.numerical_values %}
+                 <h4>Numerical Values</h4>
+                 <pre>{{ data.numerical_values | join(", ") }}</pre>
+             {% endif %}
+ 
+             {% if data.metadata %}
+                 <h4>Metadata</h4>
+                 <pre>{{ data.metadata | tojson(indent=2) }}</pre>
+             {% endif %}
+ 
+             {% if data.issues %}
+                 <div class="issues">
+                     <h4>Issues</h4>
+                     <ul>
+                         {% for issue in data.issues %}
+                         <li>{{ issue }}</li>
+                         {% endfor %}
+                     </ul>
+                 </div>
+             {% endif %}
+         </div>
+         """
+ 
+         template = Template(TEMPLATE)
+         rendered_html = template.render(data=parsed_data, filename=filename)
+ 
+         # Ensure Streamlit renders full HTML properly
+         components.html(rendered_html, height=500, scrolling=True)
+ 
+     # Raw JSON data in a separate tab
+     with raw_data_tab:
+         st.caption("Complete data structure returned by the parser")
+         st.json(parsed_data)
+ 
+ def load_or_create_infact_node(db, hypothesis_id, provider, model, api_key):
+     """
+     Loads an existing InFactNode or creates a new one.
+     
+     Args:
+         db: MongoDB database connection
+         hypothesis_id: The ID of the hypothesis
+         provider: LLM provider name ('anthropic', 'gpt', 'deepseek')
+         model: Model name
+         api_key: API key for the provider
+         
+     Returns:
+         tuple: (node, temp_file_path)
+     """
+     try:
+         # Check if a node state exists for this hypothesis
+         node_entry = db.node_states.find_one({
+             "hypothesis_id": str(hypothesis_id),
+             "provider": provider
+         })
+ 
+         # Create a temp directory for storing node state
+         temp_dir = tempfile.mkdtemp()
+         temp_file_path = os.path.join(temp_dir, f"node_state_{provider}_{hypothesis_id}.json")
+ 
+         if node_entry and "state" in node_entry:
+             # Write node state to temp file
+             st.info(f"Found existing {provider.capitalize()} node for this hypothesis. Loading...")
+             with open(temp_file_path, "w") as f:
+                 json.dump(node_entry["state"], f)
+ 
+             # Load node from temp file
+             if provider.lower() == "anthropic":
+                 node = InFactNode.load(temp_file_path, "anthropic", api_key, model)
+             elif provider.lower() == "gpt" or provider.lower() == "openai":
+                 node = InFactNode.load(temp_file_path, "openai", api_key, model)
+             elif provider.lower() == "deepseek":
+                 node = InFactNode.load(temp_file_path, "deepseek", api_key, model)
+             else:
+                 raise ValueError(f"Unsupported provider: {provider}")
+ 
+         else:
+             # Get hypothesis text
+             hypothesis_entry = db.hypotheses.find_one({"_id": hypothesis_id})
+             if not hypothesis_entry:
+                 raise ValueError(f"Hypothesis with ID {hypothesis_id} not found")
+ 
+             hypothesis_text = hypothesis_entry["text"]
+             st.info(f"Creating new {provider.capitalize()} node for this hypothesis")
+ 
+             # Create new node
+             if provider.lower() == "anthropic":
+                 node = InFactNode.create_with_anthropic(
+                     hypothesis=hypothesis_text, 
+                     api_key=api_key, 
+                     model=model
+                 )
+             elif provider.lower() == "gpt" or provider.lower() == "openai":
+                 node = InFactNode.create_with_openai(
+                     hypothesis=hypothesis_text, 
+                     api_key=api_key, 
+                     model=model
+                 )
+             elif provider.lower() == "deepseek":
+                 from InFact.providers.deepseek_provider import DeepSeekProvider
+                 deepseek_provider = DeepSeekProvider(api_key=api_key, model=model)
+                 node = InFactNode(
+                     hypothesis=hypothesis_text,
+                     llm_provider=deepseek_provider
+                 )
+             else:
+                 raise ValueError(f"Unsupported provider: {provider}")
+ 
+         return node, temp_file_path
+ 
+     except Exception as e:
+         st.error(f"Error loading/creating InFactNode: {str(e)}")
+         import traceback
+         st.error(traceback.format_exc())
+         raise
+ 
+ def display_file_upload_step(db, fs, hypothesis_collection):
+     """
+     Handles Step 4: File Upload and Processing
+     
+     Args:
+         db: MongoDB database connection
+         fs: GridFS instance
+         hypothesis_collection: MongoDB collection for hypotheses
+         parse_data: Function to parse uploaded files
+         
+     Returns:
+         str: Navigation action - "back", "next", or None
+     """
+     # 1. HEADER SECTION
+     st.markdown("### :orange[Upload Files for Your Hypothesis]")
+ 
+     # Get hypothesis information 
+     hypothesis_id = st.session_state.get("hypothesis_id", None)
+ 
+     # Check if we have hypothesis_id in session state
+     if not hypothesis_id:
+         # Also check hypothesis_id_input as fallback
+         hypothesis_id = st.session_state.get("hypothesis_id_input", "").strip()
+         if hypothesis_id:
+             st.warning(f"Using hypothesis ID from input field: {hypothesis_id}")
+             # Save it properly to session state
+             st.session_state["hypothesis_id"] = hypothesis_id
+         else:
+             col1, col2 = st.columns([1, 1])
+             with col1:
+                 st.warning("No Hypothesis ID found in session. Please go back to Step 2.")
+                 if st.button("← Back to Hypothesis Setup"):
+                     return "back"
+             st.stop()
+ 
+     # Get the current hypothesis text from DB
+     hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
+     if not hypothesis_entry:
+         col1, col2 = st.columns([1, 1])
+         with col1:
+             st.error(f"Could not find hypothesis with ID '{hypothesis_id}' in database.")
+             if st.button("← Back to Hypothesis Setup"):
+                 return "back"
+         st.stop()
+ 
+     hypothesis_text = hypothesis_entry["text"]
+     st.session_state["hypothesis_text"] = hypothesis_text
+ 
+     # Simple hypothesis display
+     st.write(f"**Hypothesis ID:** `{hypothesis_id}`")
+     st.write(f"**Hypothesis:** {hypothesis_text}")
+     st.divider()
+ 
+     # Get or create InFactNode (only once per session)
+     if "infact_node" not in st.session_state:
+         provider = st.session_state.get("provider", "anthropic")  # Default to anthropic if not set
+         model = st.session_state.get("model", "claude-3-5-sonnet")  # Default model
+         api_key = st.session_state.get("api_key", "")
+ 
+         try:
+             # Load or create InFactNode
+             node, temp_file_path = load_or_create_infact_node(
+                 db=db,
+                 hypothesis_id=hypothesis_id,
+                 provider=provider,
+                 model=model,
+                 api_key=api_key
+             )
+             # Store in session state
+             st.session_state["infact_node"] = node
+             st.session_state["node_temp_path"] = temp_file_path
+             st.success(f"Successfully loaded {provider.capitalize()} model for analysis")
+         except Exception as e:
+             st.error(f"Failed to initialize {provider} model: {str(e)}")
+ 
+     # 2. FILE LISTING SECTION
+     st.markdown("### :orange[Current Files]")
+ 
+     # Get existing files for this hypothesis, excluding node state and rendered hypothesis files
+     existing_files = list(db.fs.files.find({
+         "metadata.hypothesis_id": hypothesis_id,
+         "filename": {"$not": {"$regex": "node_state|rendered_hypothesis"}}
+     }))
+ 
+     # Check for unprocessed or ready_for_analysis files
+     unprocessed_files = [f for f in existing_files if f.get("status") == "unprocessed"]
+     processed_files = [f for f in existing_files if f.get("status") == "ready_for_analysis" and 
+                       f.get("parsing_complete", False)]
+ 
+     if existing_files:
+         st.caption(f"{len(existing_files)} file(s) associated with this hypothesis")
+ 
+         # Create a scrollable container
+         file_container = st.container(height=250, border=True)
+ 
+         # Display files within the scrollable container
+         with file_container:
+             for idx, file in enumerate(existing_files):
+                 file_id = file["_id"]
+                 filename = file["filename"]
+ 
+                 # Create a row for each file
+                 col1, col2, col3 = st.columns([3, 3, 1])
+ 
+                 # File name column
+                 with col1:
+                     st.write(f"**{filename}**")
+ 
+                 # Status column
+                 with col2:
+                     if file.get("status") == "ready_for_analysis" and file.get("parsing_complete", False):
+                         st.markdown("<span style='color:green'>✅ Ready for Analysis</span>", unsafe_allow_html=True)
+                     elif file.get("status") == "processing":
+                         st.markdown("<span style='color:orange'>⏳ Processing</span>", unsafe_allow_html=True)
+                     else:
+                         st.markdown("<span style='color:#888'>⚪ Unprocessed</span>", unsafe_allow_html=True)
+ 
+                 # Action column
+                 with col3:
+                     if st.button("Delete", key=f"delete_{idx}", use_container_width=True):
+                         if delete_file(db, fs, file_id):
+                             st.rerun()
+ 
+                 # Add a separator between files
+                 if idx < len(existing_files) - 1:
+                     st.divider()
+     else:
+         st.info("No files uploaded yet. Upload your first file below.")
+ 
+     st.divider()
+ 
+     # 3. FILE UPLOAD SECTION
+     st.markdown("### :orange[Upload New File]")
+ 
+     # Track if we're currently parsing
+     is_parsing = st.session_state.get("is_parsing", False)
+ 
+     # Only show the "Process Existing File" flow if we have unprocessed files
+     # AND we're not already parsing a file AND we're not showing file upload yet
+     show_file_upload = True
+     if unprocessed_files and not is_parsing and not st.session_state.get("show_upload_form", False):
+         st.warning(f"You have {len(unprocessed_files)} unprocessed file(s). Please process them before uploading new files.")
+ 
+         # Show option to process existing unprocessed files
+         if st.button("Process Existing File", key="process_existing"):
+             # Get the first unprocessed file
+             file_to_process = unprocessed_files[0]
+             st.session_state["current_file_id"] = file_to_process["_id"]
+             st.session_state["current_filename"] = file_to_process["filename"]
+             st.session_state["is_parsing"] = True
+             st.rerun()
+         # Don't show file upload in this case
+         show_file_upload = False
+     else:
+         # Set the flag to show we're past the unprocessed files step
+         st.session_state["show_upload_form"] = True
+ 
+     # Allow file upload only if no files are currently being processed and we should show the upload form
+     if show_file_upload:
+         if is_parsing:
+             st.info("Processing a file. Please wait until processing completes.")
+         else:
+             st.write("You can upload one file at a time. Please wait for processing to complete before uploading another file.")
+             # File uploader
+             uploaded_file = st.file_uploader("Select a file to upload", type=["txt", "pdf", "png", "jpg", "html", "csv"])
+ 
+             # Logic for handling file upload
+             if uploaded_file:
+                 file_name = uploaded_file.name
+                 print(f"DEBUG - User selected file: '{file_name}'")
+ 
+                 # Check if this file already exists for THIS hypothesis
+                 existing_filenames = [file["filename"] for file in existing_files]
+                 is_duplicate = file_name in existing_filenames
+ 
+                 if is_duplicate:
+                     st.warning(f"A file named '{file_name}' already exists for this hypothesis. Please choose a different file.")
+                 else:
+                     # Show upload button if not a duplicate
+                     if st.button("Upload File", key="upload_button"):
+                         print(f"DEBUG - Uploading file '{file_name}' for hypothesis ID '{hypothesis_id}'")
+                         # Read file content
+                         file_content = uploaded_file.read()
+ 
+                         # Save to GridFS
+                         file_id = fs.put(
+                             file_content,
+                             filename=file_name,
+                             metadata={
+                                 "hypothesis_id": hypothesis_id,
+                                 "hypothesis_text": hypothesis_text
+                             },
+                             status="unprocessed",  # Initial status
+                             upload_date=str(datetime.datetime.today()),
+                         )
+ 
+                         print(f"DEBUG - File successfully uploaded with ID: {file_id}")
+ 
+                         # Store file ID in session
+                         st.session_state["current_file_id"] = file_id
+                         st.session_state["current_filename"] = file_name
+                         st.session_state["is_parsing"] = True
+ 
+                         # Rerun to reflect state changes
+                         st.rerun()
+ 
+     # 4. FILE PROCESSING SECTION
+     parsed_data_displayed = False
+     if is_parsing and "current_file_id" in st.session_state:
+         st.divider()
+         st.markdown("### :orange[Processing File]")
+ 
+         file_id = st.session_state["current_file_id"]
+         filename = st.session_state["current_filename"]
+         print(f"DEBUG - Beginning to process file '{filename}' with ID {file_id}")
+ 
+         # Show processing indicator
+         with st.spinner(f"Processing file '{filename}'... Please wait"):
+             # Create temporary file
+             temp_dir = tempfile.gettempdir()
+             temp_file_path = os.path.join(temp_dir, filename)
+ 
+             # Get file content
+             with open(temp_file_path, "wb") as f:
+                 f.write(fs.get(ensure_object_id(file_id)).read())
+ 
+             print(f"DEBUG - Created temporary file at '{temp_file_path}'")
+ 
+             # Process the file
+             try:
+                 provider = st.session_state.get("provider")
+                 model = st.session_state.get("model")
+                 api_key = st.session_state.get("api_key")
+ 
+                 # Update DB to mark file as processing
+                 db.fs.files.update_one(
+                     {"_id": ensure_object_id(file_id)},
+                     {"$set": {"status": "processing"}}
+                 )
+ 
+                 print(f"DEBUG - Parsing file '{filename}' with provider '{provider}' and model '{model}'")
+ 
+                 # Parse data using the enhanced parser
+                 # Since we're importing parse_data directly from the module,
+                 # we need to ensure we pass all the required arguments
+ 
+ 
+                 parsed_data = parse_standalone(
+                     temp_file_path,
+                     hypothesis_text,
+                     provider,
+                     model,
+                     api_key
+                 )
+ 
+                 # Save parsed data to file record
+                 print(f"DEBUG - Saving parsed data for file '{filename}'")
+                 if save_parsed_data_to_file(db, file_id, parsed_data):
+                     st.success(f"File '{filename}' is now ready for analysis")
+ 
+                 # Clean up
+                 try:
+                     os.remove(temp_file_path)
+                     print(f"DEBUG - Removed temporary file '{temp_file_path}'")
+                 except Exception as e:
+                     print(f"DEBUG - Failed to remove temp file: {str(e)}")
+ 
+                 # Display parsed data
+                 st.divider()
+                 st.markdown("### :orange[Parsed Data]")
+                 render_parsed_data(parsed_data, filename)
+                 parsed_data_displayed = True
+ 
+                 # Mark parsing as complete
+                 st.session_state["is_parsing"] = False
+ 
+                 # Set a flag to trigger a single rerun after successful parsing
+                 if not st.session_state.get("parsed_data_rerun", False):
+                     st.session_state["parsed_data_rerun"] = True
+                     st.rerun()
+ 
+             except Exception as e:
+                 print(f"DEBUG - ERROR processing file '{filename}': {str(e)}")
+                 st.error(f"Error processing file: {str(e)}")
+                 st.session_state["is_parsing"] = False
+ 
+                 # Update DB to mark file as unprocessed again
+                 db.fs.files.update_one(
+                     {"_id": ensure_object_id(file_id)},
+                     {"$set": {"status": "unprocessed"}}
+                 )
+ 
+                 # Add option to delete if error occurred
+                 if st.button("Delete This File", key="delete_error"):
+                     if delete_file(db, fs, file_id):
+                         # Clean up session state
+                         for key in ["is_parsing", "current_file_id", "current_filename"]:
+                             if key in st.session_state:
+                                 del st.session_state[key]
+                         # Force refresh
+                         st.rerun()
+ 
+     # Reset rerun flag to prevent continuous reruns
+     if st.session_state.get("parsed_data_rerun", False):
+         st.session_state["parsed_data_rerun"] = False
+ 
+     # 5. DISPLAY MOST RECENT FILE'S PARSED DATA (if no current parsing)
+     if not parsed_data_displayed and not is_parsing and existing_files:
+         # Find the most recently uploaded file that has parsed data
+         recent_files = [f for f in existing_files if f.get("parsing_complete", False)]
+ 
+         if recent_files:
+             # Sort by upload date (newest first)
+             recent_files.sort(key=lambda x: x.get("upload_date", ""), reverse=False)
+             most_recent = recent_files[0]
+ 
+             if "parsed_data" in most_recent:
+                 st.divider()
+                 st.markdown("### :orange[Most Recently Parsed Data]")
+                 st.markdown(f"#### Showing data for: {most_recent['filename']}")
+                 render_parsed_data(most_recent["parsed_data"], most_recent["filename"])
+ 
+     # 6. NAVIGATION
+     st.divider()
+     col1, col2 = st.columns([1, 1])
+     with col1:
+         if st.button("← Back"):
+             # Clean up session state
+             for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
+                 if key in st.session_state:
+                     del st.session_state[key]
+ 
+             return "back"
+ 
+     with col2:
+         if st.button("Next →"):
+             # Clean up any temporary processing state
+             for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
+                 if key in st.session_state:
+                     del st.session_state[key]
+ 
+             return "next"
