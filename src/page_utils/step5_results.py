@@ -99,7 +99,7 @@ def display_results_step(db, fs, hypothesis_collection):
         margin-top: 10px;
     }
     </style>
-    """, unsafe_allow_html=True)
+    """, unsafe_allow_html=False)
     
     st.markdown("### :orange[Process Results and Visualization]")
     
