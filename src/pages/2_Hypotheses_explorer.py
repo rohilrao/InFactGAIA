@@ -48,22 +48,6 @@ if hypotheses:
         # Get all files for hypothesis
         all_files = list(db.fs.files.find(file_query))
         
-        # Group files by status
-        processed_files = []
-        unprocessed_files = []
-        ready_for_analysis_files = []
-        
-        for file in all_files:
-            status = file.get("status", "unknown")
-            filename = file.get("filename", "unnamed")
-            
-            if status == "processed":
-                processed_files.append(filename)
-            elif status == "unprocessed":
-                unprocessed_files.append(filename)
-            elif status == "ready_for_analysis":
-                ready_for_analysis_files.append(filename)
-        
         # Collapsible Hypothesis Section
         with st.expander(f"Hypothesis ID: `{hypothesis_id}`", expanded=False):
             # Display Hypothesis Text
@@ -72,21 +56,16 @@ if hypotheses:
             # File Status Summary
             st.write(f"**Files Attached:** {len(all_files)}")
             
-            # Display files by status
-            if processed_files:
-                st.write(f"**Processed Files ({len(processed_files)}):**")
-                for filename in processed_files:
-                    st.write(f"- `{filename}`")
-            
-            if ready_for_analysis_files:
-                st.write(f"**Ready for Analysis Files ({len(ready_for_analysis_files)}):**")
-                for filename in ready_for_analysis_files:
-                    st.write(f"- `{filename}`")
-            
-            if unprocessed_files:
-                st.write(f"**Unprocessed Files ({len(unprocessed_files)}):**")
-                for filename in unprocessed_files:
-                    st.write(f"- `{filename}`")
+            if all_files:
+                # Create a scrollable container for files
+                with st.container(height=200, border=True):
+                    for file in all_files:
+                        filename = file.get("filename", "unnamed")
+                        status = file.get("status", "unknown")
+                        # Display file with status in a clean format
+                        st.write(f"`{filename}` — Status: `{status}`")
+            else:
+                st.write("No files attached to this hypothesis.")
             
             # Find latest node state and rendered HTML
             latest_node_state = db.fs.files.find_one({
