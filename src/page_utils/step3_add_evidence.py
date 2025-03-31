@@ -338,8 +338,11 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
     # 2. FILE LISTING SECTION
     st.markdown("### :orange[Current Files]")
     
-    # Get existing files for this hypothesis
-    existing_files = list(db.fs.files.find({"metadata.hypothesis_id": hypothesis_id}))
+    # Get existing files for this hypothesis, excluding node state and rendered hypothesis files
+    existing_files = list(db.fs.files.find({
+        "metadata.hypothesis_id": hypothesis_id,
+        "filename": {"$not": {"$regex": "node_state|rendered_hypothesis"}}
+    }))
     
     # Check for unprocessed or ready_for_analysis files
     unprocessed_files = [f for f in existing_files if f.get("status") == "unprocessed"]
