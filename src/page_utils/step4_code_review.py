@@ -127,12 +127,9 @@ def display_code_review_step(db, fs, hypothesis_collection):
         
         # Get files that are ready for analysis (have parsed data)
         ready_files = list(db.fs.files.find({
-            "metadata.hypothesis_id": hypothesis_id, 
-            "$or": [
-                {"status": "ready_for_analysis"},
-                {"parsing_complete": True}
-            ]
-        }))
+                    "metadata.hypothesis_id": hypothesis_id, 
+                    "status": "ready_for_analysis"  # Only this specific status
+                    }))
         
         if not ready_files:
             st.warning("No files ready for analysis. Please upload and process files in the previous step.")

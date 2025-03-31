@@ -514,6 +514,40 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                     model,
                     api_key
                 )
+                # Extract metadata
+                from InFact.utils.metadata_extractor import extract_metadata
+                file_metadata = extract_metadata(temp_file_path, node.logger)
+
+                # Add metadata to parsed_data
+                if 'metadata' not in parsed_data:
+                    parsed_data['metadata'] = {}
+                parsed_data['metadata'].update(file_metadata)
+                    
+                # Check for redundancy if we have an infact_node
+                if 'infact_node' in st.session_state and parsed_data:
+                    from InFact.utils.redundancy_checker import is_redundant
+                    node = st.session_state['infact_node']
+                    
+                    # Check if data is redundant with existing data points
+                    if is_redundant(parsed_data, node.data_points, node.llm_provider, node.logger):
+                        st.warning("This file contains redundant information. Please upload a different file.")
+                        
+                        # Mark file as redundant in DB
+                        db.fs.files.update_one(
+                            {"_id": ensure_object_id(file_id)},
+                            {"$set": {"status": "redundant"}}
+                        )
+                        
+                        st.session_state["is_parsing"] = False
+                        
+                        if st.button("Delete Redundant File", key="delete_redundant"):
+                            if delete_file(db, fs, file_id):
+                                for key in ["is_parsing", "current_file_id", "current_filename"]:
+                                    if key in st.session_state:
+                                        del st.session_state[key]
+                                st.rerun()
+                        
+                        st.stop()  # Stop further processing
                 
                 # Save parsed data to file record
                 print(f"DEBUG - Saving parsed data for file '{filename}'")
