@@ -323,6 +323,13 @@ def display_results_step(db, fs, hypothesis_collection):
                 {"$set": {"status": "processed"}}
             )
             
+            # Get the updated file status from the database
+            updated_file = db.fs.files.find_one({"_id": ensure_object_id(file_id)})
+            current_status = updated_file.get("status", "unknown")
+            
+            # Display file processing status with current status from database
+            st.success(f"✅ Processing for file '{file_path}' is completed. Current status: {current_status}")
+            
             # Display results
             st.markdown('<div class="results-container">', unsafe_allow_html=True)
             st.write("### Analysis Results")
