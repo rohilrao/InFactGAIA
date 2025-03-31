@@ -26,45 +26,55 @@ def ensure_object_id(id_value):
     # Return the original value if conversion failed or wasn't needed
     return id_value
 
-# Add some custom CSS
+# Add minimal CSS - consistent font sizes and subtle colors
 st.markdown("""
 <style>
-    .hyp-header {
-        color: #FF8800;
-        font-size: 1rem;
-        font-weight: bold;
+    /* Set consistent text properties */
+    .streamlit-expanderHeader {
+        font-size: 1rem !important;
+        font-weight: normal !important;
+    }
+    .stExpander {
+        border: none !important;
+    }
+    .hyp-text {
+        font-size: 0.95rem;
+        margin-bottom: 0.5rem;
+    }
+    .file-container {
+        padding: 0.5rem;
+        margin-top: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .file-item {
+        font-size: 0.95rem;
+        margin-bottom: 0.2rem;
+        display: flex;
+        justify-content: space-between;
     }
     .file-name {
-        color: #3498db;
-        font-weight: 500;
+        color: #d6d6d6;
     }
-    .status-processed {
-        color: #27ae60;
-        font-weight: 500;
+    .status {
+        color: #a0a0a0;
     }
-    .status-ready {
-        color: #f39c12;
-        font-weight: 500;
-    }
-    .status-unprocessed {
-        color: #7f8c8d;
-        font-weight: 500;
-    }
-    .status-unknown {
-        color: #95a5a6;
-        font-weight: 500;
+    .section-header {
+        font-size: 0.95rem;
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+        color: #d6d6d6;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Hypothesis Explorer Page
-st.markdown("### :orange[Hypothesis Explorer]")
+st.markdown("### Hypothesis Explorer")
 
 # Fetch all stored hypotheses
 hypotheses = list(hypothesis_collection.find({}))
 
 if hypotheses:
-    st.write(f"**Total Hypotheses:** {len(hypotheses)}")
+    st.write(f"Total Hypotheses: {len(hypotheses)}")
 
     for hypothesis in hypotheses:
         hypothesis_id = hypothesis["_id"]
@@ -82,31 +92,26 @@ if hypotheses:
         # Collapsible Hypothesis Section
         with st.expander(f"Hypothesis ID: {hypothesis_id}", expanded=False):
             # Display Hypothesis Text and File Count with consistent styling
-            st.markdown(f'<span class="hyp-header">Hypothesis:</span> {hypothesis_text}', unsafe_allow_html=True)
-            st.markdown(f'<span class="hyp-header">Files Attached:</span> {len(all_files)}', unsafe_allow_html=True)
+            st.markdown(f'<div class="hyp-text">Hypothesis: {hypothesis_text}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="hyp-text">Files Attached: {len(all_files)}</div>', unsafe_allow_html=True)
             
             if all_files:
                 # Create a scrollable container for files
-                with st.container(height=200, border=True):
+                with st.container(height=150, border=False):
+                    st.markdown('<div class="file-container">', unsafe_allow_html=True)
                     for file in all_files:
                         filename = file.get("filename", "unnamed")
                         status = file.get("status", "unknown")
                         
-                        # Apply different styling based on status
-                        status_class = "status-unknown"
-                        if status == "processed":
-                            status_class = "status-processed"
-                        elif status == "ready_for_analysis":
-                            status_class = "status-ready"
-                        elif status == "unprocessed":
-                            status_class = "status-unprocessed"
-                        
-                        # Display file with colored status (without "Status:" prefix)
+                        # Simplified file display
                         st.markdown(
-                            f'<span class="file-name">{filename}</span> — '
-                            f'<span class="{status_class}">{status}</span>',
+                            f'<div class="file-item">'
+                            f'<span class="file-name">{filename}</span>'
+                            f'<span class="status">{status}</span>'
+                            f'</div>',
                             unsafe_allow_html=True
                         )
+                    st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.write("No files attached to this hypothesis.")
             
@@ -124,7 +129,7 @@ if hypotheses:
             })
             
             # Download buttons with consistent styling
-            st.markdown('<span class="hyp-header">Analysis Downloads:</span>', unsafe_allow_html=True)
+            st.markdown('<div class="section-header">Analysis Downloads</div>', unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             
             with col1:
@@ -136,7 +141,8 @@ if hypotheses:
                         data=node_state_data,
                         file_name=f"hypothesis_{hypothesis_id}_state.json",
                         mime="application/json",
-                        key=f"node_state_{hypothesis_id}"
+                        key=f"node_state_{hypothesis_id}",
+                        use_container_width=True
                     )
                 else:
                     st.info("No node state available")
@@ -150,7 +156,8 @@ if hypotheses:
                         data=html_data,
                         file_name=f"hypothesis_{hypothesis_id}_visualization.html",
                         mime="text/html",
-                        key=f"html_{hypothesis_id}"
+                        key=f"html_{hypothesis_id}",
+                        use_container_width=True
                     )
                 else:
                     st.info("No visualization available")
