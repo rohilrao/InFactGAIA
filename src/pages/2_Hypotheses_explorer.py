@@ -26,6 +26,35 @@ def ensure_object_id(id_value):
     # Return the original value if conversion failed or wasn't needed
     return id_value
 
+# Add some custom CSS
+st.markdown("""
+<style>
+    .hypothesis-id {
+        font-weight: bold;
+        color: #2c3e50;
+    }
+    .file-name {
+        color: #34495e;
+    }
+    .status-processed {
+        color: #27ae60;
+        font-weight: 500;
+    }
+    .status-ready {
+        color: #f39c12;
+        font-weight: 500;
+    }
+    .status-unprocessed {
+        color: #7f8c8d;
+        font-weight: 500;
+    }
+    .status-unknown {
+        color: #95a5a6;
+        font-weight: 500;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Hypothesis Explorer Page
 st.markdown("### :orange[Hypothesis Explorer]")
 
@@ -49,7 +78,7 @@ if hypotheses:
         all_files = list(db.fs.files.find(file_query))
         
         # Collapsible Hypothesis Section
-        with st.expander(f"Hypothesis ID: `{hypothesis_id}`", expanded=False):
+        with st.expander(f"Hypothesis ID: {hypothesis_id}", expanded=False):
             # Display Hypothesis Text
             st.write(f"**Hypothesis:** {hypothesis_text}")
 
@@ -62,8 +91,22 @@ if hypotheses:
                     for file in all_files:
                         filename = file.get("filename", "unnamed")
                         status = file.get("status", "unknown")
-                        # Display file with status in a clean format
-                        st.write(f"`{filename}` — Status: `{status}`")
+                        
+                        # Apply different styling based on status
+                        status_class = "status-unknown"
+                        if status == "processed":
+                            status_class = "status-processed"
+                        elif status == "ready_for_analysis":
+                            status_class = "status-ready"
+                        elif status == "unprocessed":
+                            status_class = "status-unprocessed"
+                        
+                        # Display file with colored status
+                        st.markdown(
+                            f'<span class="file-name">{filename}</span> — '
+                            f'Status: <span class="{status_class}">{status}</span>',
+                            unsafe_allow_html=True
+                        )
             else:
                 st.write("No files attached to this hypothesis.")
             
