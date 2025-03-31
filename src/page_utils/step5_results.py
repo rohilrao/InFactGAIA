@@ -101,7 +101,7 @@ def display_results_step(db, fs, hypothesis_collection):
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("### :green[Process Results and Visualization]")
+    st.markdown("### :orange[Process Results and Visualization]")
     
     # Get hypothesis information
     hypothesis_id = st.session_state.get("hypothesis_id", None)
@@ -123,7 +123,7 @@ def display_results_step(db, fs, hypothesis_collection):
     hypothesis_description = hypothesis_entry.get("description", "No description provided")
     
     # Display hypothesis info
-    st.markdown('<div class="hypothesis-card">', unsafe_allow_html=True)
+    st.markdown('<div class="hypothesis-card">', unsafe_allow_html=False)
     st.write(f"**Hypothesis ID:** `{hypothesis_id}`")
     st.write(f"**Hypothesis:** {hypothesis_text}")
     st.write(f"**Description:** {hypothesis_description}")
