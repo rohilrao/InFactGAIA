@@ -381,9 +381,11 @@ def display_file_upload_step(db, fs, hypothesis_collection):
 
                 # Action column
                 with col3:
-                    if st.button("Delete", key=f"delete_{idx}", use_container_width=True):
-                        if delete_file(db, fs, file_id):
-                            st.rerun()
+                    # Only show delete button if status is not "processed"
+                    if file.get("status") != "processed":
+                        if st.button("Delete", key=f"delete_{idx}", use_container_width=True):
+                            if delete_file(db, fs, file_id):
+                                st.rerun()
 
                 # Add a separator between files
                 if idx < len(existing_files) - 1:
