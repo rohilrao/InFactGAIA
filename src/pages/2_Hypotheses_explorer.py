@@ -4,7 +4,7 @@ import gridfs
 from pymongo.server_api import ServerApi
 from bson.objectid import ObjectId
 
-# 🔐 MongoDB Connection
+# MongoDB Connection
 @st.cache_resource
 def get_db_client():
     MONGO_URI = st.secrets["MONGO_URI"]
@@ -26,20 +26,20 @@ def ensure_object_id(id_value):
     # Return the original value if conversion failed or wasn't needed
     return id_value
 
-# 📌 Hypothesis Explorer Page
+# Hypothesis Explorer Page
 st.markdown("### :orange[Hypothesis Explorer]")
 
-# 📡 Fetch all stored hypotheses
+# Fetch all stored hypotheses
 hypotheses = list(hypothesis_collection.find({}))
 
 if hypotheses:
-    st.write(f"**Total Number of Hypotheses Currently Stored:** {len(hypotheses)}")
+    st.write(f"**Total Hypotheses:** {len(hypotheses)}")
 
     for hypothesis in hypotheses:
         hypothesis_id = hypothesis["_id"]
         hypothesis_text = hypothesis["text"]
         
-        # 📂 Count files specifically excluding node_state and rendered analysis files
+        # Count files specifically excluding node_state and rendered analysis files
         file_query = {
             "metadata.hypothesis_id": str(hypothesis_id),
             "filename": {"$not": {"$regex": "node_state|rendered_hypothesis"}}
@@ -53,16 +53,14 @@ if hypotheses:
         unprocessed_files = sum(1 for file in all_files if file.get("status") == "unprocessed")
         ready_for_analysis = sum(1 for file in all_files if file.get("status") == "ready_for_analysis")
         
-        # 📌 Collapsible Hypothesis Section
-        with st.expander(f"**Hypothesis ID: `{hypothesis_id}`**", expanded=False):
-            # 📌 Display Hypothesis Text
-            st.write(f"**Hypothesis Text:**\n\n{hypothesis_text}")
+        # Collapsible Hypothesis Section
+        with st.expander(f"Hypothesis ID: `{hypothesis_id}`", expanded=False):
+            # Display Hypothesis Text
+            st.write(f"**Hypothesis:** {hypothesis_text}")
 
-            # 📊 File Status Summary
-            st.write(f"📂 **Files Attached:** {len(all_files)}")
-            st.write(f"✅ **Processed:** {processed_files}")
-            st.write(f"🔍 **Ready for Analysis:** {ready_for_analysis}")
-            st.write(f"⏳ **Unprocessed:** {unprocessed_files}")
+            # File Status Summary
+            st.write(f"**Files Attached:** {len(all_files)}")
+            st.write(f"**Status:** `Processed: {processed_files}` | `Ready for Analysis: {ready_for_analysis}` | `Unprocessed: {unprocessed_files}`")
             
             # Find latest node state and rendered HTML
             latest_node_state = db.fs.files.find_one({
@@ -78,7 +76,7 @@ if hypotheses:
             })
             
             # Download buttons
-            st.write("### Download Latest Analysis")
+            st.write("**Analysis Downloads:**")
             col1, col2 = st.columns(2)
             
             with col1:
@@ -86,7 +84,7 @@ if hypotheses:
                     # Get the file data
                     node_state_data = fs.get(ensure_object_id(latest_node_state["_id"])).read()
                     st.download_button(
-                        label="📊 Download Node State (JSON)",
+                        label="Download Node State (JSON)",
                         data=node_state_data,
                         file_name=f"hypothesis_{hypothesis_id}_state.json",
                         mime="application/json",
@@ -100,7 +98,7 @@ if hypotheses:
                     # Get the file data
                     html_data = fs.get(ensure_object_id(latest_html["_id"])).read()
                     st.download_button(
-                        label="📈 Download Visualization (HTML)",
+                        label="Download Visualization (HTML)",
                         data=html_data,
                         file_name=f"hypothesis_{hypothesis_id}_visualization.html",
                         mime="text/html",
@@ -110,4 +108,4 @@ if hypotheses:
                     st.info("No visualization available")
 
 else:
-    st.warning("⚠️ No hypotheses found in the database.")
+    st.warning("No hypotheses found in the database.")
