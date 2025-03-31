@@ -579,7 +579,7 @@ def display_file_upload_step(db, fs, hypothesis_collection, parse_data):
             if "parsed_data" in most_recent:
                 st.divider()
                 st.markdown("### :orange[Most Recent Parsed Data]")
-                st.caption(f"Showing data for: {most_recent['filename']}")
+                st.markdown(f"#### <span style='color:orange;'>Showing data for: {most_recent['filename']}</span>", unsafe_allow_html=False)
                 render_parsed_data(most_recent["parsed_data"], most_recent["filename"])
     
     # 6. NAVIGATION
