@@ -99,7 +99,7 @@ def display_results_step(db, fs, hypothesis_collection):
         margin-top: 10px;
     }
     </style>
-    """, unsafe_allow_html=False)
+    """, unsafe_allow_html=True)
     
     st.markdown("### :orange[Process Results and Visualization]")
     
@@ -124,8 +124,7 @@ def display_results_step(db, fs, hypothesis_collection):
     
     # Display hypothesis info
     st.markdown('<div class="hypothesis-card">', unsafe_allow_html=True)
-    st.write("**Hypothesis ID:**")
-    st.code(hypothesis_id, language="text")
+    st.write("**Hypothesis ID:**", hypothesis_id)   
     st.write(f"**Hypothesis:** {hypothesis_text}")
     # Use Streamlit's container to close the hypothesis-card section
     st.container()
