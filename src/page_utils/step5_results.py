@@ -101,7 +101,7 @@ def display_results_step(db, fs, hypothesis_collection):
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("### :orange[Process Results and Visualization]")
+    st.markdown("### :orange[Process Results]")
     
     # Get hypothesis information
     hypothesis_id = st.session_state.get("hypothesis_id", None)
@@ -123,10 +123,9 @@ def display_results_step(db, fs, hypothesis_collection):
     hypothesis_description = hypothesis_entry.get("short_description", "No description provided")
     
     # Display hypothesis info
-    st.markdown("## Hypothesis Information")
+    st.write("Hypothesis Information:")
     st.write("**Hypothesis ID:**", hypothesis_id)   
     st.write(f"**Hypothesis:** {hypothesis_text}")
-    st.write(f"**Description:** {hypothesis_description}")
     st.markdown("---")
     
     # Get InFactNode and file information from session
