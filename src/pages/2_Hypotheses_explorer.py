@@ -29,12 +29,14 @@ def ensure_object_id(id_value):
 # Add some custom CSS
 st.markdown("""
 <style>
-    .hypothesis-id {
+    .hyp-header {
+        color: #FF8800;
+        font-size: 1rem;
         font-weight: bold;
-        color: #2c3e50;
     }
     .file-name {
-        color: #34495e;
+        color: #3498db;
+        font-weight: 500;
     }
     .status-processed {
         color: #27ae60;
@@ -79,11 +81,9 @@ if hypotheses:
         
         # Collapsible Hypothesis Section
         with st.expander(f"Hypothesis ID: {hypothesis_id}", expanded=False):
-            # Display Hypothesis Text
-            st.write(f"**Hypothesis:** {hypothesis_text}")
-
-            # File Status Summary
-            st.write(f"**Files Attached:** {len(all_files)}")
+            # Display Hypothesis Text and File Count with consistent styling
+            st.markdown(f'<span class="hyp-header">Hypothesis:</span> {hypothesis_text}', unsafe_allow_html=True)
+            st.markdown(f'<span class="hyp-header">Files Attached:</span> {len(all_files)}', unsafe_allow_html=True)
             
             if all_files:
                 # Create a scrollable container for files
@@ -101,10 +101,10 @@ if hypotheses:
                         elif status == "unprocessed":
                             status_class = "status-unprocessed"
                         
-                        # Display file with colored status
+                        # Display file with colored status (without "Status:" prefix)
                         st.markdown(
                             f'<span class="file-name">{filename}</span> — '
-                            f'Status: <span class="{status_class}">{status}</span>',
+                            f'<span class="{status_class}">{status}</span>',
                             unsafe_allow_html=True
                         )
             else:
@@ -123,8 +123,8 @@ if hypotheses:
                 "metadata.is_latest": True
             })
             
-            # Download buttons
-            st.write("**Analysis Downloads:**")
+            # Download buttons with consistent styling
+            st.markdown('<span class="hyp-header">Analysis Downloads:</span>', unsafe_allow_html=True)
             col1, col2 = st.columns(2)
             
             with col1:
