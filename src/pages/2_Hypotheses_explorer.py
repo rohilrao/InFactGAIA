@@ -26,66 +26,129 @@ def ensure_object_id(id_value):
     # Return the original value if conversion failed or wasn't needed
     return id_value
 
-# Add minimal CSS - consistent font sizes and subtle colors
+# Add Claude-inspired CSS - clean, minimal, and elegant
 st.markdown("""
 <style>
-    /* Set consistent text properties */
+    /* Set global text properties */
+    body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #2D3748;
+        background-color: #F7FAFC;
+    }
+    
+    /* Header styling */
+    .main-header {
+        color: #FF5733;
+        font-size: 1.75rem;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #EDF2F7;
+    }
+    
+    /* Expander styling */
     .streamlit-expanderHeader {
-        font-size: 0.95rem !important;
-        font-weight: normal !important;
+        font-size: 1rem !important;
+        font-weight: 500 !important;
+        color: #4A5568 !important;
+        background-color: #F7FAFC !important;
+        border-radius: 6px !important;
+        padding: 0.75rem 1rem !important;
     }
+    
     .stExpander {
-        border: none !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 6px !important;
+        margin-bottom: 1rem !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
     }
-    .hyp-text {
-        font-size: 0.95rem;
-        margin-bottom: 0.5rem;
-    }
-    .file-container {
-        margin-top: 0.5rem;
-        margin-bottom: 0.5rem;
-        border: 1px solid #333;
-        border-radius: 4px;
-        padding: 0.25rem;
-        max-height: 150px;
-        overflow-y: auto;
-    }
-    .file-item {
+    
+    /* Hypothesis styling */
+    .hyp-id {
         font-size: 0.85rem;
-        margin-bottom: 0.2rem;
-        padding: 0.15rem 0.25rem;
+        color: #718096;
+        margin-bottom: 0.5rem;
+    }
+    
+    .hyp-text {
+        font-size: 1rem;
+        margin-bottom: 1rem;
+        color: #2D3748;
+        line-height: 1.5;
+    }
+    
+    .hyp-meta {
+        font-size: 0.9rem;
+        color: #718096;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #EDF2F7;
+    }
+    
+    /* File container styling */
+    .file-container {
+        background-color: #F8F9FA;
+        border-radius: 5px;
+        padding: 0.75rem;
+        margin-top: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    
+    .file-item {
+        font-size: 0.9rem;
+        margin-bottom: 0.4rem;
         display: flex;
         justify-content: space-between;
+        padding: 0.4rem 0.5rem;
+        border-radius: 4px;
+        background-color: #FFFFFF;
+        border-left: 3px solid #CBD5E0;
     }
+    
     .file-name {
-        color: #e6e6e6;
+        color: #4A5568;
+        font-weight: 500;
     }
-    .status-processed {
-        color: #27ae60;
+    
+    .status {
+        color: #718096;
+        font-size: 0.85rem;
     }
-    .status-ready_for_analysis {
-        color: #f39c12;
-    }
-    .status-unprocessed {
-        color: #95a5a6;
-    }
-    .status-unknown {
-        color: #7f8c8d;
-    }
+    
+    /* Section headers */
     .section-header {
-        font-size: 0.95rem;
-        margin-top: 1rem;
-        margin-bottom: 0.5rem;
-        color: #ff8c00;
+        font-size: 1rem;
+        margin-top: 1.25rem;
+        margin-bottom: 0.75rem;
+        color: #4A5568;
+        font-weight: 500;
     }
-    .stDownloadButton > button {
-        font-size: 0.9rem !important;
+    
+    /* Button styling */
+    .stButton>button {
+        background-color: #F7FAFC;
+        border: 1px solid #E2E8F0;
+        color: #4A5568;
+        border-radius: 4px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    
+    .stButton>button:hover {
+        background-color: #EDF2F7;
+        border-color: #CBD5E0;
+    }
+    
+    /* Info message styling */
+    .stAlert {
+        border-radius: 4px;
+        padding: 0.75rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Hypothesis Explorer Page
-st.markdown("### Hypothesis Explorer")
+st.markdown('<div class="main-header">Hypothesis Explorer</div>', unsafe_allow_html=True)
 
 # Fetch all stored hypotheses
 hypotheses = list(hypothesis_collection.find({}))
@@ -107,40 +170,31 @@ if hypotheses:
         all_files = list(db.fs.files.find(file_query))
         
         # Collapsible Hypothesis Section
-        with st.expander(f"Hypothesis ID: {hypothesis_id}", expanded=False):
-            # Display Hypothesis Text and File Count with consistent styling
-            st.markdown(f'<div class="section-header">Hypothesis</div>', unsafe_allow_html=True)
+        with st.expander(f"Hypothesis {str(hypothesis_id)[-6:]}", expanded=False):
+            # Display Hypothesis ID, Text and File Count with Claude-inspired styling
+            st.markdown(f'<div class="hyp-id">ID: {hypothesis_id}</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="hyp-text">{hypothesis_text}</div>', unsafe_allow_html=True)
-            
-            st.markdown(f'<div class="section-header">Files Attached: {len(all_files)}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="hyp-meta">Files Attached: {len(all_files)}</div>', unsafe_allow_html=True)
             
             if all_files:
                 # Create a scrollable container for files
-                st.markdown('<div class="file-container">', unsafe_allow_html=True)
-                for file in all_files:
-                    filename = file.get("filename", "unnamed")
-                    status = file.get("status", "unknown")
-                    
-                    # Determine status class for color
-                    status_class = "status-unknown"
-                    if status == "processed":
-                        status_class = "status-processed"
-                    elif status == "ready_for_analysis":
-                        status_class = "status-ready_for_analysis"
-                    elif status == "unprocessed":
-                        status_class = "status-unprocessed"
-                    
-                    # Simplified file display with status color
-                    st.markdown(
-                        f'<div class="file-item">'
-                        f'<span class="file-name">{filename}</span>'
-                        f'<span class="{status_class}">{status}</span>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-                st.markdown('</div>', unsafe_allow_html=True)
+                with st.container(height=180, border=False):
+                    st.markdown('<div class="file-container">', unsafe_allow_html=True)
+                    for file in all_files:
+                        filename = file.get("filename", "unnamed")
+                        status = file.get("status", "unknown")
+                        
+                        # Improved file display
+                        st.markdown(
+                            f'<div class="file-item">'
+                            f'<span class="file-name">{filename}</span>'
+                            f'<span class="status">{status}</span>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+                    st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.write("No files attached to this hypothesis.")
+                st.info("No files attached to this hypothesis.")
             
             # Find latest node state and rendered HTML
             latest_node_state = db.fs.files.find_one({
