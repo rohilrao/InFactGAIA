@@ -37,7 +37,6 @@ infact_path = os.path.abspath(os.path.join(PROJECT_ROOT, "infact"))
 sys.path.append(infact_path)
 
 # Import from utils
-from utils import parse_data 
 from jinja2 import Template
 
 # Initialize session state for tracking progress
