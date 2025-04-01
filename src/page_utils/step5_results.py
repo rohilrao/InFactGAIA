@@ -267,49 +267,7 @@ def display_results_step(db, fs, hypothesis_collection):
                 {"_id": ensure_object_id(file_id)},
                 {"$set": {"node_state_file_id": str(file_state_id)}}
             )
-            
-            # Now handle the HTML rendering with a temporary directory
-            with tempfile.TemporaryDirectory() as temp_dir:
-                # Render HTML visualization
-                #renderer = InFactRenderer()
-                #html_output = renderer.render_analysis(node)
-                renderer = MongoInFactRenderer()
-                html_output = renderer.render_mongo_analysis(hypothesis_collection.find_one({"_id": hypothesis_id}))
-
-                
-                # Store HTML in session state for display and download
-                st.session_state["html_output"] = html_output
-                
-                # Save HTML to a temporary file
-                html_temp_path = os.path.join(temp_dir, f"hypothesis_{hypothesis_id}.html")
-                with open(html_temp_path, 'w', encoding='utf-8') as f:
-                    f.write(html_output)
-                
-                # Define HTML metadata
-                html_metadata = {
-                    "type": "rendered_html",
-                    "hypothesis_id": str(hypothesis_id),
-                    "file_id": str(file_id),
-                    "is_latest": True
-                }
-                
-                # Mark any previous "latest" HTML as not latest
-                db.fs.files.update_many(
-                    {"metadata.type": "rendered_html", "metadata.hypothesis_id": str(hypothesis_id)},
-                    {"$set": {"metadata.is_latest": False}}
-                )
-                
-                # Upload new HTML
-                with open(html_temp_path, 'rb') as f:
-                    html_file_id = fs.put(
-                        f,
-                        filename=f"rendered_hypothesis_{hypothesis_id}.html",
-                        content_type="text/html",
-                        metadata=html_metadata
-                    )
-            
-            
-            # Create the data point to be stored in MongoDB
+             # Create the data point to be stored in MongoDB
             mongo_data_point = {
                 'file_id': str(file_id),
                 'filename': file_path,
@@ -383,6 +341,49 @@ def display_results_step(db, fs, hypothesis_collection):
                 )
                 st.success(f"Added new data point for file {file_path} to the hypothesis")
 
+            
+            # Now handle the HTML rendering with a temporary directory
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Render HTML visualization
+                #renderer = InFactRenderer()
+                #html_output = renderer.render_analysis(node)
+                renderer = MongoInFactRenderer()
+                html_output = renderer.render_mongo_analysis(hypothesis_collection.find_one({"_id": hypothesis_id}))
+
+                
+                # Store HTML in session state for display and download
+                st.session_state["html_output"] = html_output
+                
+                # Save HTML to a temporary file
+                html_temp_path = os.path.join(temp_dir, f"hypothesis_{hypothesis_id}.html")
+                with open(html_temp_path, 'w', encoding='utf-8') as f:
+                    f.write(html_output)
+                
+                # Define HTML metadata
+                html_metadata = {
+                    "type": "rendered_html",
+                    "hypothesis_id": str(hypothesis_id),
+                    "file_id": str(file_id),
+                    "is_latest": True
+                }
+                
+                # Mark any previous "latest" HTML as not latest
+                db.fs.files.update_many(
+                    {"metadata.type": "rendered_html", "metadata.hypothesis_id": str(hypothesis_id)},
+                    {"$set": {"metadata.is_latest": False}}
+                )
+                
+                # Upload new HTML
+                with open(html_temp_path, 'rb') as f:
+                    html_file_id = fs.put(
+                        f,
+                        filename=f"rendered_hypothesis_{hypothesis_id}.html",
+                        content_type="text/html",
+                        metadata=html_metadata
+                    )
+            
+            
+           
             # Update the file status to "Processed"
             db.fs.files.update_one(
                 {"_id": ensure_object_id(file_id)},
