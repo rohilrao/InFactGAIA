@@ -41,18 +41,29 @@ def ensure_object_id(id_value):
 st.markdown("### :orange[Hypothesis Explorer]")
 
 # -------------------
-# Simple CSS for a scrollable file list container
+# CSS for a scrollable file list
 # -------------------
 st.markdown(
     """
     <style>
-    .file-container {
+    .scrollable-box {
        background-color: #f9f9f9;
        padding: 10px;
        border-radius: 5px;
        margin-bottom: 1rem;
-       max-height: 200px;    /* Limit the height to 200px */
+       max-height: 200px;    /* Limit the height for scrolling */
        overflow-y: auto;     /* Enable vertical scroll */
+    }
+    .file-item {
+       margin-bottom: 6px;
+    }
+    .filename {
+       color: blue;
+       font-weight: bold;
+    }
+    .status {
+       color: green;
+       font-weight: bold;
     }
     </style>
     """,
@@ -86,12 +97,20 @@ if hypotheses:
             st.markdown(f"**Files Attached:** {len(all_files)}")
             
             if all_files:
-                st.markdown('<div class="file-container">', unsafe_allow_html=True)
+                # Build an HTML string for the scrollable container
+                files_html = "<div class='scrollable-box'>"
                 for file in all_files:
                     filename = file.get("filename", "unnamed")
                     status = file.get("status", "unknown")
-                    st.markdown(f"**:blue[{filename}]** — :green[{status}]")
-                st.markdown('</div>', unsafe_allow_html=True)
+                    # Each file is a line with a blue filename & green status
+                    files_html += f"""
+                        <div class='file-item'>
+                            <span class='filename'>{filename}</span> — 
+                            <span class='status'>{status}</span>
+                        </div>
+                    """
+                files_html += "</div>"
+                st.markdown(files_html, unsafe_allow_html=True)
             else:
                 st.info("No files attached to this hypothesis.")
             
