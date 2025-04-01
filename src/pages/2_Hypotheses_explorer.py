@@ -41,16 +41,18 @@ def ensure_object_id(id_value):
 st.markdown("### :orange[Hypothesis Explorer]")
 
 # -------------------
-# Simple CSS for a subtle file list background
+# Simple CSS for a scrollable file list container
 # -------------------
 st.markdown(
     """
     <style>
     .file-container {
-       background-color: #f2f2f2;
+       background-color: #f9f9f9;
        padding: 10px;
        border-radius: 5px;
        margin-bottom: 1rem;
+       max-height: 200px;    /* Limit the height to 200px */
+       overflow-y: auto;     /* Enable vertical scroll */
     }
     </style>
     """,
