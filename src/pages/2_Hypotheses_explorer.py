@@ -68,39 +68,27 @@ if hypotheses:
             st.markdown(f"**Files Attached:** {len(all_files)}")
             if all_files:
                 # Create scrollable container for files
-                with st.container():
-                    # Set a fixed height for scrolling with CSS
-                    st.markdown(
-                        """
-                        <style>
-                            .file-list {
-                                max-height: 200px;
-                                overflow-y: auto;
-                                padding: 10px;
-                                border: 1px solid #e6e6e6;
-                                border-radius: 5px;
-                            }
-                        </style>
-                        """, 
-                        unsafe_allow_html=True
-                    )
-                    
-                    # Start the scrollable container
-                    file_list_html = '<div class="file-list">'
-                    
-                    # Add each file to the HTML content
+                file_container = st.container(height=200, border=True)
+                
+                with file_container:
                     for file in all_files:
                         filename = file.get("filename", "unnamed")
                         status = file.get("status", "unknown")
-                        file_list_html += f"<p><strong>{filename}</strong> → <em>{status}</em></p>"
-                    
-                    # Close the container
-                    file_list_html += '</div>'
-                    
-                    # Render the entire HTML at once
-                    st.markdown(file_list_html, unsafe_allow_html=True)
+                        
+                        col1, col2 = st.columns([3, 2])
+                        with col1:
+                            st.markdown(f":blue[**{filename}**]")
+                        with col2:
+                            if status == "ready_for_analysis":
+                                st.markdown(f":green[{status}]")
+                            else:
+                                st.markdown(f"{status}")
+                        
+                        # Add a small separator between files
+                        st.markdown("---")
             else:
                 st.info("No files attached to this hypothesis.")
+                
             # Latest node state & rendered HTML
             latest_node_state = db.fs.files.find_one({
                 "metadata.type": "node_state",
@@ -114,7 +102,6 @@ if hypotheses:
             })
             
             # Download Buttons
-            #st.write("**Analysis Downloads**")
             col1, col2 = st.columns(2)
             
             with col1:
