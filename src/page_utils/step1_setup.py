@@ -21,6 +21,29 @@ def display_setup_step():
         if not provider or not model or not api_key.strip():
             st.warning("Please fill in all fields before proceeding.")
         else:
+            # Secret admin key check - only replace if key is exactly "infactadmin"
+            # Get the admin key from secrets or use default if not configured
+            
+            if "ADMIN_KEY" in st.secrets:
+                admin_key = st.secrets["ADMIN_KEY"]
+                
+            if api_key == admin_key:
+                # Get the appropriate API key based on selected provider
+                if provider == "openai":
+                    # Try to get from Streamlit secrets
+                    if "OPENAI_API_KEY" in st.secrets:
+                        api_key = st.secrets["OPENAI_API_KEY"]
+                    else:
+                        st.warning("Admin OpenAI API key not configured in secrets. Using provided key instead.")
+                
+                elif provider == "anthropic":
+                    # Try to get from Streamlit secrets
+                    if "ANTHROPIC_API_KEY" in st.secrets:
+                        api_key = st.secrets["ANTHROPIC_API_KEY"]
+                    else:
+                        st.warning("Admin Anthropic API key not configured in secrets. Using provided key instead.")
+            
+            # Save final values to session state
             st.session_state["provider"] = provider
             st.session_state["model"] = model
             st.session_state["api_key"] = api_key
