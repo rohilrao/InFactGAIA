@@ -70,22 +70,30 @@ if hypotheses:
                 # Create scrollable container for files
                 file_container = st.container(height=200, border=True)
                 
+                # Custom CSS to reduce spacing between items
+                st.markdown("""
+                <style>
+                    .compact-items p {
+                        margin-bottom: 0px;
+                        padding-bottom: 0px;
+                    }
+                </style>
+                """, unsafe_allow_html=True)
+                
                 with file_container:
+                    # Add compact-items class to reduce vertical spacing
+                    st.markdown('<div class="compact-items">', unsafe_allow_html=True)
                     for file in all_files:
                         filename = file.get("filename", "unnamed")
                         status = file.get("status", "unknown")
                         
                         col1, col2 = st.columns([3, 2])
                         with col1:
-                            st.markdown(f":blue[**{filename}**]")
+                            st.markdown(f"**{filename}**")
                         with col2:
-                            if status == "ready_for_analysis":
-                                st.markdown(f":green[{status}]")
-                            else:
-                                st.markdown(f"{status}")
-                        
-                        # Add a small separator between files
-                        st.markdown("---")
+                            # Always show status in green as requested
+                            st.markdown(f":green[{status}]")
+                    st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.info("No files attached to this hypothesis.")
                 
