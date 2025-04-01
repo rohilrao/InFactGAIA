@@ -8,8 +8,9 @@ from bson.objectid import ObjectId
 # Streamlit Page Config
 # -------------------
 st.set_page_config(
-    page_title="Hypothesis Explorer",
-    layout="wide",  # "centered" also possible
+    page_title="InFactGAIAV3",
+    page_icon="📂",
+    layout="wide"
 )
 
 # -------------------
@@ -35,79 +36,42 @@ def ensure_object_id(id_value):
     return id_value
 
 # -------------------
-# Orange Header (Markdown H2)
+# Page Header
 # -------------------
-st.markdown(
-    "<h2 style='color: orange; font-family: Arial, sans-serif;'>Hypothesis Explorer</h2>",
-    unsafe_allow_html=True
-)
+st.markdown("### :orange[Hypothesis Explorer]")
 
 # -------------------
-# Minimalistic CSS
+# Minimal CSS (layout only; color handled inline below)
 # -------------------
 st.markdown(
     """
     <style>
-    /* Overall text properties */
+    /* General font family */
     body, [class^="st"], [data-testid="stForm"], [data-testid="stHeader"] {
         font-family: 'Arial', sans-serif;
     }
 
-    /* Adjust expander header styling */
-    .streamlit-expanderHeader {
-        font-size: 1rem !important;
-        font-weight: 500 !important;
-    }
-
-    /* Remove default expander borders */
+    /* Make expander content neat */
     .stExpander {
         border: none !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         margin-bottom: 0.5rem;
     }
 
-    /* Hypothesis text styling */
-    .hyp-text {
-        font-size: 0.95rem;
-        margin-bottom: 0.5rem;
-    }
-
-    /* File list container */
+    /* Scrollable container for files */
     .file-container {
+        background-color: #f9f9f9;
+        border-radius: 4px;
+        max-height: 200px;
+        overflow-y: auto;
         padding: 0.5rem;
         margin-top: 0.5rem;
         margin-bottom: 0.5rem;
-        max-height: 200px; /* scroll area limit */
-        overflow-y: auto;  /* scroll overflow */
-        background-color: #f9f9f9;
-        border-radius: 4px;
     }
 
-    /* Individual file item style */
+    /* Slight spacing for each file item */
     .file-item {
-        font-size: 0.95rem;
-        margin-bottom: 0.2rem;
-        display: flex;
-        justify-content: space-between;
-    }
-
-    /* File name color */
-    .file-name {
-        color: #333333;
-    }
-
-    /* Status color */
-    .status {
-        color: #888888;
-    }
-
-    /* Section header within expanders */
-    .section-header {
-        font-size: 0.95rem;
-        margin-top: 1rem;
-        margin-bottom: 0.5rem;
-        color: #666666;
-        font-weight: 600;
+        margin-bottom: 0.3rem;
     }
     </style>
     """,
@@ -120,30 +84,25 @@ st.markdown(
 hypotheses = list(hypothesis_collection.find({}))
 
 if hypotheses:
-    st.write(f"**Total Hypotheses:** {len(hypotheses)}")
+    st.markdown(f"**Total Hypotheses:** {len(hypotheses)}")
 
     for hypothesis in hypotheses:
         hypothesis_id = hypothesis["_id"]
         hypothesis_text = hypothesis["text"]
         
-        # Exclude node_state and rendered_html files
+        # Exclude node_state and rendered_hypothesis files
         file_query = {
             "metadata.hypothesis_id": str(hypothesis_id),
             "filename": {"$not": {"$regex": "node_state|rendered_hypothesis"}}
         }
         all_files = list(db.fs.files.find(file_query))
         
+        # Expander for each hypothesis
         with st.expander(f"Hypothesis ID: {hypothesis_id}", expanded=False):
-            st.markdown(
-                f'<div class="hyp-text"><strong>Hypothesis:</strong> {hypothesis_text}</div>',
-                unsafe_allow_html=True
-            )
-            st.markdown(
-                f'<div class="hyp-text"><strong>Files Attached:</strong> {len(all_files)}</div>',
-                unsafe_allow_html=True
-            )
+            st.markdown(f"**:orange[Hypothesis]:** {hypothesis_text}")
+            st.markdown(f"**:orange[Files Attached]:** {len(all_files)}")
             
-            # Display file list
+            # Display files if present
             if all_files:
                 st.markdown('<div class="file-container">', unsafe_allow_html=True)
                 for file in all_files:
@@ -151,8 +110,7 @@ if hypotheses:
                     status = file.get("status", "unknown")
                     st.markdown(
                         f'<div class="file-item">'
-                        f'<span class="file-name">{filename}</span>'
-                        f'<span class="status">{status}</span>'
+                        f':blue[{filename}] — :green[{status}]'
                         f'</div>',
                         unsafe_allow_html=True
                     )
@@ -160,7 +118,7 @@ if hypotheses:
             else:
                 st.info("No files attached to this hypothesis.")
             
-            # Latest node state and rendered HTML
+            # Retrieve latest node_state and HTML
             latest_node_state = db.fs.files.find_one({
                 "metadata.type": "node_state",
                 "metadata.hypothesis_id": str(hypothesis_id),
@@ -171,9 +129,9 @@ if hypotheses:
                 "metadata.hypothesis_id": str(hypothesis_id),
                 "metadata.is_latest": True
             })
-            
-            # Download Buttons
-            st.markdown('<div class="section-header">Analysis Downloads</div>', unsafe_allow_html=True)
+
+            # Analysis Downloads
+            st.markdown("### :orange[Analysis Downloads]")
             col1, col2 = st.columns(2)
             
             with col1:
@@ -188,7 +146,7 @@ if hypotheses:
                     )
                 else:
                     st.info("No node state available")
-            
+                
             with col2:
                 if latest_html:
                     html_data = fs.get(ensure_object_id(latest_html["_id"])).read()
