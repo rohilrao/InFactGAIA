@@ -68,19 +68,34 @@ if hypotheses:
             st.markdown(f"**Files Attached:** {len(all_files)}")
             
             if all_files:
-                # Build a DataFrame for files to let Streamlit auto-scroll
-                rows = []
-                for file in all_files:
-                    filename = file.get("filename", "unnamed")
-                    status = file.get("status", "unknown")
-                    rows.append({"File Name": filename, "Status": status})
-
-                df_files = pd.DataFrame(rows)
-                # height=200 => scroll if there are more rows than fit
-                st.dataframe(df_files, height=200)
+                # Create scrollable container for files
+                with st.container():
+                    file_container = st.container()
+                    # Set a fixed height for scrolling
+                    file_container.markdown(
+                        """
+                        <style>
+                            .file-list {
+                                max-height: 200px;
+                                overflow-y: auto;
+                                padding: 10px;
+                                border: 1px solid #e6e6e6;
+                                border-radius: 5px;
+                            }
+                        </style>
+                        """, 
+                        unsafe_allow_html=True
+                    )
+                    
+                    with file_container:
+                        st.markdown('<div class="file-list">', unsafe_allow_html=True)
+                        for file in all_files:
+                            filename = file.get("filename", "unnamed")
+                            status = file.get("status", "unknown")
+                            st.markdown(f"**{filename}** → *{status}*")
+                        st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.info("No files attached to this hypothesis.")
-            
             # Latest node state & rendered HTML
             latest_node_state = db.fs.files.find_one({
                 "metadata.type": "node_state",
