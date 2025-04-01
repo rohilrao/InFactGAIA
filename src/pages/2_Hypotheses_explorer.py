@@ -66,13 +66,11 @@ if hypotheses:
             
             # Simple count of files
             st.markdown(f"**Files Attached:** {len(all_files)}")
-            
             if all_files:
                 # Create scrollable container for files
                 with st.container():
-                    file_container = st.container()
-                    # Set a fixed height for scrolling
-                    file_container.markdown(
+                    # Set a fixed height for scrolling with CSS
+                    st.markdown(
                         """
                         <style>
                             .file-list {
@@ -87,13 +85,20 @@ if hypotheses:
                         unsafe_allow_html=True
                     )
                     
-                    with file_container:
-                        st.markdown('<div class="file-list">', unsafe_allow_html=True)
-                        for file in all_files:
-                            filename = file.get("filename", "unnamed")
-                            status = file.get("status", "unknown")
-                            st.markdown(f"**{filename}** → *{status}*")
-                        st.markdown('</div>', unsafe_allow_html=True)
+                    # Start the scrollable container
+                    file_list_html = '<div class="file-list">'
+                    
+                    # Add each file to the HTML content
+                    for file in all_files:
+                        filename = file.get("filename", "unnamed")
+                        status = file.get("status", "unknown")
+                        file_list_html += f"<p><strong>{filename}</strong> → <em>{status}</em></p>"
+                    
+                    # Close the container
+                    file_list_html += '</div>'
+                    
+                    # Render the entire HTML at once
+                    st.markdown(file_list_html, unsafe_allow_html=True)
             else:
                 st.info("No files attached to this hypothesis.")
             # Latest node state & rendered HTML
