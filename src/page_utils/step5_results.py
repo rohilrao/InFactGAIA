@@ -303,8 +303,7 @@ def display_results_step(db, fs, hypothesis_collection):
                         metadata=html_metadata
                     )
             
-            # Replace the hypothesis_collection.update_one() call around line 265 with this code:
-
+            
             # Create the data point to be stored in MongoDB
             mongo_data_point = {
                 'file_id': str(file_id),
