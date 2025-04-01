@@ -3,6 +3,7 @@ from pymongo import MongoClient
 import gridfs
 from pymongo.server_api import ServerApi
 from bson.objectid import ObjectId
+import pandas as pd
 
 # -------------------
 # Streamlit Page Config
@@ -36,39 +37,9 @@ def ensure_object_id(id_value):
     return id_value
 
 # -------------------
-# Page Header (Orange)
+# Page Header (Orange via Streamlit Markdown)
 # -------------------
 st.markdown("### :orange[Hypothesis Explorer]")
-
-# -------------------
-# CSS for a scrollable file list
-# -------------------
-st.markdown(
-    """
-    <style>
-    .scrollable-box {
-       background-color: #f9f9f9;
-       padding: 10px;
-       border-radius: 5px;
-       margin-bottom: 1rem;
-       max-height: 200px;    /* Limit the height for scrolling */
-       overflow-y: auto;     /* Enable vertical scroll */
-    }
-    .file-item {
-       margin-bottom: 6px;
-    }
-    .filename {
-       color: blue;
-       font-weight: bold;
-    }
-    .status {
-       color: green;
-       font-weight: bold;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
 
 # -------------------
 # Hypothesis Explorer
@@ -97,20 +68,16 @@ if hypotheses:
             st.markdown(f"**Files Attached:** {len(all_files)}")
             
             if all_files:
-                # Build an HTML string for the scrollable container
-                files_html = "<div class='scrollable-box'>"
+                # Build a DataFrame for files to let Streamlit auto-scroll
+                rows = []
                 for file in all_files:
                     filename = file.get("filename", "unnamed")
                     status = file.get("status", "unknown")
-                    # Each file is a line with a blue filename & green status
-                    files_html += f"""
-                        <div class='file-item'>
-                            <span class='filename'>{filename}</span> — 
-                            <span class='status'>{status}</span>
-                        </div>
-                    """
-                files_html += "</div>"
-                st.markdown(files_html, unsafe_allow_html=True)
+                    rows.append({"File Name": filename, "Status": status})
+
+                df_files = pd.DataFrame(rows)
+                # height=200 => scroll if there are more rows than fit
+                st.dataframe(df_files, height=200)
             else:
                 st.info("No files attached to this hypothesis.")
             
