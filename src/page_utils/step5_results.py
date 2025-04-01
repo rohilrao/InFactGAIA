@@ -315,6 +315,7 @@ def display_results_step(db, fs, hypothesis_collection):
                 'filename': file_path,
                 'l_plus': l_plus,
                 'l_minus': l_minus,
+                'prior_log_odds': 0.0,
                 'posterior': new_posterior,
                 'processed_date': file_obj.get("uploadDate", "Unknown date"),
                 'metadata': metadata,
