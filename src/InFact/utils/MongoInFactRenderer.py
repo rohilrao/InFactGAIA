@@ -51,7 +51,7 @@ class MongoInFactRenderer(InFactRenderer):
             })
 
         # Calculate prior probability from prior log odds - no default
-        prior_log_odds = hypothesis_doc.get("prior_log_odds")
+        prior_log_odds = point.get("prior_log_odds")
         prior_probability = math.exp(prior_log_odds) / (1 + math.exp(prior_log_odds))
 
         # Get confidence interval from document - no default
