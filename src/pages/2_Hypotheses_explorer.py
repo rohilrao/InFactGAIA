@@ -62,7 +62,7 @@ if hypotheses:
         
         with st.expander(f"Hypothesis ID: {hypothesis_id}", expanded=False):
             # Highlight the hypothesis text in orange
-            st.markdown(f"**:orange[Hypothesis]:** {hypothesis_text}")
+            st.markdown(f"**Hypothesis:** :orange[{hypothesis_text}]")
             
             # Simple count of files
             st.markdown(f"**Files Attached:** {len(all_files)}")
@@ -114,7 +114,7 @@ if hypotheses:
             })
             
             # Download Buttons
-            st.write("**Analysis Downloads**")
+            #st.write("**Analysis Downloads**")
             col1, col2 = st.columns(2)
             
             with col1:
