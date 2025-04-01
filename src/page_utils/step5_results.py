@@ -8,6 +8,8 @@ import tempfile
 
 # Import the InFactRenderer
 from InFact.utils.InFactRenderer import InFactRenderer
+from InFact.utils.MongoInFactRenderer import MongoInFactRenderer
+
 
 def ensure_object_id(id_value):
     """Convert string IDs to ObjectId if needed."""
@@ -269,8 +271,11 @@ def display_results_step(db, fs, hypothesis_collection):
             # Now handle the HTML rendering with a temporary directory
             with tempfile.TemporaryDirectory() as temp_dir:
                 # Render HTML visualization
-                renderer = InFactRenderer()
-                html_output = renderer.render_analysis(node)
+                #renderer = InFactRenderer()
+                #html_output = renderer.render_analysis(node)
+                renderer = MongoInFactRenderer()
+                html_output = renderer.render_mongo_analysis(hypothesis_collection.find_one({"_id": hypothesis_id}))
+
                 
                 # Store HTML in session state for display and download
                 st.session_state["html_output"] = html_output
