@@ -303,19 +303,78 @@ def display_results_step(db, fs, hypothesis_collection):
                         metadata=html_metadata
                     )
             
-            # Update the hypothesis collection with latest information
-            hypothesis_collection.update_one(
-                {"_id": hypothesis_id},
-                {"$set": {
-                    "latest_node_state_id": str(hypothesis_state_id),
-                    "latest_html_id": str(html_file_id),
-                    "latest_file_processed": str(file_id),
-                    "current_posterior": new_posterior,
-                    "probability": probability,
-                    "confidence_interval": [lower, upper],
-                    "last_updated": file_obj.get("uploadDate", "Unknown date")
-                }}
+            # Replace the hypothesis_collection.update_one() call around line 265 with this code:
+
+            # Create the data point to be stored in MongoDB
+            mongo_data_point = {
+                'file_id': str(file_id),
+                'filename': file_path,
+                'l_plus': l_plus,
+                'l_minus': l_minus,
+                'posterior': new_posterior,
+                'processed_date': file_obj.get("uploadDate", "Unknown date"),
+                'metadata': metadata,
+                'confidence_assessment': parsed_data.get('confidence_assessment', {}),
+                'analysis_rationale': analysis_code
+            }
+
+            # First check if hypothesis already has a data_points array
+            existing_hypothesis = hypothesis_collection.find_one({"_id": hypothesis_id})
+            if existing_hypothesis and "data_points" not in existing_hypothesis:
+                # Initialize the data_points array if it doesn't exist
+                hypothesis_collection.update_one(
+                    {"_id": hypothesis_id},
+                    {"$set": {"data_points": []}}
+                )
+
+            # Check if the data point already exists to avoid duplicates
+            existing_data_point = hypothesis_collection.find_one(
+                {
+                    "_id": hypothesis_id,
+                    "data_points.file_id": str(file_id)
+                }
             )
+
+            # Update strategy based on whether the data point already exists
+            if existing_data_point:
+                # Update the existing data point instead of adding a new one
+                hypothesis_collection.update_one(
+                    {
+                        "_id": hypothesis_id,
+                        "data_points.file_id": str(file_id)
+                    },
+                    {
+                        "$set": {
+                            "data_points.$": mongo_data_point,
+                            "latest_node_state_id": str(hypothesis_state_id),
+                            "latest_html_id": str(html_file_id),
+                            "latest_file_processed": str(file_id),
+                            "current_posterior": new_posterior,
+                            "probability": probability,
+                            "confidence_interval": [lower, upper],
+                            "last_updated": file_obj.get("uploadDate", "Unknown date")
+                        }
+                    }
+                )
+                st.info(f"Updated existing data point for file {file_path} in the hypothesis")
+            else:
+                # Append the new data point to the data_points array
+                hypothesis_collection.update_one(
+                    {"_id": hypothesis_id},
+                    {
+                        "$push": {"data_points": mongo_data_point},
+                        "$set": {
+                            "latest_node_state_id": str(hypothesis_state_id),
+                            "latest_html_id": str(html_file_id),
+                            "latest_file_processed": str(file_id),
+                            "current_posterior": new_posterior,
+                            "probability": probability,
+                            "confidence_interval": [lower, upper],
+                            "last_updated": file_obj.get("uploadDate", "Unknown date")
+                        }
+                    }
+                )
+                st.success(f"Added new data point for file {file_path} to the hypothesis")
 
             # Update the file status to "Processed"
             db.fs.files.update_one(
