@@ -313,6 +313,8 @@ def display_results_step(db, fs, hypothesis_collection):
                 'posterior': new_posterior,
                 'processed_date': file_obj.get("uploadDate", "Unknown date"),
                 'metadata': metadata,
+                "probability": probability,
+                "confidence_interval": [lower, upper],
                 'confidence_assessment': parsed_data.get('confidence_assessment', {}),
                 'analysis_rationale': analysis_code
             }
