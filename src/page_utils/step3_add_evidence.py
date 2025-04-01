@@ -331,7 +331,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
             # Store in session state
             st.session_state["infact_node"] = node
             st.session_state["node_temp_path"] = temp_file_path
-            st.success(f"Successfully loaded {provider.capitalize()} model for analysis")
+            #st.success(f"Successfully loaded {provider.capitalize()} model for analysis")
         except Exception as e:
             st.error(f"Failed to initialize {provider} model: {str(e)}")
 
