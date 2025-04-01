@@ -312,7 +312,7 @@ def display_results_step(db, fs, hypothesis_collection):
                         "$set": {
                             "data_points.$": mongo_data_point,
                             "latest_node_state_id": str(hypothesis_state_id),
-                            "latest_html_id": str(html_file_id),
+                            #"latest_html_id": str(html_file_id),
                             "latest_file_processed": str(file_id),
                             "current_posterior": new_posterior,
                             "probability": probability,
@@ -330,7 +330,7 @@ def display_results_step(db, fs, hypothesis_collection):
                         "$push": {"data_points": mongo_data_point},
                         "$set": {
                             "latest_node_state_id": str(hypothesis_state_id),
-                            "latest_html_id": str(html_file_id),
+                            #"latest_html_id": str(html_file_id),
                             "latest_file_processed": str(file_id),
                             "current_posterior": new_posterior,
                             "probability": probability,
