@@ -268,7 +268,6 @@ def display_file_upload_step(db, fs, hypothesis_collection):
         db: MongoDB database connection
         fs: GridFS instance
         hypothesis_collection: MongoDB collection for hypotheses
-        parse_data: Function to parse uploaded files
         
     Returns:
         str: Navigation action - "back", "next", or None
@@ -346,8 +345,8 @@ def display_file_upload_step(db, fs, hypothesis_collection):
 
     # Check for unprocessed or ready_for_analysis files
     unprocessed_files = [f for f in existing_files if f.get("status") == "unprocessed"]
-    processed_files = [f for f in existing_files if f.get("status") == "ready_for_analysis" and 
-                    f.get("parsing_complete", False)]
+    ready_for_analysis_files = [f for f in existing_files if f.get("status") == "ready_for_analysis" and 
+                                f.get("parsing_complete", False)]
 
     if existing_files:
         st.caption(f"{len(existing_files)} file(s) associated with this hypothesis")
@@ -396,79 +395,86 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     st.divider()
 
     # 3. FILE UPLOAD SECTION
-    st.markdown("### :orange[Upload New File]")
+    # Check if there are any files ready for analysis
+    if ready_for_analysis_files:
+        st.success("✅ You have files ready for analysis. Please proceed to the next step.")
+        col1, col2 = st.columns([1, 1])
+        with col2:
+            if st.button("Next →", key="next_with_ready_files"):
+                # Clean up any temporary processing state
+                for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                return "next"
+        st.stop()  # Stop execution to prevent showing the upload form
 
     # Track if we're currently parsing
     is_parsing = st.session_state.get("is_parsing", False)
 
-    # Only show the "Process Existing File" flow if we have unprocessed files
-    # AND we're not already parsing a file AND we're not showing file upload yet
-    show_file_upload = True
-    if unprocessed_files and not is_parsing and not st.session_state.get("show_upload_form", False):
+    # Handle unprocessed files
+    if unprocessed_files:
         st.warning(f"You have {len(unprocessed_files)} unprocessed file(s). Please process them before uploading new files.")
-
+        
         # Show option to process existing unprocessed files
-        if st.button("Process Existing File", key="process_existing"):
-            # Get the first unprocessed file
-            file_to_process = unprocessed_files[0]
-            st.session_state["current_file_id"] = file_to_process["_id"]
-            st.session_state["current_filename"] = file_to_process["filename"]
-            st.session_state["is_parsing"] = True
-            st.rerun()
-        # Don't show file upload in this case
-        show_file_upload = False
-    else:
-        # Set the flag to show we're past the unprocessed files step
-        st.session_state["show_upload_form"] = True
-
-    # Allow file upload only if no files are currently being processed and we should show the upload form
-    if show_file_upload:
-        if is_parsing:
-            st.info("Processing a file. Please wait until processing completes.")
+        if not is_parsing:
+            if st.button("Process Unprocessed File", key="process_existing", use_container_width=True):
+                # Get the first unprocessed file
+                file_to_process = unprocessed_files[0]
+                st.session_state["current_file_id"] = file_to_process["_id"]
+                st.session_state["current_filename"] = file_to_process["filename"]
+                st.session_state["is_parsing"] = True
+                st.rerun()
         else:
-            st.write("You can upload one file at a time. Please wait for processing to complete before uploading another file.")
-            # File uploader
-            uploaded_file = st.file_uploader("Select a file to upload", type=["txt", "pdf", "png", "jpg", "html", "csv"])
+            st.info("Processing a file. Please wait until processing completes.")
+    # Only allow new file uploads if there are no unprocessed files and we're not currently parsing
+    elif not is_parsing:
+        st.markdown("### :orange[Upload New File]")
+        st.write("You can upload one file at a time. Please wait for processing to complete before uploading another file.")
+        
+        # File uploader
+        uploaded_file = st.file_uploader("Select a file to upload", type=["txt", "pdf", "png", "jpg", "html", "csv"])
 
-            # Logic for handling file upload
-            if uploaded_file:
-                file_name = uploaded_file.name
-                print(f"DEBUG - User selected file: '{file_name}'")
+        # Logic for handling file upload
+        if uploaded_file:
+            file_name = uploaded_file.name
+            print(f"DEBUG - User selected file: '{file_name}'")
 
-                # Check if this file already exists for THIS hypothesis
-                existing_filenames = [file["filename"] for file in existing_files]
-                is_duplicate = file_name in existing_filenames
+            # Check if this file already exists for THIS hypothesis
+            existing_filenames = [file["filename"] for file in existing_files]
+            is_duplicate = file_name in existing_filenames
 
-                if is_duplicate:
-                    st.warning(f"A file named '{file_name}' already exists for this hypothesis. Please choose a different file.")
-                else:
-                    # Show upload button if not a duplicate
-                    if st.button("Upload File", key="upload_button"):
-                        print(f"DEBUG - Uploading file '{file_name}' for hypothesis ID '{hypothesis_id}'")
-                        # Read file content
-                        file_content = uploaded_file.read()
+            if is_duplicate:
+                st.warning(f"A file named '{file_name}' already exists for this hypothesis. Please choose a different file.")
+            else:
+                # Show upload button if not a duplicate
+                if st.button("Upload File", key="upload_button"):
+                    print(f"DEBUG - Uploading file '{file_name}' for hypothesis ID '{hypothesis_id}'")
+                    # Read file content
+                    file_content = uploaded_file.read()
 
-                        # Save to GridFS
-                        file_id = fs.put(
-                            file_content,
-                            filename=file_name,
-                            metadata={
-                                "hypothesis_id": hypothesis_id,
-                                "hypothesis_text": hypothesis_text
-                            },
-                            status="unprocessed",  # Initial status
-                            upload_date=str(datetime.datetime.today()),
-                        )
+                    # Save to GridFS
+                    file_id = fs.put(
+                        file_content,
+                        filename=file_name,
+                        metadata={
+                            "hypothesis_id": hypothesis_id,
+                            "hypothesis_text": hypothesis_text
+                        },
+                        status="unprocessed",  # Initial status
+                        upload_date=str(datetime.datetime.today()),
+                    )
 
-                        print(f"DEBUG - File successfully uploaded with ID: {file_id}")
+                    print(f"DEBUG - File successfully uploaded with ID: {file_id}")
 
-                        # Store file ID in session
-                        st.session_state["current_file_id"] = file_id
-                        st.session_state["current_filename"] = file_name
-                        st.session_state["is_parsing"] = True
+                    # Store file ID in session
+                    st.session_state["current_file_id"] = file_id
+                    st.session_state["current_filename"] = file_name
+                    st.session_state["is_parsing"] = True
 
-                        # Rerun to reflect state changes
-                        st.rerun()
+                    # Rerun to reflect state changes
+                    st.rerun()
+    elif is_parsing:
+        st.info("Processing a file. Please wait until processing completes.")
 
     # 4. FILE PROCESSING SECTION
     parsed_data_displayed = False
@@ -507,10 +513,6 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                 print(f"DEBUG - Parsing file '{filename}' with provider '{provider}' and model '{model}'")
 
                 # Parse data using the enhanced parser
-                # Since we're importing parse_data directly from the module,
-                # we need to ensure we pass all the required arguments
-
-
                 parsed_data = parse_standalone(
                     temp_file_path,
                     hypothesis_text,
@@ -590,7 +592,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     st.divider()
     col1, col2 = st.columns([1, 1])
     with col1:
-        if st.button("← Back"):
+        if st.button("← Back", key="back_nav"):
             # Clean up session state
             for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
                 if key in st.session_state:
@@ -599,7 +601,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
             return "back"
 
     with col2:
-        if st.button("Next →"):
+        if st.button("Next →", key="next_nav"):
             # Clean up any temporary processing state
             for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
                 if key in st.session_state:
