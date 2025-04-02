@@ -2,7 +2,7 @@ import json
 import base64
 import pandas as pd
 from pathlib import Path
-from typing import Dict, Any, Union, List, Optional
+from typing import Dict, Any, Union, List
 import logging
 from autogen.code_utils import extract_code
 import os
@@ -19,53 +19,18 @@ def parse_data(data_file: str, hypothesis: str, llm_provider, logger) -> Dict:
         logger: Logger instance
         
     Returns:
-        Dict: Parsed data or error information
+        Dict: Parsed data
     """
     logger.info(f"Parsing data file: {data_file}")
-    print(f"🔍 Processing: {data_file}")
     file_type = Path(data_file).suffix.lower()
 
     try:
         # Prepare content based on file type
         message_content = _prepare_file_content(data_file, file_type, logger)
         
-        # Check if message_content is None or empty
-        if message_content is None:
-            error_msg = "Failed to extract content from file"
-            logger.error(error_msg)
-            print(f"❌ Error: {error_msg}")
-            return {"error": error_msg, "file": data_file}
-            
-        # Check if using OpenAI provider and adjust the format if needed
-        provider_name = type(llm_provider).__name__ if llm_provider else "Unknown"
-        print(f"🔌 Using provider: {provider_name}")
-        
-        if provider_name == "OpenAIProvider" and isinstance(message_content, list):
-            # For OpenAI, convert message content to a format OpenAI expects
-            try:
-                print(f"🔄 Converting message format for OpenAI provider")
-                converted_content = _convert_to_openai_format(message_content, hypothesis, logger)
-                message_content = converted_content
-                print(f"✅ Successfully converted to OpenAI format")
-            except Exception as e:
-                logger.warning(f"Error converting to OpenAI format: {str(e)}")
-                print(f"⚠️ Error converting to OpenAI format: {str(e)}")
-            
-        print(f"✅ Successfully extracted content from {data_file}")
-        # Print first part of the content for debugging (limit length for readability)
-        if isinstance(message_content, list) and len(message_content) > 0:
-            if message_content[0].get("type") == "text":
-                debug_content = message_content[0].get("text", "")[:200] + "..." if len(message_content[0].get("text", "")) > 200 else message_content[0].get("text", "")
-                print(f"📄 Content preview: {debug_content}")
-            else:
-                print(f"📄 Content type: {message_content[0].get('type', 'unknown')}")
-        else:
-            debug_content = str(message_content)[:200] + "..." if len(str(message_content)) > 200 else str(message_content)
-            print(f"📄 Content preview: {debug_content}")
-
         # Add analysis prompt
         prompt = f"""
-        Extract relevant data points strictly from the above provided content for evaluating the hypothesis:
+        Extract relevant data points for evaluating the hypothesis:
         "{hypothesis}"
 
         Provide your response as a JSON code block, like this:
@@ -101,8 +66,6 @@ def parse_data(data_file: str, hypothesis: str, llm_provider, logger) -> Dict:
         3. Any potential issues or biases in the data
         """
 
-        print(f"🧠 Preparing to send content to LLM for analysis")
-        
         # Add prompt to message content if it's a list of structured content
         if isinstance(message_content, list):
             message_content.append({"type": "text", "text": prompt})
@@ -113,83 +76,21 @@ def parse_data(data_file: str, hypothesis: str, llm_provider, logger) -> Dict:
         logger.debug(f"Prepared prompt for parsing")
 
         # Send to LLM with retry logic
-        print(f"🔄 Sending to LLM API...")
-        print(f"🔍 Message content structure: {type(message_content)}")
-        if isinstance(message_content, list):
-            print(f"📋 Message components: {len(message_content)} items")
-            for i, component in enumerate(message_content):
-                comp_type = component.get("type", "unknown")
-                print(f"  - Component {i+1}: Type={comp_type}")
-                if comp_type == "text":
-                    preview = component.get("text", "")[:100] + "..." if len(component.get("text", "")) > 100 else component.get("text", "")
-                    print(f"    Preview: {preview}")
-                elif comp_type == "document":
-                    print(f"    Document media type: {component.get('source', {}).get('media_type', 'unknown')}")
-        
         response_text = llm_provider.send_with_retry(message_content)
         logger.debug(f"Received API response for parsing")
-        print(f"✅ Received response from LLM")
 
         # Extract JSON from response
-        print(f"🔍 Extracting JSON from LLM response...")
         parsed_data = _extract_json_from_response(response_text, logger)
         logger.debug(f"Successfully parsed JSON data")
-        
-        # Print the extracted data for debugging
-        print(f"✅ Successfully extracted JSON data")
-        print(f"📊 Data preview: {json.dumps(parsed_data, indent=2)[:200]}...")
         
         return parsed_data
 
     except Exception as e:
-        error_message = f"Error in parse_data: {str(e)}"
-        logger.error(error_message, exc_info=True)
-        print(f"❌ {error_message}")
-        return {"error": error_message, "file": data_file}
+        logger.error(f"Error in parse_data: {str(e)}", exc_info=True)
+        raise
 
 
-def _convert_to_openai_format(message_content: List[Dict], hypothesis: str, logger) -> List[Dict]:
-    """
-    Convert message content to OpenAI's expected format.
-    
-    Args:
-        message_content: List of message content items
-        hypothesis: The hypothesis being evaluated
-        logger: Logger instance
-        
-    Returns:
-        List[Dict]: Messages in OpenAI format
-    """
-    try:
-        messages = [{"role": "system", "content": f"You are an expert data analyst. Extract relevant information from the provided content to evaluate this hypothesis: '{hypothesis}'"}]
-        
-        for item in message_content:
-            if item.get("type") == "text":
-                messages.append({"role": "user", "content": item.get("text", "")})
-            elif item.get("type") == "document" and item.get("source", {}).get("media_type") == "application/pdf":
-                # For PDF documents, add a note that this is PDF content
-                messages.append({"role": "user", "content": "The following is PDF content that needs analysis."})
-            elif item.get("type") == "image":
-                # For images, we need a different approach with OpenAI
-                media_type = item.get("source", {}).get("media_type", "")
-                data = item.get("source", {}).get("data", "")
-                if media_type and data:
-                    messages.append({
-                        "role": "user", 
-                        "content": [
-                            {"type": "text", "text": "Please analyze this image:"},
-                            {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{data}"}}
-                        ]
-                    })
-        
-        return messages
-    except Exception as e:
-        logger.error(f"Error converting to OpenAI format: {str(e)}")
-        # Return original content as fallback
-        return [{"role": "user", "content": f"Extract relevant data points from the following content to evaluate this hypothesis: '{hypothesis}'"}] + message_content
-
-
-def _prepare_file_content(data_file: str, file_type: str, logger) -> Optional[Union[List[Dict], str]]:
+def _prepare_file_content(data_file: str, file_type: str, logger) -> Any:
     """
     Prepare file content based on file type.
     
@@ -199,7 +100,7 @@ def _prepare_file_content(data_file: str, file_type: str, logger) -> Optional[Un
         logger: Logger instance
         
     Returns:
-        Content in the format expected by the LLM provider or None if extraction fails
+        Content in the format expected by the LLM provider
     """
     def truncate_content(content: str, max_length: int = 15000) -> str:
         """Truncate content to a maximum length."""
@@ -209,61 +110,19 @@ def _prepare_file_content(data_file: str, file_type: str, logger) -> Optional[Un
         return content
 
     try:
-        print(f"🔍 Extracting content from {file_type} file")
-        
-        if not os.path.exists(data_file):
-            logger.error(f"File not found: {data_file}")
-            print(f"❌ File not found: {data_file}")
-            return None
-            
-        if os.path.getsize(data_file) == 0:
-            logger.error(f"File is empty: {data_file}")
-            print(f"❌ File is empty: {data_file}")
-            return None
-            
         if file_type == '.csv':
             logger.debug("Processing CSV file")
-            print(f"📊 Processing CSV file")
-            try:
-                df = pd.read_csv(data_file)
-                if df.empty:
-                    logger.warning(f"CSV file is empty: {data_file}")
-                    print(f"⚠️ CSV file is empty")
-                    return [{"type": "text", "text": "The provided CSV file is empty."}]
-                content = df.to_string()
-                print(f"✅ Successfully read CSV with {len(df)} rows and {len(df.columns)} columns")
-                return [{"type": "text", "text": truncate_content(content)}]
-            except pd.errors.EmptyDataError:
-                logger.warning(f"CSV file is empty: {data_file}")
-                print(f"⚠️ CSV file is empty")
-                return [{"type": "text", "text": "The provided CSV file is empty."}]
-            except pd.errors.ParserError as e:
-                logger.error(f"Error parsing CSV: {str(e)}")
-                print(f"❌ Error parsing CSV: {str(e)}")
-                return [{"type": "text", "text": f"Error parsing CSV: {str(e)}"}]
+            df = pd.read_csv(data_file)
+            content = df.to_string()
+            return [{"type": "text", "text": truncate_content(content)}]
 
         elif file_type in ['.pdf', '.PDF']:
             logger.debug("Processing PDF file")
-            print(f"📑 Processing PDF file")
-            # First try extracting text directly instead of relying on provider's PDF handling
-            print(f"🔍 Extracting text from PDF directly first")
-            extracted_text = _extract_text_from_pdf(data_file, logger)
-            
-            if extracted_text and len(extracted_text.strip()) > 100:  # Ensure we have meaningful text
-                print(f"✅ Successfully extracted text from PDF (length: {len(extracted_text)} chars)")
-                return [{"type": "text", "text": truncate_content(extracted_text)}]
-            
-            # If text extraction failed or returned minimal text, try direct PDF handling as fallback
-            print(f"⚠️ Text extraction provided insufficient content, trying direct PDF handling")
+            # Try to determine if provider supports direct PDF handling
             try:
                 with open(data_file, 'rb') as f:
                     pdf_data = base64.b64encode(f.read()).decode('utf-8')
-                print(f"✅ Successfully encoded PDF (size: {len(pdf_data)} chars)")
                 return [
-                    {
-                        "type": "text", 
-                        "text": "PDF CONTENT: Unable to extract readable text from this PDF directly."
-                    },
                     {
                         "type": "document",
                         "source": {
@@ -275,76 +134,42 @@ def _prepare_file_content(data_file: str, file_type: str, logger) -> Optional[Un
                 ]
             except Exception as e:
                 logger.warning(f"Direct PDF handling failed, falling back to text extraction: {str(e)}")
-                print(f"⚠️ Direct PDF handling failed, falling back to text extraction: {str(e)}")
                 
                 # Fall back to text extraction
                 extracted_text = _extract_text_from_pdf(data_file, logger)
-                if not extracted_text or extracted_text.strip() == "":
-                    logger.warning(f"Failed to extract any text from PDF: {data_file}")
-                    print(f"⚠️ Failed to extract any text from PDF")
-                    return [{"type": "text", "text": "Failed to extract any text from the PDF file."}]
-                print(f"✅ Successfully extracted text from PDF (length: {len(extracted_text)} chars)")
                 return [{"type": "text", "text": truncate_content(extracted_text)}]
 
         elif file_type in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
             logger.debug(f"Processing image file of type {file_type}")
-            print(f"🖼️ Processing image file of type {file_type}")
-            try:
-                with open(data_file, 'rb') as f:
-                    img_data = base64.b64encode(f.read()).decode('utf-8')
-                media_type = {
-                    '.png': 'image/png',
-                    '.jpg': 'image/jpeg',
-                    '.jpeg': 'image/jpeg',
-                    '.gif': 'image/gif',
-                    '.webp': 'image/webp'
-                }[file_type]
-                print(f"✅ Successfully encoded image (size: {len(img_data)} chars)")
-                return [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": img_data
-                        }
+            with open(data_file, 'rb') as f:
+                img_data = base64.b64encode(f.read()).decode('utf-8')
+            media_type = {
+                '.png': 'image/png',
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.gif': 'image/gif',
+                '.webp': 'image/webp'
+            }[file_type]
+            return [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": img_data
                     }
-                ]
-            except Exception as e:
-                logger.error(f"Error processing image file: {str(e)}")
-                print(f"❌ Error processing image file: {str(e)}")
-                return None
+                }
+            ]
 
         else:
             logger.debug(f"Processing text file of type {file_type}")
-            print(f"📝 Processing text file of type {file_type}")
-            try:
-                with open(data_file, 'r', encoding='utf-8', errors='replace') as f:
-                    content = f.read()
-                if not content or content.strip() == "":
-                    logger.warning(f"Text file is empty: {data_file}")
-                    print(f"⚠️ Text file is empty")
-                    return [{"type": "text", "text": "The provided text file is empty."}]
-                print(f"✅ Successfully read text file (length: {len(content)} chars)")
-                return [{"type": "text", "text": truncate_content(content)}]
-            except UnicodeDecodeError as e:
-                logger.warning(f"Unicode decode error, trying binary mode: {str(e)}")
-                print(f"⚠️ Unicode decode error, trying binary mode: {str(e)}")
-                # Try binary mode for potential binary files
-                try:
-                    with open(data_file, 'rb') as f:
-                        binary_data = base64.b64encode(f.read()).decode('utf-8')
-                    print(f"✅ Successfully read file in binary mode")
-                    return [{"type": "text", "text": f"Binary file encoded as base64: {binary_data[:100]}..."}]
-                except Exception as binary_e:
-                    logger.error(f"Error reading file in binary mode: {str(binary_e)}")
-                    print(f"❌ Error reading file in binary mode: {str(binary_e)}")
-                    return None
+            with open(data_file, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+            return [{"type": "text", "text": truncate_content(content)}]
 
     except Exception as e:
         logger.error(f"Error preparing file content: {str(e)}", exc_info=True)
-        print(f"❌ Error preparing file content: {str(e)}")
-        return None
+        raise
 
 
 def _extract_text_from_pdf(pdf_file: str, logger) -> str:
@@ -356,76 +181,43 @@ def _extract_text_from_pdf(pdf_file: str, logger) -> str:
         logger: Logger instance
         
     Returns:
-        str: Extracted text or empty string if all methods fail
+        str: Extracted text
     """
     logger.debug("Extracting text from PDF")
-    print(f"📑 Extracting text from PDF using multiple methods")
     
     # Try PyMuPDF first
     try:
         import fitz  # PyMuPDF
         logger.debug("Using PyMuPDF for text extraction")
-        print(f"🔍 Trying PyMuPDF for text extraction")
         doc = fitz.open(pdf_file)
         text = ""
-        for page_num, page in enumerate(doc):
-            page_text = page.get_text()
-            text += page_text
-            print(f"  - Page {page_num+1}: Extracted {len(page_text)} characters")
-        if text:
-            print(f"✅ Successfully extracted text using PyMuPDF: {len(text)} characters")
-            return text
-        print(f"⚠️ PyMuPDF did not extract any text, trying other methods")
-    except ImportError:
-        logger.warning("PyMuPDF not installed, skipping")
-        print(f"⚠️ PyMuPDF not installed, skipping")
+        for page in doc:
+            text += page.get_text()
+        return text
     except Exception as e:
         logger.warning(f"PyMuPDF extraction failed: {str(e)}, trying pdfplumber")
-        print(f"⚠️ PyMuPDF extraction failed: {str(e)}, trying pdfplumber")
     
     # Try pdfplumber next
     try:
         import pdfplumber
         logger.debug("Using pdfplumber for text extraction")
-        print(f"🔍 Trying pdfplumber for text extraction")
         with pdfplumber.open(pdf_file) as pdf:
             text = ""
-            for page_num, page in enumerate(pdf.pages):
-                page_text = page.extract_text() or ""
-                text += page_text
-                print(f"  - Page {page_num+1}: Extracted {len(page_text)} characters")
-        if text:
-            print(f"✅ Successfully extracted text using pdfplumber: {len(text)} characters")
-            return text
-        print(f"⚠️ pdfplumber did not extract any text, trying other methods")
-    except ImportError:
-        logger.warning("pdfplumber not installed, skipping")
-        print(f"⚠️ pdfplumber not installed, skipping")
+            for page in pdf.pages:
+                text += page.extract_text() or ""
+        return text
     except Exception as e:
         logger.warning(f"pdfplumber extraction failed: {str(e)}, trying textract")
-        print(f"⚠️ pdfplumber extraction failed: {str(e)}, trying textract")
     
     # Try textract as last resort
     try:
         import textract
         logger.debug("Using textract for text extraction")
-        print(f"🔍 Trying textract for text extraction")
         text = textract.process(pdf_file, method='pdfminer').decode('utf-8')
-        if text:
-            print(f"✅ Successfully extracted text using textract: {len(text)} characters")
-            return text
-        print(f"⚠️ textract did not extract any text")
-    except ImportError:
-        logger.warning("textract not installed, skipping")
-        print(f"⚠️ textract not installed, skipping")
+        return text
     except Exception as e:
-        logger.error(f"textract extraction failed: {str(e)}")
-        print(f"❌ textract extraction failed: {str(e)}")
-    
-    # If all methods failed
-    logger.error("All PDF extraction methods failed")
-    print(f"❌ All PDF extraction methods failed")
-    return ""
+        logger.error(f"All PDF extraction methods failed: {str(e)}")
+        return "Error: Unable to extract text from PDF using available methods."
 
 
 def _extract_json_from_response(response_text: str, logger) -> Dict:
@@ -437,18 +229,10 @@ def _extract_json_from_response(response_text: str, logger) -> Dict:
         logger: Logger instance
         
     Returns:
-        Dict: Parsed JSON data or error information
+        Dict: Parsed JSON data
     """
-    # Print the raw response for debugging
-    print(f"📝 Raw LLM response preview: {response_text[:200]}..." if len(response_text) > 200 else response_text)
     try:
-        if not response_text:
-            logger.error("Empty response from LLM")
-            print(f"❌ Empty response from LLM")
-            return {"extraction_error": "Empty response from LLM"}
-            
         # Try to extract JSON using autogen
-        print(f"🔍 Extracting JSON using code blocks")
         extracted_blocks = extract_code(response_text)
 
         # Look for JSON blocks
@@ -459,7 +243,6 @@ def _extract_json_from_response(response_text: str, logger) -> Dict:
                     # Try to parse as JSON to validate
                     parsed = json.loads(block)
                     json_str = block
-                    print(f"✅ Found valid JSON code block")
                     break
                 except json.JSONDecodeError:
                     continue
@@ -467,36 +250,30 @@ def _extract_json_from_response(response_text: str, logger) -> Dict:
         # If no valid JSON block found, try parsing the whole response
         if not json_str:
             logger.warning("No JSON code block found, trying to parse entire response")
-            print(f"⚠️ No JSON code block found, trying to parse entire response")
             try:
                 parsed = json.loads(response_text)
                 json_str = response_text
-                print(f"✅ Successfully parsed entire response as JSON")
             except json.JSONDecodeError:
                 # Try to find JSON in response using regex
                 import re
                 logger.warning("Failed to parse response as JSON, trying regex extraction")
-                print(f"⚠️ Failed to parse response as JSON, trying regex extraction")
                 json_pattern = r'({[\s\S]*})'
                 match = re.search(json_pattern, response_text)
                 if match:
                     try:
                         parsed = json.loads(match.group(1))
                         json_str = match.group(1)
-                        print(f"✅ Successfully extracted JSON using regex")
                     except json.JSONDecodeError:
                         logger.error("Regex extraction failed to find valid JSON")
-                        print(f"❌ Regex extraction failed to find valid JSON")
                         return {
                             "extraction_error": "Failed to parse LLM response",
-                            "raw_response": response_text[:500] + ("..." if len(response_text) > 500 else "")
+                            "raw_response": response_text
                         }
                 else:
                     logger.error("Failed to parse response as JSON")
-                    print(f"❌ Failed to parse response as JSON")
                     return {
                         "extraction_error": "Failed to parse LLM response",
-                        "raw_response": response_text[:500] + ("..." if len(response_text) > 500 else "")
+                        "raw_response": response_text
                     }
 
         parsed_data = json.loads(json_str)
@@ -504,10 +281,9 @@ def _extract_json_from_response(response_text: str, logger) -> Dict:
 
     except Exception as e:
         logger.error(f"Error extracting JSON from response: {str(e)}", exc_info=True)
-        print(f"❌ Error extracting JSON from response: {str(e)}")
         return {
             "extraction_error": f"Error: {str(e)}",
-            "raw_response": response_text[:500] + ("..." if len(response_text) > 500 else "")
+            "raw_response": response_text
         }
 
 
@@ -536,19 +312,10 @@ def parse_standalone(file_path: str, hypothesis: str, provider: str, model: str,
     logger.setLevel(logging.INFO)
     
     logger.info(f"Parsing file: {file_path} using {provider}/{model}")
-    print(f"🚀 Starting parse_standalone for {file_path} using {provider}/{model}")
-    
-    if not os.path.exists(file_path):
-        error_msg = f"File not found: {file_path}"
-        logger.error(error_msg)
-        print(f"❌ {error_msg}")
-        return {"error": error_msg}
-        
     file_type = Path(file_path).suffix.lower()
     
     try:
         # Import providers dynamically to avoid circular imports
-        print(f"🔌 Initializing {provider} provider with model {model}")
         if provider.lower() == "gpt" or provider.lower() == "openai":
             from ..providers.openai_provider import OpenAIProvider
             llm_provider = OpenAIProvider(api_key=api_key, model=model)
@@ -556,21 +323,13 @@ def parse_standalone(file_path: str, hypothesis: str, provider: str, model: str,
             from ..providers.anthropic_provider import AnthropicProvider
             llm_provider = AnthropicProvider(api_key=api_key, model=model)
         else:
-            error_msg = f"Unsupported provider: {provider}"
-            logger.error(error_msg)
-            print(f"❌ {error_msg}")
-            return {"error": error_msg}
+            return {"error": f"Unsupported provider: {provider}"}
             
         # Use the core parse_data function with the appropriate provider
-        print(f"🧠 Starting data parsing process")
-        result = parse_data(file_path, hypothesis, llm_provider, logger)
-        print(f"✅ Parsing completed")
-        return result
+        return parse_data(file_path, hypothesis, llm_provider, logger)
         
     except Exception as e:
-        error_msg = f"Error in parse_standalone: {str(e)}"
-        logger.error(error_msg)
-        print(f"❌ {error_msg}")
+        logger.error(f"Error in parse_standalone: {str(e)}")
         import traceback
         traceback.print_exc()
-        return {"error": error_msg}
+        return {"error": str(e)}
