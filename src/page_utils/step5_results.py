@@ -486,21 +486,23 @@ def display_results_step(db, fs, hypothesis_collection):
     
     # Navigation buttons
     st.divider()
-    col1, col2 = st.columns([1, 1])
-    
+    # At the end of display_results_step function
+    col1, col2, col3 = st.columns(3)
+
     with col1:
-        if st.button("← Back to Code Review"):
+        if st.button("← Back to Code"):
             return "back"
-    
+            
     with col2:
-        if st.button("Process Another File", type="primary"):
-            # Clear current file-specific session data but keep the node
-            for key in ["current_file_id", "current_filename", "parsed_data", 
-                      "generated_code", "current_code", "validated_code", 
-                      "l_plus", "l_minus", "edit_mode", "new_posterior",
-                      "simple_analysis", "tech_analysis"]:
+        if st.button("Process Another File"):
+            return "add_evidence"
+            
+    with col3:
+        if st.button("Start Over"):
+            # Clear all session state related to the analysis
+            for key in ["hypothesis_id", "hypothesis_text", "infact_node", 
+                    "current_file_id", "current_filename", "parsed_data",
+                    "generated_code", "validated_code"]:
                 if key in st.session_state:
                     del st.session_state[key]
-            return "restart_file_processing"
-    
-    return None  # No action taken
+            return "home"

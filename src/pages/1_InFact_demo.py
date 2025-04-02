@@ -138,12 +138,15 @@ elif st.session_state.process_step == 4:
         st.rerun()
 
 
-# Step 6: View Results
+# Step 5: View Results
 elif st.session_state.process_step == 5:
     result = display_results_step(db, fs, hypothesis_collection)
     
     if result == "back":
-        st.session_state.process_step = 4
+        st.session_state.process_step = 4  # Go back to code review
+        st.rerun()
+    elif result == "add_evidence":  # New case for "Process Another File" button
+        st.session_state.process_step = 3  # Go back to file upload/add evidence
         st.rerun()
     elif result == "home":
         # Reset to start
