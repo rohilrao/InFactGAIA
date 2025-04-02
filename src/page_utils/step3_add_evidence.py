@@ -577,7 +577,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
 
         if recent_files:
             # Sort by upload date (newest first)
-            recent_files.sort(key=lambda x: x.get("upload_date", ""), reverse=False)
+            recent_files.sort(key=lambda x: x.get("upload_date", ""), reverse=True)
             most_recent = recent_files[0]
 
             if "parsed_data" in most_recent:
