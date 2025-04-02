@@ -36,6 +36,21 @@ def parse_data(data_file: str, hypothesis: str, llm_provider, logger) -> Dict:
             print(f"❌ Error: {error_msg}")
             return {"error": error_msg, "file": data_file}
             
+        # Check if using OpenAI provider and adjust the format if needed
+        provider_name = type(llm_provider).__name__ if llm_provider else "Unknown"
+        print(f"🔌 Using provider: {provider_name}")
+        
+        if provider_name == "OpenAIProvider" and isinstance(message_content, list):
+            # For OpenAI, convert message content to a format OpenAI expects
+            try:
+                print(f"🔄 Converting message format for OpenAI provider")
+                converted_content = _convert_to_openai_format(message_content, hypothesis, logger)
+                message_content = converted_content
+                print(f"✅ Successfully converted to OpenAI format")
+            except Exception as e:
+                logger.warning(f"Error converting to OpenAI format: {str(e)}")
+                print(f"⚠️ Error converting to OpenAI format: {str(e)}")
+            
         print(f"✅ Successfully extracted content from {data_file}")
         # Print first part of the content for debugging (limit length for readability)
         if isinstance(message_content, list) and len(message_content) > 0:
@@ -99,6 +114,18 @@ def parse_data(data_file: str, hypothesis: str, llm_provider, logger) -> Dict:
 
         # Send to LLM with retry logic
         print(f"🔄 Sending to LLM API...")
+        print(f"🔍 Message content structure: {type(message_content)}")
+        if isinstance(message_content, list):
+            print(f"📋 Message components: {len(message_content)} items")
+            for i, component in enumerate(message_content):
+                comp_type = component.get("type", "unknown")
+                print(f"  - Component {i+1}: Type={comp_type}")
+                if comp_type == "text":
+                    preview = component.get("text", "")[:100] + "..." if len(component.get("text", "")) > 100 else component.get("text", "")
+                    print(f"    Preview: {preview}")
+                elif comp_type == "document":
+                    print(f"    Document media type: {component.get('source', {}).get('media_type', 'unknown')}")
+        
         response_text = llm_provider.send_with_retry(message_content)
         logger.debug(f"Received API response for parsing")
         print(f"✅ Received response from LLM")
@@ -119,6 +146,47 @@ def parse_data(data_file: str, hypothesis: str, llm_provider, logger) -> Dict:
         logger.error(error_message, exc_info=True)
         print(f"❌ {error_message}")
         return {"error": error_message, "file": data_file}
+
+
+def _convert_to_openai_format(message_content: List[Dict], hypothesis: str, logger) -> List[Dict]:
+    """
+    Convert message content to OpenAI's expected format.
+    
+    Args:
+        message_content: List of message content items
+        hypothesis: The hypothesis being evaluated
+        logger: Logger instance
+        
+    Returns:
+        List[Dict]: Messages in OpenAI format
+    """
+    try:
+        messages = [{"role": "system", "content": f"You are an expert data analyst. Extract relevant information from the provided content to evaluate this hypothesis: '{hypothesis}'"}]
+        
+        for item in message_content:
+            if item.get("type") == "text":
+                messages.append({"role": "user", "content": item.get("text", "")})
+            elif item.get("type") == "document" and item.get("source", {}).get("media_type") == "application/pdf":
+                # For PDF documents, add a note that this is PDF content
+                messages.append({"role": "user", "content": "The following is PDF content that needs analysis."})
+            elif item.get("type") == "image":
+                # For images, we need a different approach with OpenAI
+                media_type = item.get("source", {}).get("media_type", "")
+                data = item.get("source", {}).get("data", "")
+                if media_type and data:
+                    messages.append({
+                        "role": "user", 
+                        "content": [
+                            {"type": "text", "text": "Please analyze this image:"},
+                            {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{data}"}}
+                        ]
+                    })
+        
+        return messages
+    except Exception as e:
+        logger.error(f"Error converting to OpenAI format: {str(e)}")
+        # Return original content as fallback
+        return [{"role": "user", "content": f"Extract relevant data points from the following content to evaluate this hypothesis: '{hypothesis}'"}] + message_content
 
 
 def _prepare_file_content(data_file: str, file_type: str, logger) -> Optional[Union[List[Dict], str]]:
@@ -177,12 +245,25 @@ def _prepare_file_content(data_file: str, file_type: str, logger) -> Optional[Un
         elif file_type in ['.pdf', '.PDF']:
             logger.debug("Processing PDF file")
             print(f"📑 Processing PDF file")
-            # Try to determine if provider supports direct PDF handling
+            # First try extracting text directly instead of relying on provider's PDF handling
+            print(f"🔍 Extracting text from PDF directly first")
+            extracted_text = _extract_text_from_pdf(data_file, logger)
+            
+            if extracted_text and len(extracted_text.strip()) > 100:  # Ensure we have meaningful text
+                print(f"✅ Successfully extracted text from PDF (length: {len(extracted_text)} chars)")
+                return [{"type": "text", "text": truncate_content(extracted_text)}]
+            
+            # If text extraction failed or returned minimal text, try direct PDF handling as fallback
+            print(f"⚠️ Text extraction provided insufficient content, trying direct PDF handling")
             try:
                 with open(data_file, 'rb') as f:
                     pdf_data = base64.b64encode(f.read()).decode('utf-8')
                 print(f"✅ Successfully encoded PDF (size: {len(pdf_data)} chars)")
                 return [
+                    {
+                        "type": "text", 
+                        "text": "PDF CONTENT: Unable to extract readable text from this PDF directly."
+                    },
                     {
                         "type": "document",
                         "source": {
@@ -358,6 +439,8 @@ def _extract_json_from_response(response_text: str, logger) -> Dict:
     Returns:
         Dict: Parsed JSON data or error information
     """
+    # Print the raw response for debugging
+    print(f"📝 Raw LLM response preview: {response_text[:200]}..." if len(response_text) > 200 else response_text)
     try:
         if not response_text:
             logger.error("Empty response from LLM")
