@@ -368,7 +368,8 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                     st.write(f"**{filename}**")
 
                 # Status column
-                with col2:
+                col1, col2 = st.columns([1, 1])
+        with col2:
                     if file.get("status") == "ready_for_analysis" and file.get("parsing_complete", False):
                         st.markdown("<span style='color:green'>🔍 Ready for Analysis</span>", unsafe_allow_html=True)
                     elif file.get("status") == "processing":
@@ -398,11 +399,28 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     # Check if there are any files ready for analysis
     if ready_for_analysis_files:
         st.success("✅ You have files ready for analysis. Please proceed to the next step.")
-        col1, col2 = st.columns([1, 1])
+        
+        # Display the most recent ready file's parsed data first
+        ready_for_analysis_files.sort(key=lambda x: x.get("upload_date", ""), reverse=True)
+        latest_file = ready_for_analysis_files[0]
+        
+        # Store this file ID in session state for future steps
+        st.session_state["analyzed_file_id"] = str(latest_file["_id"])
+        st.session_state["current_file_id"] = latest_file["_id"]  # Keep them in sync
+        st.session_state["current_filename"] = latest_file["filename"]  # Keep filename too
+        
+        st.divider()
+        st.markdown("### :orange[Ready for Analysis]")
+        st.markdown(f"#### File: {latest_file['filename']}")
+        
+        # Display the parsed data from the database
+        if "parsed_data" in latest_file:
+            render_parsed_data(latest_file["parsed_data"], latest_file["filename"])
+        
         with col2:
             if st.button("Next →", key="next_with_ready_files"):
-                # Clean up any temporary processing state
-                for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
+                # Don't delete current_file_id and current_filename anymore
+                for key in ["is_parsing", "show_upload_form", "parsed_data_rerun"]:
                     if key in st.session_state:
                         del st.session_state[key]
                 return "next"
@@ -525,6 +543,11 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                 print(f"DEBUG - Saving parsed data for file '{filename}'")
                 if save_parsed_data_to_file(db, file_id, parsed_data):
                     st.success(f"File '{filename}' is now ready for analysis")
+                    
+                    # Store this file ID in session state for future steps
+                    st.session_state["analyzed_file_id"] = str(file_id)
+                    st.session_state["current_file_id"] = file_id  # Keep them in sync
+                    st.session_state["current_filename"] = filename  # Keep filename too
 
                 # Clean up
                 try:
@@ -533,7 +556,13 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                 except Exception as e:
                     print(f"DEBUG - Failed to remove temp file: {str(e)}")
 
-                # Display parsed data
+                # Retrieve the updated file document from the database to ensure we're showing
+                # the exact data that was stored
+                updated_file = db.fs.files.find_one({"_id": ensure_object_id(file_id)})
+                if updated_file and "parsed_data" in updated_file:
+                    parsed_data = updated_file["parsed_data"]
+                
+                # Display parsed data from the database
                 st.divider()
                 st.markdown("### :orange[Parsed Data]")
                 render_parsed_data(parsed_data, filename)
@@ -581,6 +610,12 @@ def display_file_upload_step(db, fs, hypothesis_collection):
             # Sort by upload date (newest first)
             recent_files.sort(key=lambda x: x.get("upload_date", ""), reverse=True)
             most_recent = recent_files[0]
+            
+            # Store this file ID in session state for future steps if not already set
+            if not st.session_state.get("analyzed_file_id"):
+                st.session_state["analyzed_file_id"] = str(most_recent["_id"])
+                st.session_state["current_file_id"] = most_recent["_id"]  # Keep them in sync
+                st.session_state["current_filename"] = most_recent["filename"]  # Keep filename too
 
             if "parsed_data" in most_recent:
                 st.divider()
@@ -602,8 +637,17 @@ def display_file_upload_step(db, fs, hypothesis_collection):
 
     with col2:
         if st.button("Next →", key="next_nav"):
-            # Clean up any temporary processing state
-            for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
+            # If we have processed files and no file ID is stored yet, store the most recent one
+            if not st.session_state.get("analyzed_file_id") and processed_files:
+                processed_files.sort(key=lambda x: x.get("upload_date", ""), reverse=True)
+                most_recent = processed_files[0]
+                st.session_state["analyzed_file_id"] = str(most_recent["_id"])
+                st.session_state["current_file_id"] = most_recent["_id"]  # Keep them in sync
+                st.session_state["current_filename"] = most_recent["filename"]  # Keep filename too
+                st.info(f"Using file '{most_recent['filename']}' for analysis")
+            
+            # Don't delete current_file_id and current_filename anymore
+            for key in ["is_parsing", "show_upload_form", "parsed_data_rerun"]:
                 if key in st.session_state:
                     del st.session_state[key]
 
