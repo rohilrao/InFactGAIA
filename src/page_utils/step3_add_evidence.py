@@ -571,21 +571,26 @@ def display_file_upload_step(db, fs, hypothesis_collection):
         st.session_state["parsed_data_rerun"] = False
 
     # 5. DISPLAY MOST RECENT FILE'S PARSED DATA (if no current parsing)
-    if not parsed_data_displayed and not is_parsing and existing_files:
-        # Find the most recently uploaded file that has parsed data
-        recent_files = [f for f in existing_files if f.get("parsing_complete", False)]
-
-        if recent_files:
-            # Sort by upload date (newest first)
-            recent_files.sort(key=lambda x: x.get("upload_date", ""), reverse=False)
-            most_recent = recent_files[0]
-
-            if "parsed_data" in most_recent:
-                st.divider()
-                st.markdown("### :orange[Most Recently Parsed Data]")
-                st.markdown(f"#### Showing data for: {most_recent['filename']}")
-                render_parsed_data(most_recent["parsed_data"], most_recent["filename"])
-
+    # Instead, we'll add a section that allows users to explicitly select a file to view
+    if not parsed_data_displayed and not is_parsing and processed_files:
+        st.divider()
+        st.markdown("### :orange[View Parsed Data]")
+        
+        # Create a dropdown to select which file to view
+        file_options = {file["filename"]: str(file["_id"]) for file in processed_files}
+        selected_filename = st.selectbox(
+            "Select a file to view its parsed data:",
+            options=list(file_options.keys()),
+            key="file_selector"
+        )
+        
+        if st.button("Show Data", key="show_parsed_data"):
+            selected_file_id = file_options[selected_filename]
+            selected_file = db.fs.files.find_one({"_id": ensure_object_id(selected_file_id)})
+            
+            if selected_file and "parsed_data" in selected_file:
+                st.markdown(f"#### Showing data for: {selected_filename}")
+                render_parsed_data(selected_file["parsed_data"], selected_filename)
     # 6. NAVIGATION
     st.divider()
     col1, col2 = st.columns([1, 1])
