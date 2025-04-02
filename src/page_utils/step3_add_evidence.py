@@ -368,8 +368,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                     st.write(f"**{filename}**")
 
                 # Status column
-                col1, col2 = st.columns([1, 1])
-        with col2:
+                with col2:
                     if file.get("status") == "ready_for_analysis" and file.get("parsing_complete", False):
                         st.markdown("<span style='color:green'>🔍 Ready for Analysis</span>", unsafe_allow_html=True)
                     elif file.get("status") == "processing":
@@ -379,17 +378,17 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                     else:
                         st.markdown("<span style='color:#888'>⚪ Unprocessed</span>", unsafe_allow_html=True)
 
-        # Action column
-        with col3:
-            # Only show delete button if status is not "processed"
-            if file.get("status") != "processed":
-                if st.button("Delete", key=f"delete_{idx}", use_container_width=True):
-                    if delete_file(db, fs, file_id):
-                        st.rerun()
+                # Action column
+                with col3:
+                    # Only show delete button if status is not "processed"
+                    if file.get("status") != "processed":
+                        if st.button("Delete", key=f"delete_{idx}", use_container_width=True):
+                            if delete_file(db, fs, file_id):
+                                st.rerun()
 
-        # Add a separator between files
-        if idx < len(existing_files) - 1:
-            st.divider()
+                # Add a separator between files
+                if idx < len(existing_files) - 1:
+                    st.divider()
     else:
         st.info("No files uploaded yet. Upload your first file below.")
 
@@ -417,6 +416,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
         if "parsed_data" in latest_file:
             render_parsed_data(latest_file["parsed_data"], latest_file["filename"])
         
+        col1, col2 = st.columns([1, 1])
         with col2:
             if st.button("Next →", key="next_with_ready_files"):
                 # Don't delete current_file_id and current_filename anymore
@@ -629,7 +629,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     with col1:
         if st.button("← Back", key="back_nav"):
             # Clean up session state
-            for key in ["is_parsing", "current_file_id", "current_filename", "show_upload_form", "parsed_data_rerun"]:
+            for key in ["is_parsing", "show_upload_form", "parsed_data_rerun"]:
                 if key in st.session_state:
                     del st.session_state[key]
 
