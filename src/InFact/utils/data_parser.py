@@ -28,6 +28,8 @@ def parse_data(data_file: str, hypothesis: str, llm_provider, logger) -> Dict:
         # Prepare content based on file type
         message_content = _prepare_file_content(data_file, file_type, logger)
         
+        print("Message Content: ", message_content)
+
         # Add analysis prompt
         prompt = f"""
         Extract relevant data points strictly from the above provided content for evaluating the hypothesis:
