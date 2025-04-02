@@ -88,7 +88,7 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm=None):
     render_chat_section(active_id, hypothesis_doc, hypothesis_collection, call_llm)
     
     # Render current state
-    render_current_state(active_id)
+    #render_current_state(active_id)
     
     # Render navigation buttons
     return render_navigation_buttons(active_id, hypothesis_doc)
