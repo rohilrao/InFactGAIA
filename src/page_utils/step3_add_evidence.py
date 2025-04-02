@@ -242,13 +242,6 @@ def load_or_create_infact_node(db, hypothesis_id, provider, model, api_key):
                     api_key=api_key, 
                     model=model
                 )
-            elif provider.lower() == "deepseek":
-                from InFact.providers.deepseek_provider import DeepSeekProvider
-                deepseek_provider = DeepSeekProvider(api_key=api_key, model=model)
-                node = InFactNode(
-                    hypothesis=hypothesis_text,
-                    llm_provider=deepseek_provider
-                )
             else:
                 raise ValueError(f"Unsupported provider: {provider}")
 

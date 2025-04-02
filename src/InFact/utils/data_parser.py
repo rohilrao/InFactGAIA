@@ -30,7 +30,7 @@ def parse_data(data_file: str, hypothesis: str, llm_provider, logger) -> Dict:
         
         # Add analysis prompt
         prompt = f"""
-        Extract relevant data points for evaluating the hypothesis:
+        Extract relevant data points strictly from the above provided content for evaluating the hypothesis:
         "{hypothesis}"
 
         Provide your response as a JSON code block, like this:
