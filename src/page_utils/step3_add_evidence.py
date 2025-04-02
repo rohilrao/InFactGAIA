@@ -379,17 +379,17 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                     else:
                         st.markdown("<span style='color:#888'>⚪ Unprocessed</span>", unsafe_allow_html=True)
 
-                # Action column
-                with col3:
-                    # Only show delete button if status is not "processed"
-                    if file.get("status") != "processed":
-                        if st.button("Delete", key=f"delete_{idx}", use_container_width=True):
-                            if delete_file(db, fs, file_id):
-                                st.rerun()
+        # Action column
+        with col3:
+            # Only show delete button if status is not "processed"
+            if file.get("status") != "processed":
+                if st.button("Delete", key=f"delete_{idx}", use_container_width=True):
+                    if delete_file(db, fs, file_id):
+                        st.rerun()
 
-                # Add a separator between files
-                if idx < len(existing_files) - 1:
-                    st.divider()
+        # Add a separator between files
+        if idx < len(existing_files) - 1:
+            st.divider()
     else:
         st.info("No files uploaded yet. Upload your first file below.")
 
