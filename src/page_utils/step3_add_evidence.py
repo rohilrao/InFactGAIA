@@ -329,6 +329,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                     st.rerun()
     
     # 4. DISPLAY PARSED DATA SECTION (only if we have analyzed files)
+    
     if analyzed_files:
         st.divider()
         st.markdown("### :orange[Parsed Data Preview]")
@@ -345,7 +346,10 @@ def display_file_upload_step(db, fs, hypothesis_collection):
             selected_file_id = file_options[selected_file]
             file_doc = db.fs.files.find_one({"_id": selected_file_id})
             
-            if file_doc and ("parsed_data" in file_doc or ("metadata" in file_doc and "parsed_data" in file_doc["metadata"])):
+            # Get the parsed data from either the top-level or metadata
+            parsed_data = file_doc.get("parsed_data", file_doc.get("metadata", {}).get("parsed_data", {}))
+            
+            if parsed_data:
                 # Display the parsed data in a nice format
                 st.markdown(f"#### Data from: {file_doc['filename']}")
                 
@@ -353,9 +357,6 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                 summary_tab, raw_data_tab = st.tabs(["Summary View", "Raw JSON Data"])
                 
                 with summary_tab:
-                    # Get the parsed data from either the top-level or metadata
-                    st.json(parsed_data)
-                    
                     # If there's a confidence assessment, show it prominently
                     confidence_data = parsed_data.get("confidence_assessment", {})
                     if confidence_data:
@@ -409,8 +410,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                 
                 with raw_data_tab:
                     st.caption("Complete data structure returned by the parser")
-                    # Get the parsed data from either the top-level or metadata
-                parsed_data = file_doc.get("parsed_data", file_doc.get("metadata", {}).get("parsed_data", {}))
+                    st.json(parsed_data)
             else:
                 st.warning("No parsed data available for this file.")
     
