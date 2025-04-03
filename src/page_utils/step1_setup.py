@@ -8,7 +8,6 @@ def display_setup_step():
     st.markdown("### :orange[Step 1: AI Model Configuration]")
     #st.markdown("### :orange[Upload Files for Your Hypothesis]")
 
-    st.rerun()
 
     # Pre-select values if they exist in session state
     provider_default = st.session_state.get("provider", "openai")
@@ -92,6 +91,9 @@ def display_setup_step():
     else:
         st.warning("Please set your credentials before proceeding")
     
+    st.write("🔐 Secrets:", dict(st.secrets))
+
+
     # Only show the Next button if credentials are verified
     proceed = False
     if st.session_state["credentials_verified"]:
