@@ -9,8 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), ".")))
 
 # Import necessary modules
 try:
-    from InFact.providers.anthropic_provider import AnthropicProvider
-    from InFact.providers.openai_provider import OpenAIProvider
+    from infact_utils import call_llm
     from hypothesis_setup_utils import initialize_session_state
     from hypothesis_setup_utils import setup_ui_styles
     from hypothesis_setup_utils import render_hypothesis_setup
@@ -25,13 +24,12 @@ try:
 except ImportError as e:
     st.error(f"Could not import required modules: {str(e)}. Please ensure the packages are installed correctly.")
 
-def display_combined_hypothesis_step(hypothesis_collection, call_llm=None):
+def display_combined_hypothesis_step(hypothesis_collection):
     """
     Main function for the hypothesis page. Calls the modular components in sequence.
     
     Args:
         hypothesis_collection: MongoDB collection for hypotheses
-        call_llm: Function to call LLM API (optional, for external LLM calls)
         
     Returns:
         str: Navigation action - "back", "next", or None

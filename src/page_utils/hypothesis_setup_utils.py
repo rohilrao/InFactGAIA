@@ -4,6 +4,8 @@ import json
 import uuid
 import time
 from uuid import uuid4
+from datetime import datetime
+from infact_utils import call_llm
 
 def check_and_load_hypothesis(hypothesis_collection):
     """Check if hypothesis ID exists and load its data if present."""
@@ -29,16 +31,6 @@ def reformulate_hypothesis_as_yes_no(original_text, active_id, hypothesis_collec
         api_key = st.session_state["api_key"]
         model = st.session_state["model"]
         
-        # Import the correct provider based on provider_name
-        if provider_name.lower() == "anthropic":
-            from InFact.providers.anthropic_provider import AnthropicProvider
-            llm_provider = AnthropicProvider(api_key=api_key, model=model)
-        elif provider_name.lower() == "openai":
-            from InFact.providers.openai_provider import OpenAIProvider
-            llm_provider = OpenAIProvider(api_key=api_key, model=model)
-        else:
-            raise ValueError(f"Unsupported provider: {provider_name}")
-        
         prompt_reformulate = (
             f"Given this hypothesis:\n\n'{original_text}'\n\n"
             "Rewrite/Reformulate it as a clear, concise Yes-No question. " 
@@ -46,7 +38,7 @@ def reformulate_hypothesis_as_yes_no(original_text, active_id, hypothesis_collec
             "Keep your response brief — ONLY return the reformulated question, nothing else."
         )
         
-        yes_no_formulation = llm_provider.send_message(prompt_reformulate).strip()
+        yes_no_formulation = call_llm(provider_name, api_key, model, prompt_reformulate)
         
         # Validate the response
         if not yes_no_formulation.endswith('?'):
@@ -83,26 +75,8 @@ def generate_hypothesis_description(hypothesis_text, active_id, hypothesis_colle
             "Make it clear and succinct, suitable as a hypothesis description that a researcher might write."
         )
         
-        # Use call_llm if provided, otherwise create a provider
-        if call_llm:
-            description = call_llm(
-                provider=provider_name,
-                model=model,
-                api_key=api_key,
-                prompt_text=prompt_description
-            ).strip()
-        else:
-            # Import the correct provider based on provider_name
-            if provider_name.lower() == "anthropic":
-                from InFact.providers.anthropic_provider import AnthropicProvider
-                llm_provider = AnthropicProvider(api_key=api_key, model=model)
-            elif provider_name.lower() == "openai":
-                from InFact.providers.openai_provider import OpenAIProvider
-                llm_provider = OpenAIProvider(api_key=api_key, model=model)
-            else:
-                raise ValueError(f"Unsupported provider: {provider_name}")
-                
-            description = llm_provider.send_message(prompt_description).strip()
+       
+        description = call_llm(provider_name, api_key, model, prompt_description)   .strip()
         
         # Update DB
         hypothesis_collection.update_one(
@@ -119,6 +93,10 @@ def generate_hypothesis_description(hypothesis_text, active_id, hypothesis_colle
 def generate_background_summary(hypothesis_text, active_id, hypothesis_collection, call_llm=None):
     """Generate a detailed background summary for the hypothesis."""
     try:
+        provider_name = st.session_state["provider"]
+        api_key = st.session_state["api_key"]
+        model = st.session_state["model"]
+
         prompt_summary = (
             f"Given this yes/no hypothesis question:\n\n'{hypothesis_text}'\n\n"
             "Create a comprehensive background summary with the following structure:\n\n"
@@ -136,30 +114,8 @@ def generate_background_summary(hypothesis_text, active_id, hypothesis_collectio
             "Make your response well-structured and include detailed citations. Use minimal formatting and avoid overuse of emojis or decorative elements."
         )
         
-        # Use call_llm if provided, otherwise create a provider
-        if call_llm:
-            summary = call_llm(
-                provider=st.session_state["provider"],
-                model=st.session_state["model"],
-                api_key=st.session_state["api_key"],
-                prompt_text=prompt_summary
-            )
-        else:
-            provider_name = st.session_state["provider"]
-            api_key = st.session_state["api_key"]
-            model = st.session_state["model"]
-            
-            # Import the correct provider based on provider_name
-            if provider_name.lower() == "anthropic":
-                from InFact.providers.anthropic_provider import AnthropicProvider
-                llm_provider = AnthropicProvider(api_key=api_key, model=model)
-            elif provider_name.lower() == "openai":
-                from InFact.providers.openai_provider import OpenAIProvider
-                llm_provider = OpenAIProvider(api_key=api_key, model=model)
-            else:
-                raise ValueError(f"Unsupported provider: {provider_name}")
-                
-            summary = llm_provider.send_message(prompt_summary)
+        
+        summary = call_llm(provider_name, api_key, model, prompt_summary)
         
         # Update DB
         hypothesis_collection.update_one(
@@ -176,6 +132,10 @@ def generate_background_summary(hypothesis_text, active_id, hypothesis_collectio
 def process_chat_message(user_question, hypothesis_text, background_summary, call_llm=None):
     """Process a chat message and generate a response."""
     try:
+        provider_name = st.session_state["provider"]
+        api_key = st.session_state["api_key"]
+        model = st.session_state["model"]
+
         prompt_chat = (
             f"You are an assistant helping a researcher understand the background of a hypothesis.\n\n"
             f"The hypothesis is: {hypothesis_text}\n\n"
@@ -186,30 +146,8 @@ def process_chat_message(user_question, hypothesis_text, background_summary, cal
             f"and suggest what kinds of information might be needed to address the question."
         )
         
-        # Use call_llm if provided, otherwise create a provider
-        if call_llm:
-            return call_llm(
-                provider=st.session_state["provider"],
-                model=st.session_state["model"],
-                api_key=st.session_state["api_key"],
-                prompt_text=prompt_chat
-            )
-        else:
-            provider_name = st.session_state["provider"]
-            api_key = st.session_state["api_key"]
-            model = st.session_state["model"]
-            
-            # Import the correct provider based on provider_name
-            if provider_name.lower() == "anthropic":
-                from InFact.providers.anthropic_provider import AnthropicProvider
-                llm_provider = AnthropicProvider(api_key=api_key, model=model)
-            elif provider_name.lower() == "openai":
-                from InFact.providers.openai_provider import OpenAIProvider
-                llm_provider = OpenAIProvider(api_key=api_key, model=model)
-            else:
-                raise ValueError(f"Unsupported provider: {provider_name}")
-                
-            return llm_provider.send_message(prompt_chat)
+        return call_llm(provider_name, api_key, model, prompt_chat)
+    
     except Exception as e:
         return f"Error processing your question: {str(e)}"
 
@@ -245,7 +183,7 @@ def create_hypothesis(hypothesis_id, hypothesis_text, hypothesis_collection):
         hypothesis_doc = {
             "_id": hypothesis_id,
             "text": hypothesis_text,
-            "created_at": time.time(),
+            "created_at": datetime.now().isoformat(),
             "original_text": hypothesis_text
         }
         
