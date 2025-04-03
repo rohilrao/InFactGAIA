@@ -43,38 +43,48 @@ def display_setup_step():
             credential_key = api_key
             is_admin = False
             
-            # First verify that ADMIN_KEY exists in secrets
+            # Check if this is an admin key
             if "ADMIN_KEY" in st.secrets:
                 is_admin = (api_key == st.secrets["ADMIN_KEY"])
+                
+                # If admin access granted, use the appropriate API key from secrets
+                if is_admin:
+                    if provider == "openai":
+                        if "OPENAI_API_KEY" in st.secrets:
+                            credential_key = st.secrets["OPENAI_API_KEY"]
+                            st.success("Using admin OpenAI API key")
+                        else:
+                            st.warning("Admin OpenAI API key not configured in secrets.")
+                            is_admin = False  # Revert admin status since we can't use admin credentials
+                    
+                    elif provider == "anthropic":
+                        if "ANTHROPIC_API_KEY" in st.secrets:
+                            credential_key = st.secrets["ANTHROPIC_API_KEY"]
+                            st.success("Using admin Anthropic API key")
+                        else:
+                            st.warning("Admin Anthropic API key not configured in secrets.")
+                            is_admin = False  # Revert admin status since we can't use admin credentials
+                else:
+                    # Only show this message if the key provided doesn't match admin key
+                    st.info("Using your provided API key directly.")
             else:
                 st.error("ADMIN_KEY not found in Streamlit secrets. Admin access unavailable.")
-            
-            # If admin access granted, use the appropriate API key from secrets
-            if is_admin:
-                if provider == "openai":
-                    if "OPENAI_API_KEY" in st.secrets:
-                        credential_key = st.secrets["OPENAI_API_KEY"]
-                        st.success("Using admin OpenAI API key")
-                    else:
-                        st.warning("Admin OpenAI API key not configured in secrets.")
-                
-                elif provider == "anthropic":
-                    if "ANTHROPIC_API_KEY" in st.secrets:
-                        credential_key = st.secrets["ANTHROPIC_API_KEY"]
-                        st.success("Using admin Anthropic API key")
-                    else:
-                        st.warning("Admin Anthropic API key not configured in secrets.")
+                st.info("Using your provided API key directly.")
             
             # Save final values to session state
             st.session_state["provider"] = provider
             st.session_state["model"] = model
             st.session_state["api_key"] = credential_key
+            st.session_state["is_admin"] = is_admin  # Track admin status
             st.session_state["credentials_verified"] = True
-            st.success("Credentials set successfully!")
+            
+            if not is_admin:
+                st.success("Credentials set successfully!")
     
     # Show status based on credentials verification
     if st.session_state["credentials_verified"]:
-        st.info(f"Ready to proceed with {provider} ({model})")
+        auth_method = "admin credentials" if st.session_state.get("is_admin", False) else "your API key"
+        st.info(f"Ready to proceed with {provider} ({model}) using {auth_method}")
     else:
         st.warning("Please set your credentials before proceeding")
     
