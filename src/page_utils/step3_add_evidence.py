@@ -593,7 +593,6 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                         # Force refresh
                         st.rerun()
 
-
     # Display the parsed data in a simple text area
     st.subheader(f"Parsed Data Preview for '{filename}'")
     st.text(f"File ID: {file_id}")
