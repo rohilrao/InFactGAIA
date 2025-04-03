@@ -101,6 +101,16 @@ def parse_data_from_db(db, file_id: Union[str, ObjectId], hypothesis: str, llm_p
         else:
             # If it's just text, append the prompt
             message_content += "\n\n" + prompt
+        
+
+        print("THIS CODE IS RUNNING")
+        print(message_content)
+        # Log the prepared prompt
+        logger.debug(f"Prepared prompt for parsing: {prompt}")
+        logger.debug(f"Prepared message content for parsing: {message_content}")
+        # Log the file content length
+        logger.debug(f"File content length: {len(file_content)} bytes")
+        # Log the file type
 
         logger.debug(f"Prepared prompt for parsing")
 
