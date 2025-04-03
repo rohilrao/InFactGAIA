@@ -43,8 +43,12 @@ def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o"):
     logger.info(f"Starting to process file with ID: {file_id}")
     
     try:
-        # Status should already be set to "processing" from the UI
-        # Just verify it's in processing state
+        # Get file metadata first
+        file_metadata = db.fs.files.find_one({"_id": file_id})
+        if not file_metadata or "metadata" not in file_metadata:
+            raise ValueError(f"File metadata not found for file ID: {file_id}")
+        
+        # Check and update status if needed
         file_status = file_metadata.get("metadata", {}).get("status", "")
         if file_status != "processing":
             logger.info(f"File status is {file_status}, updating to 'processing'")
@@ -59,10 +63,6 @@ def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o"):
         file_content = grid_file.read()
         
         # Get hypothesis from file metadata
-        file_metadata = db.fs.files.find_one({"_id": file_id})
-        if not file_metadata or "metadata" not in file_metadata:
-            raise ValueError(f"File metadata not found for file ID: {file_id}")
-            
         hypothesis = file_metadata["metadata"].get("hypothesis_text", "")
         if not hypothesis:
             raise ValueError("Hypothesis text not found in file metadata")
