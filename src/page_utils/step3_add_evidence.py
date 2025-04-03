@@ -549,12 +549,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                     api_key
                 )
 
-                # Display the parsed data in a simple text area
-                st.subheader(f"Parsed Data Preview for '{filename}'")
-                st.text(f"File ID: {file_id}")
-                st.text("Parsed content:")
-                st.text(parsed_data)
-                st.info("This data will be used in the analysis step.")
+                
 
                 # Save parsed data to file record
                 print(f"DEBUG - Saving parsed data for file '{filename}'")
@@ -597,6 +592,14 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                                 del st.session_state[key]
                         # Force refresh
                         st.rerun()
+
+
+    # Display the parsed data in a simple text area
+    st.subheader(f"Parsed Data Preview for '{filename}'")
+    st.text(f"File ID: {file_id}")
+    st.text("Parsed content:")
+    st.text(parsed_data)
+    st.info("This data will be used in the analysis step.")
 
     # Reset rerun flag to prevent continuous reruns
     if st.session_state.get("parsed_data_rerun", False):
