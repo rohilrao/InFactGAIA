@@ -1,0 +1,40 @@
+# Ignore MongoDB logs and lock files
+/mongodb_data/*.lock
+/mongodb_data/*.log
+/mongodb_data/journal/
+*.log
+
+# Ignore WiredTiger internal files (for MongoDB storage engine)
+WiredTiger
+WiredTiger.lock
+WiredTiger.turtle
+WiredTigerLAS.wt
+storage.bson
+diagnostic.data/
+
+# Ignore Git metadata
+.git/
+# Ignore MongoDB logs and lock files
+/mongodb_data/*.lock
+/mongodb_data/*.log
+/mongodb_data/journal/
+
+# Ignore WiredTiger internal files (for MongoDB storage engine)
+WiredTiger
+WiredTiger.lock
+WiredTiger.turtle
+WiredTigerLAS.wt
+storage.bson
+diagnostic.data/
+
+# Ignore Git metadata
+.git/
+.sh
+
+!WiredTiger
+!collection-*.wt
+!index-*.wt
+!*.bson
+!*.json
+
+
