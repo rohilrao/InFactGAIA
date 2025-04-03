@@ -6,7 +6,6 @@ from pathlib import Path
 from InFact.utils.data_parser import parse_db_standalone  # Import the new parser
 from InFact.infact_node import InFactNode
 
-# Import necessary modules - THIS IS THE ISSUE
 # The imports are using relative imports but the functions are being called directly
 # Let's define these functions inline since the imports are failing
 def ensure_object_id(id_value):

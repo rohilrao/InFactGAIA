@@ -35,6 +35,8 @@ def parse_data_from_db(db, file_id: Union[str, ObjectId], hypothesis: str, llm_p
         if not file_doc:
             logger.error(f"File with ID {file_id} not found in database")
             raise FileNotFoundError(f"File with ID {file_id} not found in database")
+        else:
+            logger.info(f"File with ID {file_id} found successfully")
         
         filename = file_doc["filename"]
         file_type = "." + filename.split(".")[-1].lower() if "." in filename else ""
@@ -43,9 +45,9 @@ def parse_data_from_db(db, file_id: Union[str, ObjectId], hypothesis: str, llm_p
         fs = gridfs.GridFS(db)
         
         # Retrieve file content from GridFS
-        logger.debug(f"Retrieving content for file '{filename}' (type: {file_type})")
+        print(f"Retrieving content for file '{filename}' (type: {file_type})")
         if not fs.exists(file_id):
-            logger.error(f"File with ID {file_id} exists in metadata but not in GridFS")
+            print(f"ERROR: File with ID {file_id} exists in metadata but not in GridFS")
             raise FileNotFoundError(f"File content for ID {file_id} not found in GridFS")
             
         # Use proper GridFS access
