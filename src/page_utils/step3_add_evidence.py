@@ -358,6 +358,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                       and f.get("status") != "processing"
                       and f.get("parsing_complete", False)]
 
+    
     if existing_files:
         st.caption(f"{len(existing_files)} file(s) associated with this hypothesis")
 
@@ -392,23 +393,21 @@ def display_file_upload_step(db, fs, hypothesis_collection):
 
                 # Download column
                 with col4:
-                    if st.button("Download", key=f"download_{idx}", use_container_width=True):
-                        try:
-                            # Retrieve file content from GridFS
-                            file_content = fs.get(file_id).read()
-                            
-                            # Create download button
-                            st.download_button(
-                                label="Get File",
-                                data=file_content,
-                                file_name=filename,
-                                mime="application/octet-stream",
-                                key=f"download_button_{idx}"
-                            )
-                            # Show success message
-                            st.success(f"Click 'Get File' to download {filename}")
-                        except Exception as e:
-                            st.error(f"Error retrieving file: {str(e)}")
+                    try:
+                        # Retrieve file content from GridFS
+                        file_content = fs.get(file_id).read()
+                        
+                        # Direct download button
+                        st.download_button(
+                            label="Download",
+                            data=file_content,
+                            file_name=filename,
+                            mime="application/octet-stream",
+                            key=f"download_{idx}",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Error retrieving file: {str(e)}")
 
                 # Action column (Delete)
                 with col3:
@@ -424,7 +423,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
         st.info("No files uploaded yet. Upload your first file below.")
 
     st.divider()
-    
+
     # 3. FILE UPLOAD SECTION
     # Check if there are any files ready for analysis
     if ready_for_analysis_files:
