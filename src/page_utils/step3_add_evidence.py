@@ -370,8 +370,8 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                 file_id = file["_id"]
                 filename = file["filename"]
 
-                # Create a row for each file
-                col1, col2, col3 = st.columns([3, 3, 1])
+                # Create a row for each file - add a column for download
+                col1, col2, col3, col4 = st.columns([3, 3, 1, 1])
 
                 # File name column
                 with col1:
@@ -390,7 +390,27 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                     else:
                         st.markdown("<span style='color:#888'>⚪ Unprocessed</span>", unsafe_allow_html=True)
 
-                # Action column
+                # Download column
+                with col4:
+                    if st.button("Download", key=f"download_{idx}", use_container_width=True):
+                        try:
+                            # Retrieve file content from GridFS
+                            file_content = fs.get(file_id).read()
+                            
+                            # Create download button
+                            st.download_button(
+                                label="Get File",
+                                data=file_content,
+                                file_name=filename,
+                                mime="application/octet-stream",
+                                key=f"download_button_{idx}"
+                            )
+                            # Show success message
+                            st.success(f"Click 'Get File' to download {filename}")
+                        except Exception as e:
+                            st.error(f"Error retrieving file: {str(e)}")
+
+                # Action column (Delete)
                 with col3:
                     if file.get("status") != "processed":
                          if st.button("Delete", key=f"delete_{idx}", use_container_width=True):
@@ -404,7 +424,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
         st.info("No files uploaded yet. Upload your first file below.")
 
     st.divider()
-
+    
     # 3. FILE UPLOAD SECTION
     # Check if there are any files ready for analysis
     if ready_for_analysis_files:
