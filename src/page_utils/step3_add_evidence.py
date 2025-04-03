@@ -597,7 +597,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     # Display the parsed data in a simple text area
     st.subheader(f"Parsed Data Preview for '{filename}'")
     st.text(f"File ID: {file_id}")
-    st.text("Parsed content:")
+    st.text("MY Parsed content:")
     st.text(parsed_data)
     st.info("This data will be used in the analysis step.")
 
