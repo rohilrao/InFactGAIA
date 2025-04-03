@@ -1,13 +1,15 @@
 import streamlit as st
 
+
+
 def display_setup_step():
     """
     Handles Step 1: AI Model Configuration
     Returns True if user proceeds to next step, False otherwise
+    Returns -1 if user wants to go back
     """
     st.markdown("### :orange[Step 1: AI Model Configuration]")
     #st.markdown("### :orange[Upload Files for Your Hypothesis]")
-
 
     # Pre-select values if they exist in session state
     provider_default = st.session_state.get("provider", "openai")
@@ -91,10 +93,19 @@ def display_setup_step():
     else:
         st.warning("Please set your credentials before proceeding")
     
+    # Create columns for Back and Next buttons
+    col1, col2 = st.columns([1, 5])
+    
+    # Back button in the first column
+    with col1:
+        if st.button("← Back"):
+            return -1
+    
     # Only show the Next button if credentials are verified
     proceed = False
-    if st.session_state["credentials_verified"]:
-        if st.button("Next →"):
-            proceed = True
+    with col2:
+        if st.session_state["credentials_verified"]:
+            if st.button("Next →"):
+                proceed = True
     
     return proceed
