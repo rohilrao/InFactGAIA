@@ -245,13 +245,13 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                     )
 
                     print(f"DEBUG - File successfully uploaded with ID: {file_id}")
-
-                    # Store file ID in session
+                    st.success(f"File '{file_name}' uploaded successfully. Click 'Process File' to continue.")
+                    
+                    # Store file ID in session but DON'T set is_parsing to True immediately
                     st.session_state["current_file_id"] = file_id
                     st.session_state["current_filename"] = file_name
-                    st.session_state["is_parsing"] = True
-
-                    # Rerun to reflect state changes
+                    
+                    # Rerun to reflect state changes without starting processing
                     st.rerun()
     elif is_parsing:
         st.info("Processing a file. Please wait until processing completes.")
