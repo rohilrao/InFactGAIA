@@ -358,7 +358,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                       and f.get("status") != "processing"
                       and f.get("parsing_complete", False)]
 
-    
+
     if existing_files:
         st.caption(f"{len(existing_files)} file(s) associated with this hypothesis")
 
@@ -548,6 +548,13 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                     model,
                     api_key
                 )
+
+                # Display the parsed data in a simple text area
+                st.subheader(f"Parsed Data Preview for '{filename}'")
+                st.text(f"File ID: {file_id}")
+                st.text("Parsed content:")
+                st.text(parsed_data)
+                st.info("This data will be used in the analysis step.")
 
                 # Save parsed data to file record
                 print(f"DEBUG - Saving parsed data for file '{filename}'")
