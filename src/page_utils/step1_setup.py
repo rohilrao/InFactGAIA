@@ -45,6 +45,8 @@ def display_setup_step():
             credential_key = api_key
             is_admin = False
             
+            print(st.secrets)
+
             # Check if this is an admin key
             if "ADMIN_KEY" in st.secrets:
                 is_admin = (api_key == st.secrets["ADMIN_KEY"])
