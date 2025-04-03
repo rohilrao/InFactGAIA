@@ -105,8 +105,8 @@ def parse_data_from_db(db, file_id: Union[str, ObjectId], hypothesis: str, llm_p
 
         print("THIS CODE IS RUNNING")
         print(message_content)
-        print(len(message_content)
-        print("THIS CODE IS RUNNING1"))
+        print(len(message_content))
+        print("THIS CODE IS RUNNING1")
         # Log the prepared prompt
         logger.debug(f"Prepared prompt for parsing: {prompt}")
         logger.debug(f"Prepared message content for parsing: {message_content}")
