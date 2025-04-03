@@ -18,7 +18,7 @@ def delete_file(db, fs, file_id):
     except Exception as e:
         st.error(f"Error deleting file: {str(e)}")
         return False
-
+    
 def display_file_upload_step(db, fs, hypothesis_collection):
     """
     Step 3: Add evidence to hypothesis by uploading files
@@ -154,123 +154,224 @@ def display_file_upload_step(db, fs, hypothesis_collection):
 
     st.divider()
     
-    # 3. UPLOAD NEW FILE SECTION
-    st.markdown("### :orange[Upload New File]")
-    st.write("You can upload one file at a time. Please wait for processing to complete before uploading another file.")
+    # Track if we're currently parsing
+    is_parsing = st.session_state.get("is_parsing", False)
     
-    # File uploader
-    uploaded_file = st.file_uploader("Select a file to upload", type=["txt", "pdf", "png", "jpg", "html", "csv"])
-
-    # Logic for handling file upload
-    if uploaded_file:
-        file_name = uploaded_file.name
-        print(f"DEBUG - User selected file: '{file_name}'")
-
-        # Check if this file already exists for THIS hypothesis
-        existing_filenames = [file["filename"] for file in existing_files]
-        is_duplicate = file_name in existing_filenames
-
-        if is_duplicate:
-            st.warning(f"A file named '{file_name}' already exists for this hypothesis. Please choose a different file.")
-        else:
-            # Show upload button if not a duplicate
-            if st.button("Upload File", key="upload_button"):
-                print(f"DEBUG - Uploading file '{file_name}' for hypothesis ID '{hypothesis_id}'")
-                # Read file content
-                file_content = uploaded_file.read()
-
-                # Save to GridFS
-                file_id = fs.put(
-                    file_content,
-                    filename=file_name,
-                    metadata={
-                        "hypothesis_id": hypothesis_id,
-                        "hypothesis_text": hypothesis_text,
-                        "status": "unprocessed",  # Initial status
-                        "upload_date": datetime.datetime.now().isoformat(),  # Use ISO format for consistent sorting
-                    }
-                )
-
-                print(f"DEBUG - File successfully uploaded with ID: {file_id}")
-                st.success(f"File '{file_name}' uploaded successfully!")
+    # 3. CHECK IF THERE ARE ALREADY FILES READY FOR ANALYSIS
+    if ready_for_analysis_files:
+        st.success("✅ You have files ready for analysis. Please proceed to the next step.")
+        
+        # Get the most recent ready file
+        ready_for_analysis_files.sort(key=lambda x: x.get("last_updated", x.get("upload_date", "")), reverse=True)
+        recent_file = ready_for_analysis_files[0]
+        
+        # Store this file ID in session state for future steps
+        st.session_state["analyzed_file_id"] = str(recent_file["_id"])
+        
+        col1, col2 = st.columns([1, 1])
+        with col2:
+            if st.button("Next →", key="next_with_ready_files"):
+                # Reset relevant session state variables
+                for key in ["is_parsing", "show_upload_form", "parsed_data_rerun"]:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                return "next"
+    
+    # 4. UNPROCESSED FILES SECTION
+    elif unprocessed_files:
+        st.warning(f"You have {len(unprocessed_files)} unprocessed file(s). Please process them before uploading new files.")
+        
+        # Show option to process existing unprocessed files
+        if not is_parsing:
+            if st.button("Process File - Parse Data", key="process_existing", use_container_width=True):
+                # Get the first unprocessed file
+                file_to_process = unprocessed_files[0]
+                st.session_state["current_file_id"] = file_to_process["_id"]
+                st.session_state["current_filename"] = file_to_process["filename"]
+                st.session_state["is_parsing"] = True
+                st.rerun()
                 
-                # Add process file button - no additional duplicate check needed here
-                if st.button("Process File", key="process_file_button"):
-                    # Create a status message container
-                    status_container = st.empty()
-                    status_container.info("File processing initiated. This may take a moment...")
-                    
-                    # Update status to 'processing' in the database
-                    db.fs.files.update_one(
-                        {"_id": file_id},
-                        {"$set": {"metadata.status": "processing"}}
-                    )
-                    
-                    # Get values from session state
-                    api_key = st.session_state.get("api_key", "")
-                    provider = st.session_state.get("llm_provider", "openai")
-                    model = st.session_state.get("llm_model", "gpt-4o")
-                    
-                    try:
-                        # Call the process_file function
-                        with st.spinner("Processing file... (this may take a minute or two)"):
-                            result = process_file(db, fs, file_id, api_key, provider, model)
+                # Update status to 'processing' in the database
+                db.fs.files.update_one(
+                    {"_id": file_to_process["_id"]},
+                    {"$set": {"metadata.status": "processing"}}
+                )
+                
+                # Get values from session state
+                api_key = st.session_state.get("api_key", "")
+                provider = st.session_state.get("llm_provider", "openai")
+                model = st.session_state.get("llm_model", "gpt-4o")
+                
+                with st.spinner("Processing file... (this may take a minute or two)"):
+                    result = process_file(db, fs, file_to_process["_id"], api_key, provider, model)
+                
+                if result["success"]:
+                    st.success("File processed successfully! Status: Ready for Analysis")
                         
-                        if result["success"]:
-                            # Show success message with expander for details
-                            status_container.success("File processed successfully! Status: Ready for Analysis")
-                                
-                            with st.expander("View Processing Results"):
-                                # Show metadata
-                                st.subheader("File Metadata")
-                                st.json(result.get("metadata", {}))
-                                
-                                # Show parsed data
-                                st.subheader("Parsed Content")
-                                st.json(result.get("parsed_data", {}))
-                                
-                                # If there's a confidence assessment, show it prominently
-                                confidence_data = result.get("parsed_data", {}).get("confidence_assessment", {})
-                                if confidence_data:
-                                    confidence_score = confidence_data.get("confidence_score", 0)
-                                    st.subheader("Confidence Assessment")
-                                    
-                                    # Display confidence score as a progress bar
-                                    st.progress(float(confidence_score))
-                                    st.write(f"**Score:** {confidence_score:.2f}")
-                                    st.write(f"**Explanation:** {confidence_data.get('explanation', '')}")
-                                    
-                                    # Display strengths and limitations
-                                    if "key_strengths" in confidence_data:
-                                        st.write("**Key Strengths:**")
-                                        for strength in confidence_data["key_strengths"]:
-                                            st.write(f"- {strength}")
-                                            
-                                    if "key_limitations" in confidence_data:
-                                        st.write("**Key Limitations:**")
-                                        for limitation in confidence_data["key_limitations"]:
-                                            st.write(f"- {limitation}")
-                        else:
-                            # Show error message
-                            status_container.error(f"Error processing file: {result.get('error', 'Unknown error')}")
+                    with st.expander("View Processing Results"):
+                        # Show metadata
+                        st.subheader("File Metadata")
+                        st.json(result.get("metadata", {}))
+                        
+                        # Show parsed data
+                        st.subheader("Parsed Content")
+                        st.json(result.get("parsed_data", {}))
+                        
+                        # If there's a confidence assessment, show it prominently
+                        confidence_data = result.get("parsed_data", {}).get("confidence_assessment", {})
+                        if confidence_data:
+                            confidence_score = confidence_data.get("confidence_score", 0)
+                            st.subheader("Confidence Assessment")
                             
-                        # Refresh the page after a short delay
-                        time.sleep(1)
-                        st.rerun()
+                            # Display confidence score as a progress bar
+                            st.progress(float(confidence_score))
+                            st.write(f"**Score:** {confidence_score:.2f}")
+                            st.write(f"**Explanation:** {confidence_data.get('explanation', '')}")
+                            
+                            # Display strengths and limitations
+                            if "key_strengths" in confidence_data:
+                                st.write("**Key Strengths:**")
+                                for strength in confidence_data["key_strengths"]:
+                                    st.write(f"- {strength}")
+                                    
+                            if "key_limitations" in confidence_data:
+                                st.write("**Key Limitations:**")
+                                for limitation in confidence_data["key_limitations"]:
+                                    st.write(f"- {limitation}")
+                else:
+                    st.error(f"Error processing file: {result.get('error', 'Unknown error')}")
+                
+                # Reset parsing flag and rerun to update UI
+                st.session_state["is_parsing"] = False
+                time.sleep(1)
+                st.rerun()
+        else:
+            st.info("Processing a file. Please wait until processing completes.")
+    
+    # 5. UPLOAD NEW FILE SECTION (ONLY IF NO UNPROCESSED FILES AND NOT PARSING)
+    elif not is_parsing:
+        st.markdown("### :orange[Upload New File]")
+        st.write("You can upload one file at a time. Please wait for processing to complete before uploading another file.")
+        
+        # File uploader
+        uploaded_file = st.file_uploader("Select a file to upload", type=["txt", "pdf", "png", "jpg", "html", "csv"])
+
+        # Logic for handling file upload
+        if uploaded_file:
+            file_name = uploaded_file.name
+            print(f"DEBUG - User selected file: '{file_name}'")
+
+            # Check if this file already exists for THIS hypothesis
+            existing_filenames = [file["filename"] for file in existing_files]
+            is_duplicate = file_name in existing_filenames
+
+            if is_duplicate:
+                st.warning(f"A file named '{file_name}' already exists for this hypothesis. Please choose a different file.")
+            else:
+                # Show upload button if not a duplicate
+                if st.button("Upload File", key="upload_button"):
+                    print(f"DEBUG - Uploading file '{file_name}' for hypothesis ID '{hypothesis_id}'")
+                    # Read file content
+                    file_content = uploaded_file.read()
+
+                    # Save to GridFS
+                    file_id = fs.put(
+                        file_content,
+                        filename=file_name,
+                        metadata={
+                            "hypothesis_id": hypothesis_id,
+                            "hypothesis_text": hypothesis_text,
+                            "status": "unprocessed",  # Initial status
+                            "upload_date": datetime.datetime.now().isoformat(),  # Use ISO format for consistent sorting
+                        }
+                    )
+
+                    print(f"DEBUG - File successfully uploaded with ID: {file_id}")
+                    st.success(f"File '{file_name}' uploaded successfully!")
+                    
+                    # Store file ID in session state
+                    st.session_state["current_file_id"] = file_id
+                    st.session_state["current_filename"] = file_name
+                    
+                    # Add process file button
+                    if st.button("Process File", key="process_file_button"):
+                        # Create a status message container
+                        status_container = st.empty()
+                        status_container.info("File processing initiated. This may take a moment...")
                         
-                    except Exception as e:
-                        status_container.error(f"Error: {str(e)}")
-                        
-                        # Update file status to error in the database
+                        # Update status to 'processing' in the database
                         db.fs.files.update_one(
                             {"_id": file_id},
-                            {"$set": {
-                                "metadata.status": "error",
-                                "metadata.error_message": str(e)
-                            }}
+                            {"$set": {"metadata.status": "processing"}}
                         )
-
-    # 4. NAVIGATION BUTTONS
+                        
+                        # Get values from session state
+                        api_key = st.session_state.get("api_key", "")
+                        provider = st.session_state.get("llm_provider", "openai")
+                        model = st.session_state.get("llm_model", "gpt-4o")
+                        
+                        try:
+                            # Call the process_file function
+                            with st.spinner("Processing file... (this may take a minute or two)"):
+                                result = process_file(db, fs, file_id, api_key, provider, model)
+                            
+                            if result["success"]:
+                                # Show success message with expander for details
+                                status_container.success("File processed successfully! Status: Ready for Analysis")
+                                    
+                                with st.expander("View Processing Results"):
+                                    # Show metadata
+                                    st.subheader("File Metadata")
+                                    st.json(result.get("metadata", {}))
+                                    
+                                    # Show parsed data
+                                    st.subheader("Parsed Content")
+                                    st.json(result.get("parsed_data", {}))
+                                    
+                                    # If there's a confidence assessment, show it prominently
+                                    confidence_data = result.get("parsed_data", {}).get("confidence_assessment", {})
+                                    if confidence_data:
+                                        confidence_score = confidence_data.get("confidence_score", 0)
+                                        st.subheader("Confidence Assessment")
+                                        
+                                        # Display confidence score as a progress bar
+                                        st.progress(float(confidence_score))
+                                        st.write(f"**Score:** {confidence_score:.2f}")
+                                        st.write(f"**Explanation:** {confidence_data.get('explanation', '')}")
+                                        
+                                        # Display strengths and limitations
+                                        if "key_strengths" in confidence_data:
+                                            st.write("**Key Strengths:**")
+                                            for strength in confidence_data["key_strengths"]:
+                                                st.write(f"- {strength}")
+                                                
+                                        if "key_limitations" in confidence_data:
+                                            st.write("**Key Limitations:**")
+                                            for limitation in confidence_data["key_limitations"]:
+                                                st.write(f"- {limitation}")
+                            else:
+                                # Show error message
+                                status_container.error(f"Error processing file: {result.get('error', 'Unknown error')}")
+                                
+                            # Refresh the page after a short delay
+                            time.sleep(1)
+                            st.rerun()
+                            
+                        except Exception as e:
+                            status_container.error(f"Error: {str(e)}")
+                            
+                            # Update file status to error in the database
+                            db.fs.files.update_one(
+                                {"_id": file_id},
+                                {"$set": {
+                                    "metadata.status": "error",
+                                    "metadata.error_message": str(e)
+                                }}
+                            )
+    elif is_parsing:
+        st.info("Processing a file. Please wait until processing completes.")
+        
+    # 6. NAVIGATION BUTTONS
     st.divider()
     
     col1, col2, spacer, col3 = st.columns([1, 1, 2, 1])
