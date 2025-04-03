@@ -45,6 +45,13 @@ def display_combined_hypothesis_step(hypothesis_collection, call_llm=None):
     # Render hypothesis setup section
     hypothesis_id, hypothesis_doc = render_hypothesis_setup(hypothesis_collection)
     
+    # Explicitly set the hypothesis_id in session state
+    if hypothesis_id:
+        print(f"[display_combined_hypothesis_step] Setting hypothesis_id in session state: {hypothesis_id}")
+        st.session_state["hypothesis_id"] = hypothesis_id
+    else:   
+        print(f"[display_combined_hypothesis_step] No hypothesis_id provided.")
+
     # Only continue if we have a valid hypothesis
     can_proceed = (st.session_state["id_exists"] is True and hypothesis_id) or \
                   st.session_state.get("hypothesis_id") == hypothesis_id
