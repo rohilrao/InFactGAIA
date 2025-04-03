@@ -19,10 +19,6 @@ st.markdown("### :orange[Introduction]")
 st.markdown("""
 The <b>InFact Project</b> is our attempt to realize this vision. We're building a prototype for a decentralized system 
 that evaluates scientific claims and provides a clear measure of confidence based on available evidence.  
-
-Imagine a collaborative platform where scientists and the public can <b>work together</b> to assess the reliability of scientific findings, 
-supported by <b>AI-powered analysis</b> and <b>rigorous automated statistics</b>.  
-This is the core idea behind InFact.
 """, unsafe_allow_html=True)
 
 # Section: How does InFact work?
