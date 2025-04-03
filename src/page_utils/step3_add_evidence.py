@@ -281,7 +281,8 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     """
     # 1. HEADER SECTION
     st.markdown("### :orange[Upload Files for Your Hypothesis]")
-
+    parsed_data = None
+    
     # Get hypothesis information 
     hypothesis_id = st.session_state.get("hypothesis_id", None)
 
@@ -593,12 +594,18 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                         # Force refresh
                         st.rerun()
 
-    # Display the parsed data in a simple text area
-    st.subheader(f"Parsed Data Preview for '{filename}'")
-    st.text(f"File ID: {file_id}")
-    st.text("MY Parsed content:")
-    st.text(parsed_data)
-    st.info("This data will be used in the analysis step.")
+    # Display the parsed data in a simple text area only if we have processed data
+    if "just_processed_file_id" in st.session_state and "just_processed_filename" in st.session_state:
+        filename = st.session_state["just_processed_filename"]
+        file_id = st.session_state["just_processed_file_id"]
+        file_doc = db.fs.files.find_one({"_id": ensure_object_id(file_id)})
+        
+        if file_doc and "parsed_data" in file_doc:
+            st.subheader(f"Parsed Data Preview for '{filename}'")
+            st.text(f"File ID: {file_id}")
+            st.text("Parsed content:")
+            st.text(file_doc["parsed_data"])
+            st.info("This data will be used in the analysis step.")
 
     # Reset rerun flag to prevent continuous reruns
     if st.session_state.get("parsed_data_rerun", False):
