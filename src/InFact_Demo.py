@@ -64,9 +64,14 @@ if st.session_state.process_step == 0:
 
 
 # Step 1: AI Model Config
-if st.session_state.process_step == 1:
-    if display_setup_step():
-        st.session_state.process_step = 2
+elif st.session_state.process_step == 1:
+    result = display_setup_step()
+    
+    if result == "next":
+        st.session_state.process_step = 2  # Go to the next sequential step (what was step 4)
+        st.rerun()
+    elif result == "back":
+        st.session_state.process_step = 0
         st.rerun()
 
 #Step 2

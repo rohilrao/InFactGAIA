@@ -99,13 +99,11 @@ def display_setup_step():
     # Back button in the first column
     with col1:
         if st.button("← Back"):
-            return -1
+            return "back"
     
     # Only show the Next button if credentials are verified
-    proceed = False
+    
     with col2:
         if st.session_state["credentials_verified"]:
             if st.button("Next →"):
-                proceed = True
-    
-    return proceed
+                return "next"
