@@ -1,6 +1,7 @@
 import streamlit as st
 
 process_steps = {
+    0: "Introduction",
     1: "Setup",
     2: "Hypothesis Setup", 
     3: "Add Evidence",
