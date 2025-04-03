@@ -194,7 +194,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                 print(f"DEBUG - File successfully uploaded with ID: {file_id}")
                 st.success(f"File '{file_name}' uploaded successfully!")
                 
-                # Add process file button
+                # Add process file button - no additional duplicate check needed here
                 if st.button("Process File", key="process_file_button"):
                     # Create a status message container
                     status_container = st.empty()
