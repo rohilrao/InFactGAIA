@@ -495,14 +495,19 @@ def display_results_step(db, fs, hypothesis_collection):
             
     with col2:
         if st.button("Process Another File"):
+            # Clear only file-related session state for next file
+            for key in ["current_file_id", "current_filename", "parsed_data",
+                       "generated_code", "validated_code", "new_posterior"]:
+                if key in st.session_state:
+                    del st.session_state[key]
             return "add_evidence"
             
     with col3:
         if st.button("Start Over"):
             # Clear all session state related to the analysis
             for key in ["hypothesis_id", "hypothesis_text", "infact_node", 
-                    "current_file_id", "current_filename", "parsed_data",
-                    "generated_code", "validated_code"]:
+                     "current_file_id", "current_filename", "parsed_data",
+                     "generated_code", "validated_code", "new_posterior"]:
                 if key in st.session_state:
                     del st.session_state[key]
             return "home"
