@@ -347,9 +347,8 @@ def display_file_upload_step(db, fs, hypothesis_collection):
             file_doc = db.fs.files.find_one({"_id": selected_file_id})
             
             # Get the parsed data from either the top-level or metadata
-            parsed_data = file_doc.get("parsed_data", file_doc.get("metadata", {}).get("parsed_data", {}))
-            
-            if parsed_data:
+            if "metadata" in file_doc and "parsed_data" in file_doc["metadata"]:
+                parsed_data = file_doc["metadata"]["parsed_data"]
                 # Display the parsed data in a nice format
                 st.markdown(f"#### Data from: {file_doc['filename']}")
                 
