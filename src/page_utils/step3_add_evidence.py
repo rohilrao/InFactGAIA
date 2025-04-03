@@ -3,7 +3,7 @@ import datetime
 import json
 from bson.objectid import ObjectId
 from pathlib import Path
-from InFact.utils.db_data_parser import parse_db_standalone  # Import the new parser
+from InFact.utils.data_parser import parse_db_standalone  # Import the new parser
 from InFact.infact_node import InFactNode
 
 # Import necessary modules - THIS IS THE ISSUE
