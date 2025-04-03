@@ -220,56 +220,56 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                             # Show success message with expander for details
                             status_container.success("File processed successfully! Status: Ready for Analysis")
                                 
-                                with st.expander("View Processing Results"):
-                                    # Show metadata
-                                    st.subheader("File Metadata")
-                                    st.json(result.get("metadata", {}))
-                                    
-                                    # Show parsed data
-                                    st.subheader("Parsed Content")
-                                    st.json(result.get("parsed_data", {}))
-                                    
-                                    # If there's a confidence assessment, show it prominently
-                                    confidence_data = result.get("parsed_data", {}).get("confidence_assessment", {})
-                                    if confidence_data:
-                                        confidence_score = confidence_data.get("confidence_score", 0)
-                                        st.subheader("Confidence Assessment")
-                                        
-                                        # Display confidence score as a progress bar
-                                        st.progress(float(confidence_score))
-                                        st.write(f"**Score:** {confidence_score:.2f}")
-                                        st.write(f"**Explanation:** {confidence_data.get('explanation', '')}")
-                                        
-                                        # Display strengths and limitations
-                                        if "key_strengths" in confidence_data:
-                                            st.write("**Key Strengths:**")
-                                            for strength in confidence_data["key_strengths"]:
-                                                st.write(f"- {strength}")
-                                                
-                                        if "key_limitations" in confidence_data:
-                                            st.write("**Key Limitations:**")
-                                            for limitation in confidence_data["key_limitations"]:
-                                                st.write(f"- {limitation}")
-                            else:
-                                # Show error message
-                                status_container.error(f"Error processing file: {result.get('error', 'Unknown error')}")
+                            with st.expander("View Processing Results"):
+                                # Show metadata
+                                st.subheader("File Metadata")
+                                st.json(result.get("metadata", {}))
                                 
-                            # Refresh the page after a short delay
-                            time.sleep(1)
-                            st.rerun()
+                                # Show parsed data
+                                st.subheader("Parsed Content")
+                                st.json(result.get("parsed_data", {}))
+                                
+                                # If there's a confidence assessment, show it prominently
+                                confidence_data = result.get("parsed_data", {}).get("confidence_assessment", {})
+                                if confidence_data:
+                                    confidence_score = confidence_data.get("confidence_score", 0)
+                                    st.subheader("Confidence Assessment")
+                                    
+                                    # Display confidence score as a progress bar
+                                    st.progress(float(confidence_score))
+                                    st.write(f"**Score:** {confidence_score:.2f}")
+                                    st.write(f"**Explanation:** {confidence_data.get('explanation', '')}")
+                                    
+                                    # Display strengths and limitations
+                                    if "key_strengths" in confidence_data:
+                                        st.write("**Key Strengths:**")
+                                        for strength in confidence_data["key_strengths"]:
+                                            st.write(f"- {strength}")
+                                            
+                                    if "key_limitations" in confidence_data:
+                                        st.write("**Key Limitations:**")
+                                        for limitation in confidence_data["key_limitations"]:
+                                            st.write(f"- {limitation}")
+                        else:
+                            # Show error message
+                            status_container.error(f"Error processing file: {result.get('error', 'Unknown error')}")
                             
-                        except Exception as e:
-                            status_container.error(f"Error: {str(e)}")
-                            
-                            # Update file status to error in the database
-                            db.fs.files.update_one(
-                                {"_id": file_id},
-                                {"$set": {
-                                    "metadata.status": "error",
-                                    "metadata.error_message": str(e)
-                                }}
-                            )
-    
+                        # Refresh the page after a short delay
+                        time.sleep(1)
+                        st.rerun()
+                        
+                    except Exception as e:
+                        status_container.error(f"Error: {str(e)}")
+                        
+                        # Update file status to error in the database
+                        db.fs.files.update_one(
+                            {"_id": file_id},
+                            {"$set": {
+                                "metadata.status": "error",
+                                "metadata.error_message": str(e)
+                            }}
+                        )
+
     # 4. NAVIGATION BUTTONS
     st.divider()
     
