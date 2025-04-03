@@ -5,7 +5,7 @@ import json
 import os
 
 # Import utility functions
-from .utils.data_parser import parse_data
+
 from .utils.data_analyzer import analyze_data
 from .utils.metadata_extractor import extract_metadata
 from .utils.redundancy_checker import is_redundant
@@ -185,6 +185,7 @@ class InFactNode:
         
         return node
 
+    '''    
     def process_data(self, data_file: str):
         """
         Process a new data file and update beliefs.
@@ -240,7 +241,7 @@ class InFactNode:
         except Exception as e:
             self.logger.error(f"Error processing {data_file}: {str(e)}", exc_info=True)
             raise
-
+    '''
     def _calculate_uncertainty(self):
         """
         Calculate 95% confidence interval for the posterior probability.
