@@ -1,12 +1,9 @@
 import streamlit as st
-import os
-import tempfile
 import datetime
 import json
 from bson.objectid import ObjectId
 from pathlib import Path
-from InFact.utils.data_parser import parse_data
-from InFact.utils.data_parser import parse_standalone
+from InFact.utils.db_data_parser import parse_db_standalone  # Import the new parser
 from InFact.infact_node import InFactNode
 
 # Import necessary modules
@@ -248,7 +245,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     elif is_parsing:
         st.info("Processing a file. Please wait until processing completes.")
 
-    # 4. FILE PROCESSING SECTION
+    # 4. FILE PROCESSING SECTION - MODIFIED TO USE DB-BASED PARSER
     if is_parsing and "current_file_id" in st.session_state:
         st.divider()
         st.markdown("### :orange[Processing File]")
@@ -259,16 +256,6 @@ def display_file_upload_step(db, fs, hypothesis_collection):
 
         # Show processing indicator
         with st.spinner(f"Processing file '{filename}'... Please wait"):
-            # Create temporary file
-            temp_dir = tempfile.gettempdir()
-            temp_file_path = os.path.join(temp_dir, filename)
-
-            # Get file content
-            with open(temp_file_path, "wb") as f:
-                f.write(fs.get(ensure_object_id(file_id)).read())
-
-            print(f"DEBUG - Created temporary file at '{temp_file_path}'")
-
             # Process the file
             try:
                 provider = st.session_state.get("provider")
@@ -283,9 +270,10 @@ def display_file_upload_step(db, fs, hypothesis_collection):
 
                 print(f"DEBUG - Parsing file '{filename}' with provider '{provider}' and model '{model}'")
 
-                # Parse data using the enhanced parser
-                parsed_data = parse_standalone(
-                    temp_file_path,
+                # Parse data using the DB-based parser
+                parsed_data = parse_db_standalone(
+                    db,
+                    file_id,
                     hypothesis_text,
                     provider,
                     model,
@@ -301,13 +289,6 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                     st.session_state["analyzed_file_id"] = str(file_id)
                     st.session_state["just_processed_file_id"] = file_id
                     st.session_state["just_processed_filename"] = filename
-
-                # Clean up
-                try:
-                    os.remove(temp_file_path)
-                    print(f"DEBUG - Removed temporary file '{temp_file_path}'")
-                except Exception as e:
-                    print(f"DEBUG - Failed to remove temp file: {str(e)}")
 
                 # Retrieve the updated file document from the database
                 updated_file = db.fs.files.find_one({"_id": ensure_object_id(file_id)})
