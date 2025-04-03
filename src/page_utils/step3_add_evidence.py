@@ -1,5 +1,7 @@
 import streamlit as st
 import datetime
+import time
+from file_processor import process_file
 
 def delete_file(db, fs, file_id):
     """Delete a file from GridFS and its metadata from the database"""
@@ -194,19 +196,79 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                 
                 # Add process file button
                 if st.button("Process File", key="process_file_button"):
-                    # Update status to 'processing'
+                    # Create a status message container
+                    status_container = st.empty()
+                    status_container.info("File processing initiated. This may take a moment...")
+                    
+                    # Update status to 'processing' in the database
                     db.fs.files.update_one(
                         {"_id": file_id},
                         {"$set": {"metadata.status": "processing"}}
                     )
                     
-                    # Here you would typically call your processing function or queue
-                    # For now, just display a message
-                    st.info("File processing initiated. This may take a moment...")
+                    # Get values from session state
+                    api_key = st.session_state.get("api_key", "")
+                    provider = st.session_state.get("llm_provider", "openai")
+                    model = st.session_state.get("llm_model", "gpt-4o")
                     
-                    # In a real app, you might want to trigger a background job here
-                    # and then rerun the page to show updated status
-                    st.rerun()
+                    try:
+                        # Call the process_file function
+                        with st.spinner("Processing file... (this may take a minute or two)"):
+                            result = process_file(db, fs, file_id, api_key, provider, model)
+                        
+                        if result["success"]:
+                            # Show success message with expander for details
+                            status_container.success("File processed successfully! Status: Ready for Analysis")
+                                
+                                with st.expander("View Processing Results"):
+                                    # Show metadata
+                                    st.subheader("File Metadata")
+                                    st.json(result.get("metadata", {}))
+                                    
+                                    # Show parsed data
+                                    st.subheader("Parsed Content")
+                                    st.json(result.get("parsed_data", {}))
+                                    
+                                    # If there's a confidence assessment, show it prominently
+                                    confidence_data = result.get("parsed_data", {}).get("confidence_assessment", {})
+                                    if confidence_data:
+                                        confidence_score = confidence_data.get("confidence_score", 0)
+                                        st.subheader("Confidence Assessment")
+                                        
+                                        # Display confidence score as a progress bar
+                                        st.progress(float(confidence_score))
+                                        st.write(f"**Score:** {confidence_score:.2f}")
+                                        st.write(f"**Explanation:** {confidence_data.get('explanation', '')}")
+                                        
+                                        # Display strengths and limitations
+                                        if "key_strengths" in confidence_data:
+                                            st.write("**Key Strengths:**")
+                                            for strength in confidence_data["key_strengths"]:
+                                                st.write(f"- {strength}")
+                                                
+                                        if "key_limitations" in confidence_data:
+                                            st.write("**Key Limitations:**")
+                                            for limitation in confidence_data["key_limitations"]:
+                                                st.write(f"- {limitation}")
+                            else:
+                                # Show error message
+                                status_container.error(f"Error processing file: {result.get('error', 'Unknown error')}")
+                                
+                            # Refresh the page after a short delay
+                            time.sleep(1)
+                            st.rerun()
+                            
+                        except Exception as e:
+                            status_container.error(f"Error: {str(e)}")
+                            
+                            # Update file status to error in the database
+                            db.fs.files.update_one(
+                                {"_id": file_id},
+                                {"$set": {
+                                    "metadata.status": "error",
+                                    "metadata.error_message": str(e)
+                                }}
+                            )
     
     # 4. NAVIGATION BUTTONS
     st.divider()
