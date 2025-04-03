@@ -8,106 +8,6 @@ import logging
 from autogen.code_utils import extract_code
 
 
-def parse_data_from_db(db, file_id: Union[str, ObjectId], hypothesis: str, llm_provider, logger) -> Dict:
-    """
-    Parse different file types using LLM assistance, retrieving file content directly from the database.
-    
-    Args:
-        db: MongoDB database connection
-        file_id: ObjectId or string ID of the file in GridFS
-        hypothesis: The hypothesis being evaluated
-        llm_provider: LLM provider instance
-        logger: Logger instance
-        
-    Returns:
-        Dict: Parsed data
-    """
-    logger.info(f"Parsing data file from DB with ID: {file_id}")
-    
-    # Ensure file_id is an ObjectId
-    if isinstance(file_id, str):
-        file_id = ObjectId(file_id)
-    
-    try:
-        # Get file information from DB
-        file_doc = db.fs.files.find_one({"_id": file_id})
-        if not file_doc:
-            logger.error(f"File with ID {file_id} not found in database")
-            raise FileNotFoundError(f"File with ID {file_id} not found in database")
-        
-        filename = file_doc["filename"]
-        file_type = "." + filename.split(".")[-1].lower() if "." in filename else ""
-        
-        # Retrieve file content from GridFS
-        logger.debug(f"Retrieving content for file '{filename}' (type: {file_type})")
-        grid_out = db.fs.get(file_id)
-        file_content = grid_out.read()
-        
-        # Prepare content based on file type
-        message_content = _prepare_db_file_content(file_content, filename, file_type, logger)
-        
-        # Add analysis prompt
-        prompt = f"""
-        Extract relevant data points for evaluating the hypothesis:
-        "{hypothesis}"
-
-        Provide your response as a JSON code block, like this:
-        ```json
-        {{
-            "numerical_values": [],
-            "metadata": {{}},
-            "issues": [],
-            "confidence_assessment": {{
-                "confidence_score": 0.75,
-                "explanation": "Detailed explanation of confidence level",
-                "key_strengths": [
-                    "Strength 1",
-                    "Strength 2"
-                ],
-                "key_limitations": [
-                    "Limitation 1",
-                    "Limitation 2"
-                ]
-            }}
-        }}
-        ```
-
-        The confidence_assessment should:
-        1. Include a confidence_score between 0 and 1
-        2. Provide a detailed explanation of the confidence level
-        3. List key strengths of the evidence
-        4. List key limitations or potential issues
-
-        The overall JSON should include:
-        1. Extracted numerical values and their uncertainties
-        2. Relevant metadata (source quality, methodology, etc.)
-        3. Any potential issues or biases in the data
-        """
-
-        # Add prompt to message content if it's a list of structured content
-        if isinstance(message_content, list):
-            message_content.append({"type": "text", "text": prompt})
-        else:
-            # If it's just text, append the prompt
-            message_content += "\n\n" + prompt
-
-        logger.debug(f"Prepared prompt for parsing")
-
-        # Send to LLM with retry logic
-        response_text = llm_provider.send_with_retry(message_content)
-        logger.debug(f"Received API response for parsing")
-
-        # Extract JSON from response
-        parsed_data = _extract_json_from_response(response_text, logger)
-        logger.debug(f"Successfully parsed JSON data")
-        
-        return parsed_data
-
-    except Exception as e:
-        logger.error(f"Error in parse_data_from_db: {str(e)}", exc_info=True)
-        raise
-
-
 def _prepare_db_file_content(file_content: bytes, filename: str, file_type: str, logger) -> Any:
     """
     Prepare file content based on file type, working directly with binary content from DB.
@@ -381,3 +281,103 @@ def parse_db_standalone(db, file_id: Union[str, ObjectId], hypothesis: str, prov
         import traceback
         traceback.print_exc()
         return {"error": str(e)}
+
+
+def parse_data_from_db(db, file_id: Union[str, ObjectId], hypothesis: str, llm_provider, logger) -> Dict:
+    """
+    Parse different file types using LLM assistance, retrieving file content directly from the database.
+    
+    Args:
+        db: MongoDB database connection
+        file_id: ObjectId or string ID of the file in GridFS
+        hypothesis: The hypothesis being evaluated
+        llm_provider: LLM provider instance
+        logger: Logger instance
+        
+    Returns:
+        Dict: Parsed data
+    """
+    logger.info(f"Parsing data file from DB with ID: {file_id}")
+    
+    # Ensure file_id is an ObjectId
+    if isinstance(file_id, str):
+        file_id = ObjectId(file_id)
+    
+    try:
+        # Get file information from DB
+        file_doc = db.fs.files.find_one({"_id": file_id})
+        if not file_doc:
+            logger.error(f"File with ID {file_id} not found in database")
+            raise FileNotFoundError(f"File with ID {file_id} not found in database")
+        
+        filename = file_doc["filename"]
+        file_type = "." + filename.split(".")[-1].lower() if "." in filename else ""
+        
+        # Retrieve file content from GridFS
+        logger.debug(f"Retrieving content for file '{filename}' (type: {file_type})")
+        grid_out = db.fs.get(file_id)
+        file_content = grid_out.read()
+        
+        # Prepare content based on file type
+        message_content = _prepare_db_file_content(file_content, filename, file_type, logger)
+        
+        # Add analysis prompt
+        prompt = f"""
+        Extract relevant data points for evaluating the hypothesis:
+        "{hypothesis}"
+
+        Provide your response as a JSON code block, like this:
+        ```json
+        {{
+            "numerical_values": [],
+            "metadata": {{}},
+            "issues": [],
+            "confidence_assessment": {{
+                "confidence_score": 0.75,
+                "explanation": "Detailed explanation of confidence level",
+                "key_strengths": [
+                    "Strength 1",
+                    "Strength 2"
+                ],
+                "key_limitations": [
+                    "Limitation 1",
+                    "Limitation 2"
+                ]
+            }}
+        }}
+        ```
+
+        The confidence_assessment should:
+        1. Include a confidence_score between 0 and 1
+        2. Provide a detailed explanation of the confidence level
+        3. List key strengths of the evidence
+        4. List key limitations or potential issues
+
+        The overall JSON should include:
+        1. Extracted numerical values and their uncertainties
+        2. Relevant metadata (source quality, methodology, etc.)
+        3. Any potential issues or biases in the data
+        """
+
+        # Add prompt to message content if it's a list of structured content
+        if isinstance(message_content, list):
+            message_content.append({"type": "text", "text": prompt})
+        else:
+            # If it's just text, append the prompt
+            message_content += "\n\n" + prompt
+
+        logger.debug(f"Prepared prompt for parsing")
+
+        # Send to LLM with retry logic
+        response_text = llm_provider.send_with_retry(message_content)
+        logger.debug(f"Received API response for parsing")
+
+        # Extract JSON from response
+        parsed_data = _extract_json_from_response(response_text, logger)
+        logger.debug(f"Successfully parsed JSON data")
+        
+        return parsed_data
+
+    except Exception as e:
+        logger.error(f"Error in parse_data_from_db: {str(e)}", exc_info=True)
+        raise
