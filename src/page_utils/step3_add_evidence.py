@@ -3,6 +3,17 @@ import datetime
 import time
 from file_processor import process_file
 
+from bson.objectid import ObjectId
+
+def ensure_object_id(id_value):
+    """Convert string IDs to ObjectId if needed."""
+    if isinstance(id_value, str) and ObjectId.is_valid(id_value):
+        try:
+            return ObjectId(id_value)
+        except:
+            return id_value
+    return id_value
+
 def delete_file(db, fs, file_id):
     """Delete a file from GridFS and its metadata from the database"""
     try:
@@ -344,10 +355,14 @@ def display_file_upload_step(db, fs, hypothesis_collection):
         
         if selected_file:
             selected_file_id = file_options[selected_file]
-            file_doc = db.fs.files.find_one({"_id": selected_file_id})
             
-            # Get the parsed data from either the top-level or metadata
-            if "metadata" in file_doc and "parsed_data" in file_doc["metadata"]:
+            # Convert to ObjectId if needed
+            object_id = ensure_object_id(selected_file_id)
+            
+            # Query with the proper ID
+            file_doc = db.fs.files.find_one({"_id": object_id})
+            
+            if file_doc and "metadata" in file_doc and "parsed_data" in file_doc["metadata"]:
                 parsed_data = file_doc["metadata"]["parsed_data"]
                 # Display the parsed data in a nice format
                 st.markdown(f"#### Data from: {file_doc['filename']}")
