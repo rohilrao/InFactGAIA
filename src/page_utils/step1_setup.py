@@ -29,10 +29,15 @@ def display_setup_step():
     # Don't default to showing the API key when returning
     api_key = st.text_input("Enter API Key:", type="password")
 
-    proceed = False
-    if st.button("Next →"):
+    # Initialize credentials_verified in session state if it doesn't exist
+    if "credentials_verified" not in st.session_state:
+        st.session_state["credentials_verified"] = False
+        
+    # Add a Set Credentials button
+    if st.button("Set Credentials"):
         if not provider or not model or not api_key.strip():
-            st.warning("Please fill in all fields before proceeding.")
+            st.warning("Please fill in all fields before setting credentials.")
+            st.session_state["credentials_verified"] = False
         else:
             # Always evaluate credentials fresh each time
             credential_key = api_key
@@ -64,6 +69,19 @@ def display_setup_step():
             st.session_state["provider"] = provider
             st.session_state["model"] = model
             st.session_state["api_key"] = credential_key
+            st.session_state["credentials_verified"] = True
+            st.success("Credentials set successfully!")
+    
+    # Show status based on credentials verification
+    if st.session_state["credentials_verified"]:
+        st.info(f"Ready to proceed with {provider} ({model})")
+    else:
+        st.warning("Please set your credentials before proceeding")
+    
+    # Only show the Next button if credentials are verified
+    proceed = False
+    if st.session_state["credentials_verified"]:
+        if st.button("Next →"):
             proceed = True
     
     return proceed
