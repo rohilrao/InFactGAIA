@@ -99,7 +99,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     processed_files = [f for f in existing_files if f.get("metadata", {}).get("status") == "processed"]
     
     # Any files that are ready for analysis or already processed
-    analyzed_files = ready_for_analysis_files + processed_files
+    analyzed_files = ready_for_analysis_files #+ processed_files
 
     if existing_files:
         st.caption(f"{len(existing_files)} file(s) associated with this hypothesis")
