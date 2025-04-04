@@ -7,7 +7,7 @@ from autogen.code_utils import extract_code
 import json
 from code_analyzer import analyze_data
 from code_analyzer import _execute_code_with_debug
-
+from infact_utils import call_llm
 
 def ensure_object_id(id_value):
     """Convert string IDs to ObjectId if needed."""
@@ -338,8 +338,12 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                     Return only the improved Python code.
                                     """
                                     
-                                    # Use the node's llm_provider to get the improved code
-                                    response_text = node.llm_provider.send_message(feedback_prompt)
+                                    model = st.session_state.get("model", None)
+                                    api_key = st.session_state.get("api_key", None)
+                                    provider = st.session_state.get("provider", None)
+                                    credentials = (provider, model, api_key) 
+                                    
+                                    response_text = call_llm(provider, api_key, model, feedback_prompt)
                                     
                                     # Extract code from the response
                                     extracted_code = extract_code(response_text)
@@ -413,9 +417,14 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 
                                 Use non-technical language that a layperson would understand.
                                 """
+                                model = st.session_state.get("model", None)
+                                api_key = st.session_state.get("api_key", None)
+                                provider = st.session_state.get("provider", None)
+                                    
+                                credentials = (provider, model, api_key) 
                                 
-                                # Use the node's llm_provider to get the analysis
-                                simple_analysis_text = node.llm_provider.send_message(simple_analysis_prompt)
+                                
+                                simple_analysis_text = call_llm(provider, api_key, model, simple_analysis_prompt)
                                 
                                 st.session_state["simple_analysis"] = simple_analysis_text
                                 st.markdown(simple_analysis_text)
@@ -453,7 +462,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 """
                                 
                                 # Use the node's llm_provider to get the technical analysis
-                                tech_analysis_text = node.llm_provider.send_message(tech_analysis_prompt)
+                                tech_analysis_text = call_llm(provider, api_key, model, tech_analysis_prompt)
                                 
                                 st.session_state["tech_analysis"] = tech_analysis_text
                                 st.markdown(tech_analysis_text)
@@ -490,8 +499,6 @@ def display_code_review_step(db, fs, hypothesis_collection):
                             
                         credentials = (provider, model, api_key) 
                         
-                        # Use _execute_code_with_debug from data_analyzer
-                        from InFact.utils.data_analyzer import _execute_code_with_debug
                         l_plus, l_minus = _execute_code_with_debug(code_to_test, parsed_data, credentials)
                         
                         st.session_state["l_plus"] = l_plus
