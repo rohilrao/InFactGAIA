@@ -5,6 +5,7 @@ from bson.objectid import ObjectId
 import math
 from autogen.code_utils import extract_code
 import json
+from datetime import datetime
 from code_analyzer import analyze_data
 from code_analyzer import _execute_code_with_debug
 from infact_utils import call_llm
@@ -209,7 +210,6 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         return "reload"
                     except Exception as e:
                         st.error(f"Error generating code: {str(e)}")
-                        #node.logger.error(f"Error generating analysis code: {str(e)}", exc_info=True)
                         print(f"Error generating analysis code: {str(e)}")
         
         else:
@@ -383,7 +383,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                     
                                 except Exception as e:
                                     st.error(f"Error regenerating code: {str(e)}")
-                                    #node.logger.error(f"Error regenerating code: {str(e)}", exc_info=True)
+                        
                                     print(f"Error regenerating code: {str(e)}")
                         else:
                             st.warning("Please provide feedback to guide code regeneration.")
@@ -432,7 +432,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 
                             except Exception as e:
                                 st.error(f"Error generating analysis: {str(e)}")
-                                #node.logger.error(f"Error generating simple analysis: {str(e)}", exc_info=True)
+                                
                                 print(f"Error generating simple analysis: {str(e)}")
                 
                 tech_analysis = st.checkbox("Technical Analysis", value=False)
@@ -462,7 +462,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 Keep your response developer-focused, identifying specific technical issues.
                                 """
                                 
-                                # Use the node's llm_provider to get the technical analysis
+                                
                                 tech_analysis_text = call_llm(provider, api_key, model, tech_analysis_prompt)
                                 
                                 st.session_state["tech_analysis"] = tech_analysis_text
@@ -470,7 +470,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 
                             except Exception as e:
                                 st.error(f"Error generating technical analysis: {str(e)}")
-                                #node.logger.error(f"Error generating technical analysis: {str(e)}", exc_info=True)
+                               
                                 print(f"Error generating technical analysis: {str(e)}")
             
             # Validation section - always visible
@@ -602,7 +602,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                               "simple_analysis", "tech_analysis"]:
                         if key in st.session_state:
                             del st.session_state[key]
-                    # Don't delete the infact_node - we keep it for other steps
+                    
                     return "back"
             
             with col2:
