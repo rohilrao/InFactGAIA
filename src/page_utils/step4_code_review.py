@@ -562,7 +562,8 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                     "probability": probability,
                                     "confidence_lower": lower,
                                     "confidence_upper": upper
-                                }
+                                },
+                                "metadata.status": "processed"  # Update file status to processed
                             }}
                         )
 
