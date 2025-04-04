@@ -523,15 +523,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                             data_points = hypothesis_doc["node_metadata"]["data_points"]
 
 
-                        # Add the current analysis as a new data point
-                        new_data_point = {
-                            "file_id": file_id,
-                            "filename": st.session_state.get("current_filename", "Unknown file"),
-                            "l_plus": l_plus,
-                            "l_minus": l_minus,
-                            "timestamp": datetime.now()
-                        }
-                        data_points.append(new_data_point)
+                        
                         
                         # Calculate probability and uncertainty
                         probability = _to_probability(new_posterior)
@@ -555,14 +547,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         # Store the new posterior in the session state for later use
                         st.session_state["new_posterior"] = new_posterior
                         
-                        # Update the hypothesis document with the new posterior and data point
-                        hypothesis_collection.update_one(
-                            {"_id": hypothesis_id},
-                            {"$set": {
-                                "node_metadata.current_posterior": new_posterior,
-                                "node_metadata.data_points": data_points
-                            }}
-                        )
+                        
 
                         # Update the database with validation results
                         db.fs.files.update_one(
@@ -580,7 +565,35 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 }
                             }}
                         )
+
+
+
+                        # Add the current analysis as a new data point
+                        new_data_point = {
+                            "file_id": file_id,
+                            "filename": st.session_state.get("current_filename", "Unknown file"),
+                            "l_plus": l_plus,
+                            "l_minus": l_minus,
+                            "timestamp": datetime.now(),
+                            "current_posterior": current_posterior,
+                            "new_posterior": new_posterior,
+                            "probability": probability,
+                            "confidence_lower": lower,
+                            "confidence_upper": upper,
+                            "analysis_code": code_to_test
+
+                        }
+                        data_points.append(new_data_point)
                         
+                        # Update the hypothesis document with the new posterior and data point
+                        hypothesis_collection.update_one(
+                            {"_id": hypothesis_id},
+                            {"$set": {
+                                "node_metadata.current_posterior": new_posterior,
+                                "node_metadata.data_points": data_points
+                            }}
+                        )
+
                         # Exit edit mode after validation if we're in it
                         if edit_mode:
                             st.session_state["edit_mode"] = False
