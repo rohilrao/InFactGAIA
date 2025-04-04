@@ -5,6 +5,9 @@ from bson.objectid import ObjectId
 import math
 from autogen.code_utils import extract_code
 import json
+from code_analyzer import analyze_data
+from code_analyzer import _execute_code_with_debug
+
 
 def ensure_object_id(id_value):
     """Convert string IDs to ObjectId if needed."""
@@ -110,13 +113,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
     st.write(f"**Hypothesis:** {hypothesis_text}")
     st.divider()
     
-    # Check if we have the InFactNode from previous step
-    node = st.session_state.get("infact_node", None)
-    if not node:
-        st.error("InFactNode not found in session state. Please go back to Step 3 to initialize the analysis environment.")
-        if st.button("← Back to File Upload"):
-            return "back"
-        st.stop()
+    
     
     # Get file ID if it exists in session state
     file_id = st.session_state.get("current_file_id", None)
@@ -128,7 +125,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
         # Get files that are ready for analysis (have parsed data)
         ready_files = list(db.fs.files.find({
                     "metadata.hypothesis_id": hypothesis_id, 
-                    "status": "ready_for_analysis"  # Only this specific status
+                    "metadata.status": "ready_for_analysis"  # Only this specific status
                     }))
         
         if not ready_files:
@@ -147,8 +144,8 @@ def display_code_review_step(db, fs, hypothesis_collection):
             
             # Fetch the parsed data directly from the database
             file_obj = db.fs.files.find_one({"_id": file_options[selected_filename]})
-            if file_obj and "parsed_data" in file_obj:
-                st.session_state["parsed_data"] = file_obj["parsed_data"]
+            if file_obj and "metadata" in file_obj and "parsed_data" in file_obj["metadata"]:
+                st.session_state["parsed_data"] = file_obj["metadata"]["parsed_data"]
             
             return "reload"
     
@@ -163,9 +160,8 @@ def display_code_review_step(db, fs, hypothesis_collection):
         if not parsed_data:
             # Try to get parsed data from the database
             file_obj = db.fs.files.find_one({"_id": ensure_object_id(file_id)})
-            if file_obj and "parsed_data" in file_obj:
-                parsed_data = file_obj["parsed_data"]
-                st.session_state["parsed_data"] = parsed_data
+            if file_obj and "metadata" in file_obj and "parsed_data" in file_obj["metadata"]:
+                st.session_state["parsed_data"] = file_obj["metadata"]["parsed_data"]
             else:
                 st.error("Could not find parsed data for this file. Please return to the file upload step.")
                 if st.button("← Back to File Upload"):
@@ -187,11 +183,17 @@ def display_code_review_step(db, fs, hypothesis_collection):
                 with st.spinner("Generating analysis code..."):
                     try:
                         # Import data_analyzer directly and use it
-                        from InFact.utils.data_analyzer import analyze_data
                         
                         # Use analyze_data to generate code without executing it
                         # We only want the 'code' part from the tuple (l_plus, l_minus, code)
-                        _, _, code = analyze_data(parsed_data, hypothesis_text, node.llm_provider, node.logger)
+                        # Get model, api_key, and provider from session_state
+                        model = st.session_state.get("model", None)
+                        api_key = st.session_state.get("api_key", None)
+                        provider = st.session_state.get("provider", None)
+                            
+                        credentials = (provider, model, api_key) 
+                        
+                        _, _, code = analyze_data(parsed_data, hypothesis_text, logger, credentials)
                         
                         st.session_state["generated_code"] = code
                         st.session_state["current_code"] = code  # Track current version
