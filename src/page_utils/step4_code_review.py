@@ -193,7 +193,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                             
                         credentials = (provider, model, api_key) 
                         
-                        _, _, code = analyze_data(parsed_data, hypothesis_text, logger, credentials)
+                        _, _, code = analyze_data(parsed_data, hypothesis_text, credentials)
                         
                         st.session_state["generated_code"] = code
                         st.session_state["current_code"] = code  # Track current version
@@ -208,7 +208,8 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         return "reload"
                     except Exception as e:
                         st.error(f"Error generating code: {str(e)}")
-                        node.logger.error(f"Error generating analysis code: {str(e)}", exc_info=True)
+                        #node.logger.error(f"Error generating analysis code: {str(e)}", exc_info=True)
+                        print(f"Error generating analysis code: {str(e)}")
         
         else:
             # Main Code Display and Editing Section
@@ -377,7 +378,8 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                     
                                 except Exception as e:
                                     st.error(f"Error regenerating code: {str(e)}")
-                                    node.logger.error(f"Error regenerating code: {str(e)}", exc_info=True)
+                                    #node.logger.error(f"Error regenerating code: {str(e)}", exc_info=True)
+                                    print(f"Error regenerating code: {str(e)}")
                         else:
                             st.warning("Please provide feedback to guide code regeneration.")
             
@@ -420,7 +422,8 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 
                             except Exception as e:
                                 st.error(f"Error generating analysis: {str(e)}")
-                                node.logger.error(f"Error generating simple analysis: {str(e)}", exc_info=True)
+                                #node.logger.error(f"Error generating simple analysis: {str(e)}", exc_info=True)
+                                print(f"Error generating simple analysis: {str(e)}")
                 
                 tech_analysis = st.checkbox("Technical Analysis", value=False)
                 if tech_analysis:
@@ -457,7 +460,8 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 
                             except Exception as e:
                                 st.error(f"Error generating technical analysis: {str(e)}")
-                                node.logger.error(f"Error generating technical analysis: {str(e)}", exc_info=True)
+                                #node.logger.error(f"Error generating technical analysis: {str(e)}", exc_info=True)
+                                print(f"Error generating technical analysis: {str(e)}")
             
             # Validation section - always visible
             st.markdown("### :orange[Validate and Test Code]")
@@ -478,10 +482,17 @@ def display_code_review_step(db, fs, hypothesis_collection):
                             code_to_test = edited_code
                         else:
                             code_to_test = current_code
+
+
+                        model = st.session_state.get("model", None)
+                        api_key = st.session_state.get("api_key", None)
+                        provider = st.session_state.get("provider", None)
+                            
+                        credentials = (provider, model, api_key) 
                         
                         # Use _execute_code_with_debug from data_analyzer
                         from InFact.utils.data_analyzer import _execute_code_with_debug
-                        l_plus, l_minus = _execute_code_with_debug(code_to_test, parsed_data, node.llm_provider, node.logger)
+                        l_plus, l_minus = _execute_code_with_debug(code_to_test, parsed_data, credentials)
                         
                         st.session_state["l_plus"] = l_plus
                         st.session_state["l_minus"] = l_minus
@@ -537,8 +548,9 @@ def display_code_review_step(db, fs, hypothesis_collection):
                     except Exception as e:
                         st.error(f"Code execution failed: {str(e)}")
                         st.info("Please revise the code and try again.")
-                        node.logger.error(f"Code execution failed: {str(e)}", exc_info=True)
-            
+                        #node.logger.error(f"Code execution failed: {str(e)}", exc_info=True)
+                        print(f"Code execution failed: {str(e)}")
+
             # Navigation buttons
             st.divider()
             
