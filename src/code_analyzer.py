@@ -1,28 +1,25 @@
 import json
 from typing import Dict, Tuple
-import logging
-from autogen.code_utils import extract_code
 import numpy as np
+from autogen.code_utils import extract_code
 from infact_utils import call_llm
 
 
-def analyze_data(data: Dict, hypothesis: str, logger, credentials: Tuple[str, ...]) -> Tuple[float, float, str]:
+def analyze_data(data: Dict, hypothesis: str, credentials: Tuple[str, ...]) -> Tuple[float, float, str]:
     """
     Generate and execute analysis code using LLM.
     
     Args:
         data: Parsed data dictionary
         hypothesis: The hypothesis being evaluated
-        logger: Logger instance
         credentials: Tuple of strings containing authentication credentials
         
     Returns:
         Tuple: (l_plus, l_minus, code) - log likelihoods and the analysis code
     """
-    logger.info("Analyzing parsed data")
+    print("Analyzing parsed data")
     
     # Initialize LLM provider with credentials
-    
     provider, model, api_key = credentials
 
     MAX_LOG_LIKELIHOOD_RATIO = 5.0
@@ -55,15 +52,15 @@ def analyze_data(data: Dict, hypothesis: str, logger, credentials: Tuple[str, ..
         Do not include the function call itself.
         """
 
-        logger.debug("Sending analysis prompt to LLM")
+        print("Sending analysis prompt to LLM")
         response_text = call_llm(provider, api_key, model, prompt)
-        logger.debug("Received analysis code from LLM")
+        print("Received analysis code from LLM")
 
         # Extract code using autogen
         extracted_code = extract_code(response_text)
 
         if not extracted_code:
-            logger.error("No code block found in API response")
+            print("ERROR: No code block found in API response")
             raise ValueError("No code block found in LLM response")
 
         # Get the first Python code block
@@ -74,28 +71,27 @@ def analyze_data(data: Dict, hypothesis: str, logger, credentials: Tuple[str, ..
                 break
 
         if not code:
-            logger.error("No Python code block found in API response")
+            print("ERROR: No Python code block found in API response")
             raise ValueError("No Python code block found in LLM response")
 
-        logger.debug("Extracted Python code")
+        print("Extracted Python code")
 
         # Execute the code
-        l_plus, l_minus = _execute_code_with_debug(code, data, logger, credentials)
+        l_plus, l_minus = _execute_code_with_debug(code, data, credentials)
         return l_plus, l_minus, code
 
     except Exception as e:
-        logger.error(f"Error in analyze_data: {str(e)}", exc_info=True)
+        print(f"ERROR in analyze_data: {str(e)}")
         raise
 
 
-def _execute_code_with_debug(code: str, data: Dict, logger, credentials: Tuple[str, ...], max_attempts: int = 5) -> Tuple[float, float]:
+def _execute_code_with_debug(code: str, data: Dict, credentials: Tuple[str, ...], max_attempts: int = 5) -> Tuple[float, float]:
     """
     Execute code with debug loop for error correction.
     
     Args:
         code: Python code to execute
         data: Input data for the code
-        logger: Logger instance
         credentials: Tuple of strings containing authentication credentials
         max_attempts: Maximum number of debugging attempts
         
@@ -112,8 +108,8 @@ def _execute_code_with_debug(code: str, data: Dict, logger, credentials: Tuple[s
     
     attempt = 1
     while attempt <= max_attempts:
-        logger.info(f"Code execution attempt {attempt}/{max_attempts}")
-        logger.debug(f"Executing code:\n{code}")
+        print(f"Code execution attempt {attempt}/{max_attempts}")
+        print(f"Executing code:\n{code}")
 
         try:
             exec(code, globals_dict)
@@ -126,14 +122,14 @@ def _execute_code_with_debug(code: str, data: Dict, logger, credentials: Tuple[s
             if not (isinstance(l_plus, (int, float)) and isinstance(l_minus, (int, float))):
                 raise ValueError("l_plus and l_minus must be numeric values")
 
-            logger.info(f"Code execution successful - l_plus: {l_plus}, l_minus: {l_minus}")
+            print(f"Code execution successful - l_plus: {l_plus}, l_minus: {l_minus}")
             return float(l_plus), float(l_minus)
 
         except Exception as e:
-            logger.warning(f"Code execution failed on attempt {attempt}: {str(e)}")
+            print(f"WARNING: Code execution failed on attempt {attempt}: {str(e)}")
 
             if attempt == max_attempts:
-                logger.error("Max attempts reached, raising error")
+                print("ERROR: Max attempts reached, raising error")
                 raise RuntimeError(f"Failed to generate working code after {max_attempts} attempts. Final error: {str(e)}")
 
             # Ask LLM to fix the code
@@ -159,14 +155,14 @@ def _execute_code_with_debug(code: str, data: Dict, logger, credentials: Tuple[s
             Return only the corrected Python code.
             """
 
-            logger.debug(f"Sending debug prompt to LLM")
+            print(f"Sending debug prompt to LLM")
             response_text = call_llm(provider, api_key, model, debug_prompt)
 
             # Extract corrected code
             extracted_code = extract_code(response_text)
 
             if not extracted_code:
-                logger.error("No code block found in debug response")
+                print("ERROR: No code block found in debug response")
                 attempt += 1
                 continue
 
@@ -176,7 +172,7 @@ def _execute_code_with_debug(code: str, data: Dict, logger, credentials: Tuple[s
                     code = code_block
                     break
             else:
-                logger.error("No Python code block found in debug response")
+                print("ERROR: No Python code block found in debug response")
                 attempt += 1
                 continue
 
