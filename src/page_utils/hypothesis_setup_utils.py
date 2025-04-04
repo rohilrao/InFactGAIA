@@ -48,8 +48,13 @@ def reformulate_hypothesis_as_yes_no(original_text, active_id, hypothesis_collec
         hypothesis_collection.update_one(
             {"_id": active_id},
             {"$set": {
-                "original_text": original_text,
-                "text": yes_no_formulation
+            "original_text": original_text,
+            "text": yes_no_formulation,
+            "node_metadata": {
+                "prior_log_odds": 0.0,
+                "current_posterior": 0.0,
+                "data_points": []
+            }
             }}
         )
         
