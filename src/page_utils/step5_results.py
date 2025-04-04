@@ -270,13 +270,13 @@ def display_results_step(db, fs, hypothesis_collection):
                 
                 # Show the analysis code if available
                 if 'analysis_code' in point:
-                    with st.expander("Analysis Code"):
-                        st.code(point['analysis_code'], language="python")
+                    st.write("**Analysis Code:**")
+                    st.code(point['analysis_code'], language="python")
                 
                 # Show rationale if available
                 if 'analysis_rationale' in point:
-                    with st.expander("Analysis Rationale"):
-                        st.write(point['analysis_rationale'])
+                    st.write("**Analysis Rationale:**")
+                    st.write(point['analysis_rationale'])
     
     with visual_tab:
         # Render HTML visualization
@@ -411,8 +411,16 @@ def display_results_step(db, fs, hypothesis_collection):
     with col2:
         if st.button("Start New Analysis", type="primary"):
             # Clean up session state for a new analysis
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
+            keys_to_clear = [
+                "hypothesis_id", "current_file_id", "current_filename", 
+                "parsed_data", "generated_code", "current_code", 
+                "validated_code", "l_plus", "l_minus", 
+                "simple_analysis", "tech_analysis", "html_output"
+            ]
+            
+            for key in keys_to_clear:
+                if key in st.session_state:
+                    del st.session_state[key]
             
             return "restart"
     
