@@ -506,7 +506,13 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         st.session_state["validated_code"] = code_to_test
                         
                         # Calculate the new posterior by adding to current posterior
-                        current_posterior = node.current_posterior
+                        # Retrieve current posterior from the hypothesis document in the database
+                        hypothesis_doc = hypothesis_collection.find_one({"_id": hypothesis_id})
+                        if hypothesis_doc and "node_metadata" in hypothesis_doc and "current_posterior" in hypothesis_doc["node_metadata"]:
+                            current_posterior = hypothesis_doc["node_metadata"]["current_posterior"]
+                        else:
+                            # Throw error if current_posterior is not found
+                            raise ValueError("Could not find current posterior value in hypothesis document. Please ensure the hypothesis is properly initialized.")
                         new_posterior = current_posterior + l_plus - l_minus
 
                         # Use node's methods to calculate probability and uncertainty
