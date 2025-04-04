@@ -9,6 +9,7 @@ from typing import Dict, Any, List, Tuple
 
 import pandas as pd
 from bson.objectid import ObjectId
+import pdfplumber  # Added pdfplumber for PDF text extraction
 
 # Import your existing call_llm function
 from infact_utils import call_llm
@@ -82,7 +83,7 @@ def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o"):
             
             # Parse file data using LLM
             logger.info("Parsing file data using LLM...")
-            parsed_data = _parse_data(temp_file_path, hypothesis, api_key, provider, model)
+            parsed_data, extracted_content = _parse_data(temp_file_path, hypothesis, api_key, provider, model)
             
             # Update file in GridFS with the results - proper status transition to ready_for_analysis
             db.fs.files.update_one(
@@ -91,6 +92,7 @@ def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o"):
                     "metadata.status": "ready_for_analysis",
                     "metadata.parsed_data": parsed_data,
                     "metadata.extracted_metadata": metadata,
+                    "metadata.extracted_content": extracted_content,  # Store the extracted content
                     "metadata.processing_date": datetime.now().isoformat(),
                     "metadata.parsing_complete": True,
                     "metadata.processing_provider": provider,
@@ -106,7 +108,8 @@ def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o"):
                 "file_id": str(file_id),
                 "filename": filename,
                 "metadata": metadata,
-                "parsed_data": parsed_data
+                "parsed_data": parsed_data,
+                "extracted_content": extracted_content  # Include extracted content in the response
             }
             
         finally:
@@ -133,10 +136,18 @@ def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o"):
             "error": str(e)
         }
 
-def _parse_data(data_file: str, hypothesis: str, api_key: str, provider: str, model: str) -> Dict:
-    """Parse different file types using LLM assistance."""
+def _parse_data(data_file: str, hypothesis: str, api_key: str, provider: str, model: str) -> Tuple[Dict, str]:
+    """
+    Parse different file types using LLM assistance.
+    
+    Returns:
+        Tuple containing:
+            - Dictionary with parsed data
+            - String with the extracted content that was passed to the LLM
+    """
     logger.info(f"Parsing data file: {data_file}")
     file_type = Path(data_file).suffix.lower()
+    content = ""
 
     try:
         # Prepare file content based on file type
@@ -147,10 +158,9 @@ def _parse_data(data_file: str, hypothesis: str, api_key: str, provider: str, mo
             
         elif file_type in ['.pdf', '.PDF']:
             logger.debug("Processing PDF file")
-            with open(data_file, 'rb') as f:
-                pdf_data = base64.b64encode(f.read()).decode('utf-8')
-            # Since we're using text-only APIs, describe PDF content
-            content = f"[PDF file: {Path(data_file).name}, size: {os.path.getsize(data_file)} bytes]"
+            # Use pdfplumber to extract text from PDF
+            content = _extract_pdf_text(data_file)
+            logger.info(f"Extracted {len(content)} characters from PDF")
             
         elif file_type in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
             logger.debug(f"Processing image file of type {file_type}")
@@ -163,12 +173,13 @@ def _parse_data(data_file: str, hypothesis: str, api_key: str, provider: str, mo
                 content = f.read()
 
         # Create analysis prompt
+        truncated_content = content[:10000]  # Limiting content length to avoid token limits
         prompt = f"""
         Extract relevant data points for evaluating the hypothesis:
         "{hypothesis}"
 
         Here is the content to analyze:
-        {content[:10000]}  # Limiting content length to avoid token limits
+        {truncated_content}
 
         Provide your response as a JSON code block, like this:
         ```json
@@ -243,18 +254,65 @@ def _parse_data(data_file: str, hypothesis: str, api_key: str, provider: str, mo
                 return {
                     "extraction_error": "Failed to parse LLM response",
                     "raw_response": response_text[:1000]  # Include truncated response
-                }
+                }, content
 
         parsed_data = json.loads(json_str)
         logger.debug(f"Successfully parsed JSON data")
-        return parsed_data
+        return parsed_data, content
 
     except Exception as e:
         logger.error(f"Error in _parse_data: {str(e)}", exc_info=True)
         return {
             "extraction_error": str(e),
             "file_type": file_type
-        }
+        }, content
+
+def _extract_pdf_text(pdf_file: str) -> str:
+    """
+    Extract text from a PDF file using pdfplumber.
+    
+    Args:
+        pdf_file: Path to the PDF file
+    
+    Returns:
+        Extracted text as a string
+    """
+    logger.info(f"Extracting text from PDF: {pdf_file}")
+    extracted_text = ""
+    
+    try:
+        with pdfplumber.open(pdf_file) as pdf:
+            # Extract text from each page and join with page separators
+            all_pages = []
+            for i, page in enumerate(pdf.pages):
+                page_text = page.extract_text() or ""
+                all_pages.append(f"--- Page {i+1} ---\n{page_text}")
+            
+            extracted_text = "\n\n".join(all_pages)
+            
+            # Extract tables if any (simple text representation)
+            has_tables = False
+            for i, page in enumerate(pdf.pages):
+                tables = page.extract_tables()
+                if tables:
+                    has_tables = True
+                    table_text = []
+                    table_text.append(f"\n\n--- Tables on Page {i+1} ---")
+                    for j, table in enumerate(tables):
+                        table_text.append(f"\nTable {j+1}:")
+                        for row in table:
+                            # Join non-None values with pipe separators
+                            processed_row = [str(cell) if cell is not None else "" for cell in row]
+                            table_text.append(" | ".join(processed_row))
+                    
+                    extracted_text += "\n".join(table_text)
+            
+            logger.info(f"Extracted {len(extracted_text)} characters from PDF, has_tables={has_tables}")
+            return extracted_text
+            
+    except Exception as e:
+        logger.error(f"Error extracting text from PDF: {str(e)}", exc_info=True)
+        return f"[Error extracting PDF text: {str(e)}]"
 
 def _extract_metadata(data_file: str) -> Dict[str, Any]:
     """Extract metadata from the data file."""
@@ -272,23 +330,53 @@ def _extract_metadata(data_file: str) -> Dict[str, Any]:
 
         if file_path.suffix.lower() == '.pdf':
             try:
-                import PyPDF2
-                with open(file_path, 'rb') as f:
-                    pdf = PyPDF2.PdfReader(f)
-                    if hasattr(pdf, 'metadata') and pdf.metadata:
-                        basic_metadata.update({
-                            "title": pdf.metadata.get('/Title', ''),
-                            "author": pdf.metadata.get('/Author', ''),
-                            "creator": pdf.metadata.get('/Creator', ''),
-                            "producer": pdf.metadata.get('/Producer', ''),
-                            "creation_date": pdf.metadata.get('/CreationDate', ''),
-                            "modification_date": pdf.metadata.get('/ModDate', ''),
-                            "page_count": len(pdf.pages)
-                        })
-            except ImportError:
-                logger.warning("PyPDF2 not installed, skipping PDF metadata extraction")
+                # Use pdfplumber for more comprehensive PDF metadata
+                with pdfplumber.open(file_path) as pdf:
+                    page_count = len(pdf.pages)
+                    # Get PDF metadata if available
+                    metadata = pdf.metadata
+                    
+                    pdf_metadata = {
+                        "page_count": page_count,
+                        "title": metadata.get('Title', ''),
+                        "author": metadata.get('Author', ''),
+                        "creator": metadata.get('Creator', ''),
+                        "producer": metadata.get('Producer', ''),
+                        "creation_date": metadata.get('CreationDate', ''),
+                        "modification_date": metadata.get('ModDate', '')
+                    }
+                    
+                    # Check if PDF has tables
+                    has_tables = False
+                    for page in pdf.pages:
+                        if page.extract_tables():
+                            has_tables = True
+                            break
+                    
+                    pdf_metadata["has_tables"] = has_tables
+                    
+                    basic_metadata.update(pdf_metadata)
             except Exception as e:
-                logger.warning(f"Error extracting PDF metadata: {str(e)}")
+                logger.warning(f"Error extracting PDF metadata with pdfplumber: {str(e)}")
+                # Fallback to PyPDF2 if available
+                try:
+                    import PyPDF2
+                    with open(file_path, 'rb') as f:
+                        pdf = PyPDF2.PdfReader(f)
+                        if hasattr(pdf, 'metadata') and pdf.metadata:
+                            basic_metadata.update({
+                                "title": pdf.metadata.get('/Title', ''),
+                                "author": pdf.metadata.get('/Author', ''),
+                                "creator": pdf.metadata.get('/Creator', ''),
+                                "producer": pdf.metadata.get('/Producer', ''),
+                                "creation_date": pdf.metadata.get('/CreationDate', ''),
+                                "modification_date": pdf.metadata.get('/ModDate', ''),
+                                "page_count": len(pdf.pages)
+                            })
+                except ImportError:
+                    logger.warning("PyPDF2 not installed, skipping PDF metadata extraction")
+                except Exception as e:
+                    logger.warning(f"Error extracting PDF metadata with PyPDF2: {str(e)}")
 
         elif file_path.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif', '.webp']:
             try:
