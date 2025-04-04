@@ -218,65 +218,95 @@ def display_results_step(db, fs, hypothesis_collection):
         # Display detailed evidence cards for each data point
         st.subheader("Evidence Analysis")
         
-        # Show evidence points in reverse order (newest first)
-        for point in reversed(data_points):
-            with st.expander(f"{point.get('filename', 'Unknown File')} - {datetime.fromisoformat(str(point['timestamp'])).strftime('%Y-%m-%d %H:%M')}"):
-                # Main statistics
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.write("**Log Likelihood (H):**")
-                    st.write(f"{point.get('l_plus', 0):.4f}")
-                with col2:
-                    st.write("**Log Likelihood (¬H):**")
-                    st.write(f"{point.get('l_minus', 0):.4f}")
-                with col3:
-                    impact = point.get('l_plus', 0) - point.get('l_minus', 0)
-                    st.write("**Net Impact:**")
-                    if impact > 0:
-                        st.markdown(f"<span style='color:#047857;'>+{impact:.4f}</span>", unsafe_allow_html=True)
-                    elif impact < 0:
-                        st.markdown(f"<span style='color:#dc2626;'>{impact:.4f}</span>", unsafe_allow_html=True)
-                    else:
-                        st.write(f"{impact:.4f}")
+        # Create a selectbox to choose which evidence to view
+        evidence_names = [f"{point.get('filename', 'Unknown File')} - {datetime.fromisoformat(str(point['timestamp'])).strftime('%Y-%m-%d %H:%M')}" 
+                          for point in data_points]
+        
+        selected_evidence = st.selectbox("Select evidence to view:", evidence_names)
+        selected_index = evidence_names.index(selected_evidence)
+        point = data_points[selected_index]
+        
+        st.markdown("---")
+        st.subheader(f"Analysis of {point.get('filename', 'Unknown File')}")
+        
+        # Main statistics in a card
+        st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
+        
+        # Main statistics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.write("**Log Likelihood (H):**")
+            st.write(f"{point.get('l_plus', 0):.4f}")
+        with col2:
+            st.write("**Log Likelihood (¬H):**")
+            st.write(f"{point.get('l_minus', 0):.4f}")
+        with col3:
+            impact = point.get('l_plus', 0) - point.get('l_minus', 0)
+            st.write("**Net Impact:**")
+            if impact > 0:
+                st.markdown(f"<span style='color:#047857;'>+{impact:.4f}</span>", unsafe_allow_html=True)
+            elif impact < 0:
+                st.markdown(f"<span style='color:#dc2626;'>{impact:.4f}</span>", unsafe_allow_html=True)
+            else:
+                st.write(f"{impact:.4f}")
+        
+        # Probability info
+        st.write("**Prior Probability:**", f"{point.get('probability', 0) - (point.get('l_plus', 0) - point.get('l_minus', 0)):.2%}")
+        st.write("**Posterior Probability:**", f"{point.get('probability', 0):.2%}")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # What to show section
+        show_options = []
+        if point.get('confidence_assessment'):
+            show_options.append("Confidence Assessment")
+        if 'analysis_code' in point:
+            show_options.append("Analysis Code")
+        if 'analysis_rationale' in point:
+            show_options.append("Analysis Rationale")
+        
+        if show_options:
+            selected_view = st.radio("Show:", show_options)
+            
+            if selected_view == "Confidence Assessment" and point.get('confidence_assessment'):
+                st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
+                st.write("### Confidence Assessment")
                 
-                # Probability info
-                st.write("**Prior Probability:**", f"{point.get('probability', 0) - (point.get('l_plus', 0) - point.get('l_minus', 0)):.2%}")
-                st.write("**Posterior Probability:**", f"{point.get('probability', 0):.2%}")
+                confidence = point['confidence_assessment'].get('confidence_score', 0)
+                confidence_class = ""
+                if confidence > 0.7:
+                    confidence_class = "confidence-high"
+                elif confidence > 0.4:
+                    confidence_class = "confidence-medium"
+                else:
+                    confidence_class = "confidence-low"
                 
-                # Display confidence assessment if available
-                if point.get('confidence_assessment'):
-                    st.write("##### Confidence Assessment")
-                    confidence = point['confidence_assessment'].get('confidence_score', 0)
-                    confidence_class = ""
-                    if confidence > 0.7:
-                        confidence_class = "confidence-high"
-                    elif confidence > 0.4:
-                        confidence_class = "confidence-medium"
-                    else:
-                        confidence_class = "confidence-low"
-                    
-                    st.markdown(f"<span class='{confidence_class}'>{confidence:.0%} Confidence</span>", unsafe_allow_html=True)
-                    
-                    # Display strengths and limitations
-                    if 'key_strengths' in point['confidence_assessment'] and point['confidence_assessment']['key_strengths']:
-                        st.write("**Key Strengths:**")
-                        for strength in point['confidence_assessment']['key_strengths']:
-                            st.markdown(f"- {strength}")
-                    
-                    if 'key_limitations' in point['confidence_assessment'] and point['confidence_assessment']['key_limitations']:
-                        st.write("**Key Limitations:**")
-                        for limitation in point['confidence_assessment']['key_limitations']:
-                            st.markdown(f"- {limitation}")
+                st.markdown(f"<span class='{confidence_class}'>{confidence:.0%} Confidence</span>", unsafe_allow_html=True)
                 
-                # Show the analysis code if available
-                if 'analysis_code' in point:
-                    st.write("**Analysis Code:**")
-                    st.code(point['analysis_code'], language="python")
+                # Display strengths and limitations
+                if 'key_strengths' in point['confidence_assessment'] and point['confidence_assessment']['key_strengths']:
+                    st.write("**Key Strengths:**")
+                    for strength in point['confidence_assessment']['key_strengths']:
+                        st.markdown(f"- {strength}")
                 
-                # Show rationale if available
-                if 'analysis_rationale' in point:
-                    st.write("**Analysis Rationale:**")
-                    st.write(point['analysis_rationale'])
+                if 'key_limitations' in point['confidence_assessment'] and point['confidence_assessment']['key_limitations']:
+                    st.write("**Key Limitations:**")
+                    for limitation in point['confidence_assessment']['key_limitations']:
+                        st.markdown(f"- {limitation}")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+            elif selected_view == "Analysis Code" and 'analysis_code' in point:
+                st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
+                st.write("### Analysis Code")
+                st.code(point['analysis_code'], language="python")
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+            elif selected_view == "Analysis Rationale" and 'analysis_rationale' in point:
+                st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
+                st.write("### Analysis Rationale")
+                st.write(point['analysis_rationale'])
+                st.markdown('</div>', unsafe_allow_html=True)
     
     with visual_tab:
         # Render HTML visualization
