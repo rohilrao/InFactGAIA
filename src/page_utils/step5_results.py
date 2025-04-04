@@ -130,8 +130,7 @@ def display_results_step(db, fs, hypothesis_collection):
     st.write(f"**Hypothesis:** {hypothesis_text}")
     st.markdown("---")
     
-    # Get InFactNode and file information from session
-    node = st.session_state.get("infact_node", None)
+    
     file_id = st.session_state.get("current_file_id", None)
     new_posterior = st.session_state.get("new_posterior", None)
     

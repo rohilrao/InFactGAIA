@@ -521,7 +521,8 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         data_points = []
                         if hypothesis_doc and "node_metadata" in hypothesis_doc and "data_points" in hypothesis_doc["node_metadata"]:
                             data_points = hypothesis_doc["node_metadata"]["data_points"]
-                        
+
+
                         # Add the current analysis as a new data point
                         new_data_point = {
                             "file_id": file_id,
