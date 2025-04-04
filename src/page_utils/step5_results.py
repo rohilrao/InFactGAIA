@@ -1,15 +1,13 @@
 import streamlit as st
 import os
-import json
-import math
-from pathlib import Path
-from bson.objectid import ObjectId
 import tempfile
-
-# Import the InFactRenderer
-from InFact.utils.InFactRenderer import InFactRenderer
-from InFact.utils.MongoInFactRenderer import MongoInFactRenderer
-
+from bson.objectid import ObjectId
+import math
+from datetime import datetime
+import base64
+from MongoInFactRenderer import MongoInFactRenderer
+from infact_utils import call_llm
+from bayesian_analysis_utils import _to_probability, _calculate_uncertainty
 
 def ensure_object_id(id_value):
     """Convert string IDs to ObjectId if needed."""
@@ -21,42 +19,9 @@ def ensure_object_id(id_value):
     # Return the original value if conversion failed or wasn't needed
     return id_value
 
-def json_serialize_with_datetime(obj):
-    """Custom JSON serializer that handles datetime objects."""
-    from datetime import datetime
-    if isinstance(obj, datetime):
-        return obj.isoformat()
-    raise TypeError(f"Type {type(obj)} not serializable")
-
-def node_state_to_json(node):
-    """Convert node state to JSON string with datetime handling."""
-    data = {
-        'hypothesis': node.hypothesis,
-        'prior_log_odds': node.prior_log_odds,
-        'current_posterior': node.current_posterior,
-        'provider_info': {
-            'type': node.llm_provider.__class__.__name__,
-            'model': node.llm_provider.model,
-        },
-        'data_points': [
-            {
-                'metadata': dp['metadata'],
-                'raw_data': dp['raw_data'],
-                'l_plus': dp['l_plus'],
-                'l_minus': dp['l_minus'],
-                'posterior': dp['posterior'],
-                'confidence_assessment': dp.get('confidence_assessment', {}),
-                'analysis_rationale': dp.get('analysis_rationale', '')
-            }
-            for dp in node.data_points
-        ]
-    }
-    
-    return json.dumps(data, indent=2, default=json_serialize_with_datetime)
-
 def display_results_step(db, fs, hypothesis_collection):
     """
-    Handles Step 5: Process Results and Visualization
+    Handles Step 5: Results and Visualization
     
     Args:
         db: MongoDB database connection
@@ -64,9 +29,9 @@ def display_results_step(db, fs, hypothesis_collection):
         hypothesis_collection: MongoDB collection for hypotheses
         
     Returns:
-        str: Navigation action - "back", "next", or None
+        str: Navigation action - "back", "restart", or None
     """
-    # Add styling
+    # Add styling for results page
     st.markdown("""
     <style>
     .results-container {
@@ -76,29 +41,61 @@ def display_results_step(db, fs, hypothesis_collection):
         margin: 10px 0;
         border-left: 4px solid #4CAF50;
     }
-    .nav-buttons {
+    .evidence-card {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #e0e0e0;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .evidence-header {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 5px 5px 0 0;
+        margin: -15px -15px 15px -15px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    .navigation-buttons {
         display: flex;
         justify-content: space-between;
         margin-top: 20px;
     }
-    .hypothesis-card {
-        background-color: #f0f2f6;
-        padding: 20px;
-        border-radius: 5px;
+    .confidence-high {
+        color: #047857;
+        font-weight: bold;
+    }
+    .confidence-medium {
+        color: #b45309;
+        font-weight: bold;
+    }
+    .confidence-low {
+        color: #dc2626;
+        font-weight: bold;
+    }
+    .probability-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #2b6cb0;
+        text-align: center;
+        margin: 10px 0;
+    }
+    .confidence-interval {
+        text-align: center;
+        color: #4a5568;
         margin-bottom: 20px;
     }
-    .rendered-html {
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        padding: 5px;
-        margin-top: 20px;
-        height: 500px;
-        overflow: auto;
+    .interpretation {
+        text-align: center;
+        font-weight: bold;
+        margin: 10px 0;
+        font-size: 1.2rem;
     }
-    .download-buttons {
-        display: flex;
-        gap: 10px;
-        margin-top: 10px;
+    .iframe-container {
+        width: 100%;
+        height: 800px;
+        border: none;
+        overflow: hidden;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -112,8 +109,8 @@ def display_results_step(db, fs, hypothesis_collection):
         if st.button("← Back to Hypothesis Setup"):
             return "back"
         st.stop()
-
-    # Get the current hypothesis text from DB
+    
+    # Get the current hypothesis entry from DB
     hypothesis_entry = hypothesis_collection.find_one({"_id": hypothesis_id})
     if not hypothesis_entry:
         st.error("Could not find hypothesis data in database.")
@@ -121,392 +118,302 @@ def display_results_step(db, fs, hypothesis_collection):
             return "back"
         st.stop()
 
+    # Extract hypothesis details
     hypothesis_text = hypothesis_entry["text"]
-    hypothesis_description = hypothesis_entry.get("short_description", "No description provided")
+    hypothesis_description = hypothesis_entry.get("description", "No description provided")
     
-    # Display hypothesis info
-    st.write("Hypothesis Information:")
-    st.write("**Hypothesis ID:**", hypothesis_id)   
-    st.write(f"**Hypothesis:** {hypothesis_text}")
-    st.markdown("---")
-    
-    
-    file_id = st.session_state.get("current_file_id", None)
-    new_posterior = st.session_state.get("new_posterior", None)
-    
-    if not node:
-        st.error("InFactNode not found in session state. Please go back to initialize the analysis environment.")
-        if st.button("← Back to Analysis Setup"):
-            return "back"
-        st.stop()
-        
-    if not file_id or not new_posterior:
-        st.error("File information or analysis results not found. Please complete the code analysis step first.")
+    # Check if the hypothesis has any data points
+    if "node_metadata" not in hypothesis_entry or "data_points" not in hypothesis_entry["node_metadata"] or not hypothesis_entry["node_metadata"]["data_points"]:
+        st.warning("No analysis has been performed on this hypothesis yet. Please go back to Step 4 to analyze data.")
         if st.button("← Back to Code Review"):
             return "back"
         st.stop()
     
-    # Get file information
-    file_obj = db.fs.files.find_one({"_id": ensure_object_id(file_id)})
-    if not file_obj:
-        st.error("Could not find file data in database.")
-        if st.button("← Back to File Upload"):
-            return "back"
-        st.stop()
+    # Display hypothesis info
+    st.write("**Hypothesis ID:**", hypothesis_id)
+    st.write(f"**Hypothesis:** {hypothesis_text}")
+    if hypothesis_description != "No description provided":
+        st.write(f"**Description:** {hypothesis_description}")
+
+    st.markdown("---")
+    
+    # Get current posterior and data points
+    data_points = hypothesis_entry["node_metadata"]["data_points"]
+    current_posterior = hypothesis_entry["node_metadata"].get("current_posterior", 0.0)
+    
+    # Calculate current probability and uncertainty
+    probability = _to_probability(current_posterior)
+    lower, upper = _calculate_uncertainty(current_posterior, data_points)
+    
+    # Display current assessment
+    st.subheader("Current Assessment")
+    
+    # Determine interpretation based on probability
+    interpretation = ""
+    if probability > 0.99:
+        interpretation = "Virtually Certain"
+    elif probability > 0.95:
+        interpretation = "Extremely Likely"
+    elif probability > 0.90:
+        interpretation = "Very Likely"
+    elif probability > 0.66:
+        interpretation = "Likely"
+    elif probability > 0.33:
+        interpretation = "Uncertain"
+    elif probability > 0.10:
+        interpretation = "Unlikely"
+    elif probability > 0.05:
+        interpretation = "Very Unlikely"
+    elif probability > 0.01:
+        interpretation = "Extremely Unlikely"
+    else:
+        interpretation = "Virtually Impossible"
+    
+    st.markdown(f'<div class="probability-value">{probability:.1%}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="confidence-interval">95% Confidence Interval: ({lower:.1%}, {upper:.1%})</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="interpretation">{interpretation}</div>', unsafe_allow_html=True)
+    
+    # Display tabs for different views
+    results_tab, evidence_tab, visual_tab = st.tabs(["Summary", "Evidence Details", "Visualization"])
+    
+    with results_tab:
+        # Display summary of the analysis
+        st.subheader("Analysis Summary")
         
-    filename = file_obj["filename"]
-    file_path = os.path.basename(filename)
-    
-    # Get validated code and results from the database
-    analysis_code = file_obj.get("analysis_code", "No analysis code found")
-    analysis_results = file_obj.get("analysis_results", {})
-    parsed_data = file_obj.get("parsed_data", {})
-    
-    l_plus = analysis_results.get("l_plus", 0)
-    l_minus = analysis_results.get("l_minus", 0)
-    
-    # Process results section
-    st.markdown("## Processing Results")
-    
-    with st.spinner("Processing data and updating belief..."):
-        try:
-            # Create a basic metadata structure since we don't have extract_metadata
-            metadata = {
-                "filename": file_path,
-                "file_id": str(file_id),
-                "processed_date": file_obj.get("uploadDate", "Unknown date")
-            }
+        # Add a bit more space
+        st.write("")
+        
+        # Create summary metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Data Points Analyzed", len(data_points))
+        with col2:
+            # Format the posterior for display
+            posterior_display = f"{current_posterior:.2f}"
+            st.metric("Log Odds", posterior_display)
+        with col3:
+            # For last evidence, calculate the change
+            if len(data_points) > 0:
+                last_point = data_points[-1]
+                change = last_point["l_plus"] - last_point["l_minus"]
+                change_display = f"{change:+.2f}"
+                st.metric("Last Evidence Impact", change_display)
+        
+        # Add a list of the files analyzed
+        st.write("##### Files Analyzed")
+        for idx, point in enumerate(data_points, 1):
+            filename = point.get("filename", f"File {idx}")
+            impact = point["l_plus"] - point["l_minus"]
+            sign = "+" if impact >= 0 else ""
             
-            # Update node's current_posterior if not already done
-            node.current_posterior = new_posterior
-            
-            # Create a data point structure similar to what's created in process_data
-            data_point = {
-                'raw_data': parsed_data,
-                'metadata': metadata,
-                'l_plus': l_plus,
-                'l_minus': l_minus,
-                'posterior': new_posterior,
-                'confidence_assessment': parsed_data.get('confidence_assessment', {
-                    'confidence_score': 0.5,  # Default moderate confidence
-                    'explanation': 'Automatically processed data point',
-                    'key_strengths': ['Systematic analysis'],
-                    'key_limitations': ['Limited context awareness']
-                }),
-                'analysis_rationale': analysis_code
-            }
-            
-            # Add data point to node if not already present
-            # Check if this data point is already in the node to avoid duplicates
-            file_ids_in_node = [dp.get('metadata', {}).get('file_id', "") for dp in node.data_points]
-            if str(file_id) not in file_ids_in_node:
-                node.data_points.append(data_point)
-                st.success(f"Added data point for file: {file_path}")
+            # Display with color based on impact
+            if impact > 0:
+                st.markdown(f"- {filename}: <span style='color:#047857;'>{sign}{impact:.2f}</span>", unsafe_allow_html=True)
+            elif impact < 0:
+                st.markdown(f"- {filename}: <span style='color:#dc2626;'>{impact:.2f}</span>", unsafe_allow_html=True)
             else:
-                st.info(f"Data point for file {file_path} already exists in the node")
-            
-            # Calculate probability and uncertainty
-            probability = node._to_probability(new_posterior)
-            lower, upper = node._calculate_uncertainty()
-            
-            # === Handle node state and HTML rendering ===
-            
-            # Create the node state JSON directly
-            node_state_content = node_state_to_json(node)
-            st.session_state["node_state_json"] = node_state_content
-            
-            # Check if we already have a node state for this hypothesis
-            existing_node_state = db.fs.files.find_one({
-                "metadata.type": "node_state",
-                "metadata.hypothesis_id": str(hypothesis_id),
-                "metadata.is_latest": True
-            })
-            
-            # Mark any previous "latest" node states as not latest
-            if existing_node_state:
-                db.fs.files.update_many(
-                    {"metadata.type": "node_state", "metadata.hypothesis_id": str(hypothesis_id)},
-                    {"$set": {"metadata.is_latest": False}}
-                )
-            
-            # Define the metadata for hypothesis state
-            hypothesis_state_metadata = {
-                "type": "node_state",
-                "hypothesis_id": str(hypothesis_id),
-                "file_id": str(file_id),  # The file that triggered this update
-                "is_latest": True
-            }
-            
-            # Upload the node state to GridFS for the hypothesis
-            hypothesis_state_id = fs.put(
-                node_state_content.encode(),
-                filename=f"node_state_hypothesis_{hypothesis_id}.json",
-                content_type="application/json",
-                metadata=hypothesis_state_metadata
-            )
-            
-            # Define metadata for file-specific state
-            file_state_metadata = {
-                "type": "node_state",
-                "hypothesis_id": str(hypothesis_id),
-                "file_id": str(file_id),
-                "is_latest": False  # This is a file-specific snapshot
-            }
-            
-            # Upload a file-specific state
-            file_state_id = fs.put(
-                node_state_content.encode(),
-                filename=f"node_state_file_{file_id}.json",
-                content_type="application/json",
-                metadata=file_state_metadata
-            )
-            
-            # Update the file record to reference this node state
-            db.fs.files.update_one(
-                {"_id": ensure_object_id(file_id)},
-                {"$set": {"node_state_file_id": str(file_state_id)}}
-            )
-             # Create the data point to be stored in MongoDB
-            mongo_data_point = {
-                'file_id': str(file_id),
-                'filename': file_path,
-                'l_plus': l_plus,
-                'l_minus': l_minus,
-                'prior_log_odds': 0.0,
-                'posterior': new_posterior,
-                'processed_date': file_obj.get("uploadDate", "Unknown date"),
-                'metadata': metadata,
-                "probability": probability,
-                "confidence_interval": [lower, upper],
-                'confidence_assessment': parsed_data.get('confidence_assessment', {}),
-                'analysis_rationale': analysis_code
-            }
-
-            # First check if hypothesis already has a data_points array
-            existing_hypothesis = hypothesis_collection.find_one({"_id": hypothesis_id})
-            if existing_hypothesis and "data_points" not in existing_hypothesis:
-                # Initialize the data_points array if it doesn't exist
-                hypothesis_collection.update_one(
-                    {"_id": hypothesis_id},
-                    {"$set": {"data_points": []}}
-                )
-
-            # Check if the data point already exists to avoid duplicates
-            existing_data_point = hypothesis_collection.find_one(
-                {
-                    "_id": hypothesis_id,
-                    "data_points.file_id": str(file_id)
-                }
-            )
-
-            # Update strategy based on whether the data point already exists
-            if existing_data_point:
-                # Update the existing data point instead of adding a new one
-                hypothesis_collection.update_one(
-                    {
-                        "_id": hypothesis_id,
-                        "data_points.file_id": str(file_id)
-                    },
-                    {
-                        "$set": {
-                            "data_points.$": mongo_data_point,
-                            "latest_node_state_id": str(hypothesis_state_id),
-                            #"latest_html_id": str(html_file_id),
-                            "latest_file_processed": str(file_id),
-                            "current_posterior": new_posterior,
-                            "probability": probability,
-                            "confidence_interval": [lower, upper],
-                            "last_updated": file_obj.get("uploadDate", "Unknown date")
-                        }
-                    }
-                )
-                st.info(f"Updated existing data point for file {file_path} in the hypothesis")
-            else:
-                # Append the new data point to the data_points array
-                hypothesis_collection.update_one(
-                    {"_id": hypothesis_id},
-                    {
-                        "$push": {"data_points": mongo_data_point},
-                        "$set": {
-                            "latest_node_state_id": str(hypothesis_state_id),
-                            #"latest_html_id": str(html_file_id),
-                            "latest_file_processed": str(file_id),
-                            "current_posterior": new_posterior,
-                            "probability": probability,
-                            "confidence_interval": [lower, upper],
-                            "last_updated": file_obj.get("uploadDate", "Unknown date")
-                        }
-                    }
-                )
-                st.success(f"Added new data point for file {file_path} to the hypothesis")
-
-            
-            # Now handle the HTML rendering with a temporary directory
-            with tempfile.TemporaryDirectory() as temp_dir:
-                # Render HTML visualization
-                #renderer = InFactRenderer()
-                #html_output = renderer.render_analysis(node)
-                renderer = MongoInFactRenderer()
-                html_output = renderer.render_mongo_analysis(hypothesis_collection.find_one({"_id": hypothesis_id}))
-
+                st.markdown(f"- {filename}: {impact:.2f}")
+    
+    with evidence_tab:
+        # Display detailed evidence cards for each data point
+        st.subheader("Evidence Analysis")
+        
+        # Show evidence points in reverse order (newest first)
+        for point in reversed(data_points):
+            with st.expander(f"{point.get('filename', 'Unknown File')} - {datetime.fromisoformat(str(point['timestamp'])).strftime('%Y-%m-%d %H:%M')}"):
+                # Main statistics
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.write("**Log Likelihood (H):**")
+                    st.write(f"{point.get('l_plus', 0):.4f}")
+                with col2:
+                    st.write("**Log Likelihood (¬H):**")
+                    st.write(f"{point.get('l_minus', 0):.4f}")
+                with col3:
+                    impact = point.get('l_plus', 0) - point.get('l_minus', 0)
+                    st.write("**Net Impact:**")
+                    if impact > 0:
+                        st.markdown(f"<span style='color:#047857;'>+{impact:.4f}</span>", unsafe_allow_html=True)
+                    elif impact < 0:
+                        st.markdown(f"<span style='color:#dc2626;'>{impact:.4f}</span>", unsafe_allow_html=True)
+                    else:
+                        st.write(f"{impact:.4f}")
                 
-                # Store HTML in session state for display and download
-                st.session_state["html_output"] = html_output
+                # Probability info
+                st.write("**Prior Probability:**", f"{point.get('probability', 0) - (point.get('l_plus', 0) - point.get('l_minus', 0)):.2%}")
+                st.write("**Posterior Probability:**", f"{point.get('probability', 0):.2%}")
+                
+                # Display confidence assessment if available
+                if point.get('confidence_assessment'):
+                    st.write("##### Confidence Assessment")
+                    confidence = point['confidence_assessment'].get('confidence_score', 0)
+                    confidence_class = ""
+                    if confidence > 0.7:
+                        confidence_class = "confidence-high"
+                    elif confidence > 0.4:
+                        confidence_class = "confidence-medium"
+                    else:
+                        confidence_class = "confidence-low"
+                    
+                    st.markdown(f"<span class='{confidence_class}'>{confidence:.0%} Confidence</span>", unsafe_allow_html=True)
+                    
+                    # Display strengths and limitations
+                    if 'key_strengths' in point['confidence_assessment'] and point['confidence_assessment']['key_strengths']:
+                        st.write("**Key Strengths:**")
+                        for strength in point['confidence_assessment']['key_strengths']:
+                            st.markdown(f"- {strength}")
+                    
+                    if 'key_limitations' in point['confidence_assessment'] and point['confidence_assessment']['key_limitations']:
+                        st.write("**Key Limitations:**")
+                        for limitation in point['confidence_assessment']['key_limitations']:
+                            st.markdown(f"- {limitation}")
+                
+                # Show the analysis code if available
+                if 'analysis_code' in point:
+                    with st.expander("Analysis Code"):
+                        st.code(point['analysis_code'], language="python")
+                
+                # Show rationale if available
+                if 'analysis_rationale' in point:
+                    with st.expander("Analysis Rationale"):
+                        st.write(point['analysis_rationale'])
+    
+    with visual_tab:
+        # Render HTML visualization
+        st.subheader("Interactive Visualization")
+        
+        # Create a temporary directory to store the HTML file
+        with tempfile.TemporaryDirectory() as temp_dir:
+            try:
+                # Prepare the document for rendering
+                # Add necessary fields expected by the renderer
+                render_doc = hypothesis_entry.copy()
+                render_doc["prior_log_odds"] = 0.0  # Default to even odds if not present
+                
+                # Set data points with the right structure for the renderer
+                if "node_metadata" in render_doc and "data_points" in render_doc["node_metadata"]:
+                    render_doc["data_points"] = render_doc["node_metadata"]["data_points"]
+                
+                # Add probability field (current posterior as probability)
+                render_doc["probability"] = probability
+                
+                # Add confidence interval
+                render_doc["confidence_interval"] = [lower, upper]
+                
+                # Initialize the renderer and generate HTML
+                renderer = MongoInFactRenderer()
+                html_output = renderer.render_mongo_analysis(render_doc)
                 
                 # Save HTML to a temporary file
                 html_temp_path = os.path.join(temp_dir, f"hypothesis_{hypothesis_id}.html")
                 with open(html_temp_path, 'w', encoding='utf-8') as f:
                     f.write(html_output)
                 
-                # Define HTML metadata
-                html_metadata = {
-                    "type": "rendered_html",
-                    "hypothesis_id": str(hypothesis_id),
-                    "file_id": str(file_id),
-                    "is_latest": True
-                }
+                # For download button
+                st.session_state["html_output"] = html_output
                 
-                # Mark any previous "latest" HTML as not latest
-                db.fs.files.update_many(
-                    {"metadata.type": "rendered_html", "metadata.hypothesis_id": str(hypothesis_id)},
-                    {"$set": {"metadata.is_latest": False}}
+                # Display HTML using iframe
+                # Read the HTML file and convert to base64
+                with open(html_temp_path, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+                
+                html_base64 = base64.b64encode(html_content.encode()).decode()
+                
+                # Display in iframe
+                st.markdown(
+                    f'<iframe src="data:text/html;base64,{html_base64}" class="iframe-container"></iframe>',
+                    unsafe_allow_html=True
                 )
                 
-                # Upload new HTML
-                with open(html_temp_path, 'rb') as f:
-                    html_file_id = fs.put(
-                        f,
-                        filename=f"rendered_hypothesis_{hypothesis_id}.html",
-                        content_type="text/html",
-                        metadata=html_metadata
+                # Provide download option
+                html_filename = f"hypothesis_{hypothesis_id}.html"
+                st.download_button(
+                    label="Download HTML Report",
+                    data=html_output,
+                    file_name=html_filename,
+                    mime="text/html"
+                )
+                
+            except Exception as e:
+                st.error(f"Error generating visualization: {str(e)}")
+                st.write("Detailed error information:")
+                st.code(str(e))
+    
+    # Generate summary report if requested
+    if st.button("Generate Summary Report"):
+        with st.spinner("Generating report..."):
+            try:
+                model = st.session_state.get("model", None)
+                api_key = st.session_state.get("api_key", None)
+                provider = st.session_state.get("provider", None)
+                
+                if not provider or not model or not api_key:
+                    st.warning("LLM model information not found. Please ensure provider, model and API key are set.")
+                else:
+                    # Create a prompt to generate a summary
+                    prompt = f"""
+                    Generate a detailed summary report for the following hypothesis:
+                    
+                    Hypothesis: {hypothesis_text}
+                    
+                    Current probability: {probability:.2%}
+                    95% confidence interval: ({lower:.2%}, {upper:.2%})
+                    Interpretation: {interpretation}
+                    
+                    Evidence analyzed:
+                    """
+                    
+                    # Add information about each piece of evidence
+                    for point in data_points:
+                        filename = point.get("filename", "Unknown File")
+                        impact = point.get("l_plus", 0) - point.get("l_minus", 0)
+                        prompt += f"\n- {filename}: Impact on log odds: {impact:.4f}"
+                    
+                    prompt += """
+                    
+                    Please include in your summary:
+                    1. A clear interpretation of the current probability
+                    2. An analysis of the strength of evidence
+                    3. Key limitations or uncertainties in the analysis
+                    4. Suggestions for what additional evidence would be valuable
+                    5. A conclusion about the hypothesis
+                    
+                    Format the response as a professional report with sections.
+                    """
+                    
+                    # Call the LLM
+                    summary_report = call_llm(provider, api_key, model, prompt)
+                    
+                    # Display the generated report
+                    st.subheader("Summary Report")
+                    st.markdown(summary_report)
+                    
+                    # Add download button for the report
+                    report_filename = f"hypothesis_{hypothesis_id}_report.md"
+                    st.download_button(
+                        label="Download Report",
+                        data=summary_report,
+                        file_name=report_filename,
+                        mime="text/markdown"
                     )
             
-            
-           
-            # Update the file status to "Processed"
-            db.fs.files.update_one(
-                {"_id": ensure_object_id(file_id)},
-                {"$set": {"status": "processed"}}
-            )
-            
-            # Get the updated file status from the database
-            updated_file = db.fs.files.find_one({"_id": ensure_object_id(file_id)})
-            current_status = updated_file.get("status", "unknown")
-            
-            # Display file processing status with current status from database
-            st.success(f"✅ Processing for file '{file_path}' is completed. Current status: {current_status}")
-            
-            # Display results
-            st.markdown('<div class="results-container">', unsafe_allow_html=True)
-            st.write("### Analysis Results")
-            st.write(f"**l_plus (log P(data | hypothesis)):** {l_plus:.4f}")
-            st.write(f"**l_minus (log P(data | not hypothesis)):** {l_minus:.4f}")
-            st.write(f"**New posterior log odds:** {new_posterior:.4f}")
-            st.write(f"**Probability of hypothesis:** {probability:.2%}")
-            st.write(f"**Confidence interval (95%):** ({lower:.2%}, {upper:.2%})")
-            st.write("---")
-            st.write(f"**Node state saved to GridFS with ID:** `{hypothesis_state_id}`")
-            st.write(f"**HTML visualization saved to GridFS with ID:** `{html_file_id}`")
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-        except Exception as e:
-            st.error(f"Error processing results: {str(e)}")
-            import traceback
-            st.code(traceback.format_exc(), language="python")
-    
-    # Display the rendered HTML
-    st.markdown("## Rendered Visualization")
-    
-    # Create tabs for viewing HTML and raw node data
-    tabs = st.tabs(["Visualization", "Raw Node Data", "Download Files"])
-    
-    with tabs[0]:
-        # Display the HTML in an iframe if we have it in session state
-        html_output = st.session_state.get("html_output", None)
-        if html_output:
-            # Use base64 encoding for the HTML content
-            import base64
-            encoded_html = base64.b64encode(html_output.encode()).decode()
-            
-            # Display in an iframe
-            st.markdown(f'<div class="rendered-html"><iframe src="data:text/html;base64,{encoded_html}" width="100%" height="100%"></iframe></div>', unsafe_allow_html=True)
-        else:
-            st.warning("HTML visualization not available in session state")
-    
-    with tabs[1]:
-        # Display raw node data as JSON
-        node_data = {
-            'hypothesis': node.hypothesis,
-            'prior_log_odds': node.prior_log_odds,
-            'current_posterior': node.current_posterior,
-            'probability': probability,
-            'confidence_interval': [lower, upper],
-            'data_points_count': len(node.data_points),
-            'latest_data_point': {
-                'file': file_path,
-                'l_plus': l_plus,
-                'l_minus': l_minus,
-                'posterior': new_posterior
-            } if str(file_id) not in file_ids_in_node else "Already in node"
-        }
-        st.json(node_data)
-    
-    with tabs[2]:
-        st.markdown("### Download Files")
-        st.write("Download the node state and visualization for offline use or further analysis.")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Download button for node state JSON
-            if "node_state_json" in st.session_state:
-                st.download_button(
-                    label="Download Node State (JSON)",
-                    data=st.session_state["node_state_json"],
-                    file_name=f"hypothesis_{hypothesis_id}_state.json",
-                    mime="application/json",
-                    key="download_json"
-                )
-            else:
-                st.warning("Node state JSON not available for download")
-        
-        with col2:
-            # Download button for HTML
-            if "html_output" in st.session_state:
-                st.download_button(
-                    label="Download Visualization (HTML)",
-                    data=st.session_state["html_output"],
-                    file_name=f"hypothesis_{hypothesis_id}_visualization.html",
-                    mime="text/html",
-                    key="download_html"
-                )
-            else:
-                st.warning("HTML visualization not available for download")
+            except Exception as e:
+                st.error(f"Error generating report: {str(e)}")
     
     # Navigation buttons
     st.divider()
-    # At the end of display_results_step function
-    col1, col2, col3 = st.columns(3)
-
+    
+    col1, col2 = st.columns([1, 1])
     with col1:
-        if st.button("← Back to Code"):
+        if st.button("← Back to Analysis"):
             return "back"
-            
+    
     with col2:
-        if st.button("Process Another File"):
-            # Clear only file-related session state for next file
-            for key in ["current_file_id", "current_filename", "parsed_data",
-                       "generated_code", "validated_code", "new_posterior"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            return "add_evidence"
+        if st.button("Start New Analysis", type="primary"):
+            # Clean up session state for a new analysis
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
             
-    with col3:
-        if st.button("Start Over"):
-            # Clear all session state related to the analysis
-            for key in ["hypothesis_id", "hypothesis_text", "infact_node", 
-                     "current_file_id", "current_filename", "parsed_data",
-                     "generated_code", "validated_code", "new_posterior"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            return "home"
+            return "restart"
+    
+    return None

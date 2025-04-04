@@ -1,8 +1,8 @@
 from pathlib import Path
 import math
 from jinja2 import Environment, FileSystemLoader, BaseLoader, Template
-from InFact.utils.UItemplate import TEMPLATE
-from InFact.utils.InFactRenderer import InFactRenderer
+from UItemplate import TEMPLATE
+from InFactRenderer import InFactRenderer
 
 
 class MongoInFactRenderer(InFactRenderer):
