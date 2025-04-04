@@ -8,6 +8,7 @@ import json
 from code_analyzer import analyze_data
 from code_analyzer import _execute_code_with_debug
 from infact_utils import call_llm
+from bayesian_analysis_utils import _to_probability, _calculate_uncertainty
 
 def ensure_object_id(id_value):
     """Convert string IDs to ObjectId if needed."""
@@ -492,7 +493,6 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         else:
                             code_to_test = current_code
 
-
                         model = st.session_state.get("model", None)
                         api_key = st.session_state.get("api_key", None)
                         provider = st.session_state.get("provider", None)
@@ -505,19 +505,36 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         st.session_state["l_minus"] = l_minus
                         st.session_state["validated_code"] = code_to_test
                         
-                        # Calculate the new posterior by adding to current posterior
                         # Retrieve current posterior from the hypothesis document in the database
                         hypothesis_doc = hypothesis_collection.find_one({"_id": hypothesis_id})
                         if hypothesis_doc and "node_metadata" in hypothesis_doc and "current_posterior" in hypothesis_doc["node_metadata"]:
                             current_posterior = hypothesis_doc["node_metadata"]["current_posterior"]
                         else:
-                            # Throw error if current_posterior is not found
-                            raise ValueError("Could not find current posterior value in hypothesis document. Please ensure the hypothesis is properly initialized.")
+                            # Default to 0 if current_posterior is not found (prior is even odds)
+                            current_posterior = 0.0
+                            st.warning("Could not find current posterior value. Using default of even odds (0.0).")
+                        
+                        # Calculate the new posterior by adding log-likelihood ratio to current posterior
                         new_posterior = current_posterior + l_plus - l_minus
 
-                        # Use node's methods to calculate probability and uncertainty
-                        probability = node._to_probability(new_posterior)
-                        lower, upper = node._calculate_uncertainty()
+                        # Get existing data points or initialize empty list
+                        data_points = []
+                        if hypothesis_doc and "node_metadata" in hypothesis_doc and "data_points" in hypothesis_doc["node_metadata"]:
+                            data_points = hypothesis_doc["node_metadata"]["data_points"]
+                        
+                        # Add the current analysis as a new data point
+                        new_data_point = {
+                            "file_id": file_id,
+                            "filename": st.session_state.get("current_filename", "Unknown file"),
+                            "l_plus": l_plus,
+                            "l_minus": l_minus,
+                            "timestamp": datetime.now()
+                        }
+                        data_points.append(new_data_point)
+                        
+                        # Calculate probability and uncertainty
+                        probability = _to_probability(new_posterior)
+                        lower, upper = _calculate_uncertainty(new_posterior, data_points)
 
                         st.success("Code executed successfully!")
 
@@ -536,6 +553,15 @@ def display_code_review_step(db, fs, hypothesis_collection):
 
                         # Store the new posterior in the session state for later use
                         st.session_state["new_posterior"] = new_posterior
+                        
+                        # Update the hypothesis document with the new posterior and data point
+                        hypothesis_collection.update_one(
+                            {"_id": hypothesis_id},
+                            {"$set": {
+                                "node_metadata.current_posterior": new_posterior,
+                                "node_metadata.data_points": data_points
+                            }}
+                        )
 
                         # Update the database with validation results
                         db.fs.files.update_one(
@@ -553,6 +579,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 }
                             }}
                         )
+                        
                         # Exit edit mode after validation if we're in it
                         if edit_mode:
                             st.session_state["edit_mode"] = False
@@ -561,9 +588,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                     except Exception as e:
                         st.error(f"Code execution failed: {str(e)}")
                         st.info("Please revise the code and try again.")
-                        #node.logger.error(f"Code execution failed: {str(e)}", exc_info=True)
                         print(f"Code execution failed: {str(e)}")
-
             # Navigation buttons
             st.divider()
             
