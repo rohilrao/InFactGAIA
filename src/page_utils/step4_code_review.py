@@ -275,6 +275,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         if code_changed:
                             st.session_state["current_code"] = edited_code
                             st.session_state.pop("validated_code", None)  # Code changed, need to revalidate
+                            st.session_state.pop("test_results", None)  # Clear any previous test results
                             
                             # Update the code in the database
                             db.fs.files.update_one(
@@ -370,6 +371,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                     st.session_state.pop("validated_code", None)  # Need to revalidate
                                     st.session_state.pop("simple_analysis", None)  # Clear old analysis
                                     st.session_state.pop("tech_analysis", None)  # Clear old analysis
+                                    st.session_state.pop("test_results", None)  # Clear any previous test results
                                     st.session_state["edit_mode"] = False  # Exit edit mode
                                     
                                     # Update the database
@@ -476,13 +478,26 @@ def display_code_review_step(db, fs, hypothesis_collection):
             # Validation section - always visible
             st.markdown("### :orange[Validate and Test Code]")
             
-            # Show validation status
-            if "validated_code" in st.session_state:
-                st.success("Code validated successfully")
+            # Show test results if available
+            if "test_results" in st.session_state:
+                st.success("Code tested successfully")
+                
+                # Display results in a container with styling
+                st.markdown('<div class="results-container">', unsafe_allow_html=True)
+                st.markdown("#### Test Results")
+                test_results = st.session_state["test_results"]
+                
+                st.write(f"**l_plus (log P(data | hypothesis)):** {test_results['l_plus']:.4f}")
+                st.write(f"**l_minus (log P(data | not hypothesis)):** {test_results['l_minus']:.4f}")
+                st.write(f"**Current posterior log odds:** {test_results['current_posterior']:.4f}")
+                st.write(f"**New posterior log odds:** {test_results['new_posterior']:.4f}")
+                st.write(f"**Probability of hypothesis given this data:** {test_results['probability']:.2%}")
+                st.write(f"**Confidence interval (95%):** ({test_results['confidence_lower']:.2%}, {test_results['confidence_upper']:.2%})")
+                st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.info("Code needs to be validated before proceeding")
+                st.info("Code needs to be tested before it can be finalized")
             
-            # Validation button and results
+            # Test button to execute code without updating DB
             if st.button("Test Code"):
                 with st.spinner("Testing code execution..."):
                     try:
@@ -501,9 +516,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         
                         l_plus, l_minus = _execute_code_with_debug(code_to_test, parsed_data, credentials)
                         
-                        st.session_state["l_plus"] = l_plus
-                        st.session_state["l_minus"] = l_minus
-                        st.session_state["validated_code"] = code_to_test
+                        # Store results in session state
                         
                         # Retrieve current posterior from the hypothesis document in the database
                         hypothesis_doc = hypothesis_collection.find_one({"_id": hypothesis_id})
@@ -516,85 +529,35 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         
                         # Calculate the new posterior by adding log-likelihood ratio to current posterior
                         new_posterior = current_posterior + l_plus - l_minus
-
-                        # Get existing data points or initialize empty list
+                        
+                        # Get existing data points (but don't modify them yet)
                         data_points = []
                         if hypothesis_doc and "node_metadata" in hypothesis_doc and "data_points" in hypothesis_doc["node_metadata"]:
                             data_points = hypothesis_doc["node_metadata"]["data_points"]
-
-
-                        
                         
                         # Calculate probability and uncertainty
                         probability = _to_probability(new_posterior)
                         lower, upper = _calculate_uncertainty(new_posterior, data_points)
 
-                        st.success("Code executed successfully!")
-
-                        # Show validated code in an expander
-                        with st.expander("Finalized Analysis Code", expanded=False):
-                            st.code(code_to_test, language="python")
-
-                        # Display results
-                        st.markdown("#### Analysis Results")
-                        st.write(f"**l_plus (log P(data | hypothesis)):** {l_plus:.4f}")
-                        st.write(f"**l_minus (log P(data | not hypothesis)):** {l_minus:.4f}")
-                        st.write(f"**Current posterior log odds:** {current_posterior:.4f}")
-                        st.write(f"**New posterior log odds:** {new_posterior:.4f}")
-                        st.write(f"**Probability of hypothesis given this data:** {probability:.2%}")
-                        st.write(f"**Confidence interval (95%):** ({lower:.2%}, {upper:.2%})")
-
-                        # Store the new posterior in the session state for later use
-                        st.session_state["new_posterior"] = new_posterior
+                        # Store validated code
+                        st.session_state["validated_code"] = code_to_test
                         
-                        
-
-                        # Update the database with validation results
-                        db.fs.files.update_one(
-                            {"_id": ensure_object_id(file_id)},
-                            {"$set": {
-                                "analysis_code": code_to_test,
-                                "analysis_results": {
-                                    "l_plus": l_plus,
-                                    "l_minus": l_minus,
-                                    "current_posterior": current_posterior,
-                                    "new_posterior": new_posterior,
-                                    "probability": probability,
-                                    "confidence_lower": lower,
-                                    "confidence_upper": upper
-                                },
-                                "metadata.status": "processed"  # Update file status to processed
-                            }}
-                        )
-
-
-
-                        # Add the current analysis as a new data point
-                        new_data_point = {
-                            "file_id": file_id,
-                            "filename": st.session_state.get("current_filename", "Unknown file"),
+                        # Store all test results in a dictionary
+                        test_results = {
                             "l_plus": l_plus,
                             "l_minus": l_minus,
-                            "timestamp": datetime.now(),
                             "current_posterior": current_posterior,
                             "new_posterior": new_posterior,
                             "probability": probability,
                             "confidence_lower": lower,
                             "confidence_upper": upper,
-                            "analysis_code": code_to_test
-
+                            "code": code_to_test
                         }
-                        data_points.append(new_data_point)
                         
-                        # Update the hypothesis document with the new posterior and data point
-                        hypothesis_collection.update_one(
-                            {"_id": hypothesis_id},
-                            {"$set": {
-                                "node_metadata.current_posterior": new_posterior,
-                                "node_metadata.data_points": data_points
-                            }}
-                        )
+                        st.session_state["test_results"] = test_results
 
+                        st.success("Code executed successfully!")
+                        
                         # Exit edit mode after validation if we're in it
                         if edit_mode:
                             st.session_state["edit_mode"] = False
@@ -604,6 +567,82 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         st.error(f"Code execution failed: {str(e)}")
                         st.info("Please revise the code and try again.")
                         print(f"Code execution failed: {str(e)}")
+            
+            # Add Finalize button that appears only after successful code testing
+            if "test_results" in st.session_state:
+                st.markdown("### :orange[Finalize Analysis]")
+                st.info("Finalizing will update the database with these results and add this analysis to your data points.")
+                
+                if st.button("Finalize Code and Visualize Results", type="primary"):
+                    with st.spinner("Finalizing analysis..."):
+                        try:
+                            # Get test results and validated code
+                            test_results = st.session_state["test_results"]
+                            validated_code = test_results["code"]
+                            
+                            # Get existing data points
+                            hypothesis_doc = hypothesis_collection.find_one({"_id": hypothesis_id})
+                            data_points = []
+                            if hypothesis_doc and "node_metadata" in hypothesis_doc and "data_points" in hypothesis_doc["node_metadata"]:
+                                data_points = hypothesis_doc["node_metadata"]["data_points"]
+                            
+                            # Add the current analysis as a new data point
+                            new_data_point = {
+                                "file_id": file_id,
+                                "filename": st.session_state.get("current_filename", "Unknown file"),
+                                "l_plus": test_results["l_plus"],
+                                "l_minus": test_results["l_minus"],
+                                "timestamp": datetime.now(),
+                                "current_posterior": test_results["current_posterior"],
+                                "new_posterior": test_results["new_posterior"],
+                                "probability": test_results["probability"],
+                                "confidence_lower": test_results["confidence_lower"],
+                                "confidence_upper": test_results["confidence_upper"],
+                                "analysis_code": validated_code
+                            }
+                            data_points.append(new_data_point)
+                            
+                            # Update the hypothesis document with the new posterior and data point
+                            hypothesis_collection.update_one(
+                                {"_id": hypothesis_id},
+                                {"$set": {
+                                    "node_metadata.current_posterior": test_results["new_posterior"],
+                                    "node_metadata.data_points": data_points
+                                }}
+                            )
+                            
+                            # Update the database with validation results
+                            db.fs.files.update_one(
+                                {"_id": ensure_object_id(file_id)},
+                                {"$set": {
+                                    "analysis_code": validated_code,
+                                    "analysis_results": {
+                                        "l_plus": test_results["l_plus"],
+                                        "l_minus": test_results["l_minus"],
+                                        "current_posterior": test_results["current_posterior"],
+                                        "new_posterior": test_results["new_posterior"],
+                                        "probability": test_results["probability"],
+                                        "confidence_lower": test_results["confidence_lower"],
+                                        "confidence_upper": test_results["confidence_upper"]
+                                    },
+                                    "metadata.status": "processed"  # Update file status to processed
+                                }}
+                            )
+                            
+                            st.success("Analysis finalized! Results have been saved to the database.")
+                            st.session_state["file_ready_for_processing"] = True
+                            
+                            # Show visualization options or next step options
+                            st.markdown("### 📊 Data Updated Successfully")
+                            st.info("You can now view visualizations or proceed to the next step.")
+                            
+                            if st.button("Continue to Visualization →"):
+                                return "next"
+                            
+                        except Exception as e:
+                            st.error(f"Error finalizing analysis: {str(e)}")
+                            print(f"Error finalizing analysis: {str(e)}")
+                            
             # Navigation buttons
             st.divider()
             
@@ -613,7 +652,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                     # Clean up session state for this step
                     for key in ["current_file_id", "current_filename", "parsed_data", 
                               "generated_code", "current_code", "validated_code", 
-                              "l_plus", "l_minus", "edit_mode",
+                              "test_results", "edit_mode",
                               "simple_analysis", "tech_analysis"]:
                         if key in st.session_state:
                             del st.session_state[key]
@@ -621,10 +660,10 @@ def display_code_review_step(db, fs, hypothesis_collection):
                     return "back"
             
             with col2:
-                if "validated_code" in st.session_state:
-                    if st.button("Continue →", type="primary"):
-                        # Store necessary information in session state
-                        st.session_state["file_ready_for_processing"] = True
+                if "test_results" in st.session_state:
+                    if st.button("Skip to Next Step →"):
+                        # Skip without finalizing
+                        st.warning("Skipping without finalizing. Your test results will not be saved to the database.")
                         return "next"
     
     return None  # No action taken
