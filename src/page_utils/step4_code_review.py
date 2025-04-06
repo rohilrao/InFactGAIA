@@ -484,7 +484,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
                 
                 # Display results in a container with styling
                 st.markdown('<div class="results-container">', unsafe_allow_html=True)
-                st.markdown("#### Test Results")
+                st.markdown("#### Test Results (Temporary)")
                 test_results = st.session_state["test_results"]
                 
                 st.write(f"**l_plus (log P(data | hypothesis)):** {test_results['l_plus']:.4f}")
@@ -493,9 +493,10 @@ def display_code_review_step(db, fs, hypothesis_collection):
                 st.write(f"**New posterior log odds:** {test_results['new_posterior']:.4f}")
                 st.write(f"**Probability of hypothesis given this data:** {test_results['probability']:.2%}")
                 st.write(f"**Confidence interval (95%):** ({test_results['confidence_lower']:.2%}, {test_results['confidence_upper']:.2%})")
+                st.info("These results are temporary and have not been saved to the database yet.")
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.info("Code needs to be tested before it can be finalized")
+                st.info("Code needs to be tested before it can be saved to the database")
             
             # Test button to execute code without updating DB
             if st.button("Test Code"):
@@ -568,13 +569,13 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         st.info("Please revise the code and try again.")
                         print(f"Code execution failed: {str(e)}")
             
-            # Add Finalize button that appears only after successful code testing
+            # Add Save button that appears only after successful code testing
             if "test_results" in st.session_state:
-                st.markdown("### :orange[Finalize Analysis]")
-                st.info("Finalizing will update the database with these results and add this analysis to your data points.")
+                st.markdown("### :orange[Save Analysis to Database]")
+                st.info("Saving will update the database with these results and update your data points.")
                 
-                if st.button("Finalize Code and Visualize Results", type="primary"):
-                    with st.spinner("Finalizing analysis..."):
+                if st.button("Save Code to DB and Update Node", type="primary"):
+                    with st.spinner("Saving analysis to database..."):
                         try:
                             # Get test results and validated code
                             test_results = st.session_state["test_results"]
@@ -586,8 +587,15 @@ def display_code_review_step(db, fs, hypothesis_collection):
                             if hypothesis_doc and "node_metadata" in hypothesis_doc and "data_points" in hypothesis_doc["node_metadata"]:
                                 data_points = hypothesis_doc["node_metadata"]["data_points"]
                             
-                            # Add the current analysis as a new data point
-                            new_data_point = {
+                            # Check if there's an existing data point with this file_id
+                            existing_data_point_index = None
+                            for i, data_point in enumerate(data_points):
+                                if data_point.get("file_id") == file_id:
+                                    existing_data_point_index = i
+                                    break
+                            
+                            # Prepare the data point with updated information
+                            updated_data_point = {
                                 "file_id": file_id,
                                 "filename": st.session_state.get("current_filename", "Unknown file"),
                                 "l_plus": test_results["l_plus"],
@@ -600,7 +608,14 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 "confidence_upper": test_results["confidence_upper"],
                                 "analysis_code": validated_code
                             }
-                            data_points.append(new_data_point)
+                            
+                            # Update existing or add new data point
+                            if existing_data_point_index is not None:
+                                data_points[existing_data_point_index] = updated_data_point
+                                st.info(f"Updated existing analysis for file: {st.session_state.get('current_filename')}")
+                            else:
+                                data_points.append(updated_data_point)
+                                st.info(f"Added new analysis for file: {st.session_state.get('current_filename')}")
                             
                             # Update the hypothesis document with the new posterior and data point
                             hypothesis_collection.update_one(
@@ -629,22 +644,30 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 }}
                             )
                             
-                            st.success("Analysis finalized! Results have been saved to the database.")
+                            st.success("Analysis saved! Results have been stored in the database.")
                             st.session_state["file_ready_for_processing"] = True
                             
-                            # Show visualization options or next step options
+                            # Show success message and next button
                             st.markdown("### 📊 Data Updated Successfully")
-                            st.info("You can now view visualizations or proceed to the next step.")
                             
-                            if st.button("Continue to Visualization →"):
+                            if st.button("Continue to Next Step →"):
                                 return "next"
                             
                         except Exception as e:
-                            st.error(f"Error finalizing analysis: {str(e)}")
-                            print(f"Error finalizing analysis: {str(e)}")
+                            st.error(f"Error saving analysis: {str(e)}")
+                            print(f"Error saving analysis: {str(e)}")
                             
             # Navigation buttons
             st.divider()
+            
+            # Check if we have existing analysis for this file in data points
+            has_saved_analysis = False
+            hypothesis_doc = hypothesis_collection.find_one({"_id": hypothesis_id})
+            if hypothesis_doc and "node_metadata" in hypothesis_doc and "data_points" in hypothesis_doc["node_metadata"]:
+                for data_point in hypothesis_doc["node_metadata"]["data_points"]:
+                    if data_point.get("file_id") == file_id:
+                        has_saved_analysis = True
+                        break
             
             col1, col2 = st.columns([1, 1])
             with col1:
@@ -660,10 +683,9 @@ def display_code_review_step(db, fs, hypothesis_collection):
                     return "back"
             
             with col2:
-                if "test_results" in st.session_state:
-                    if st.button("Skip to Next Step →"):
-                        # Skip without finalizing
-                        st.warning("Skipping without finalizing. Your test results will not be saved to the database.")
+                # Show Next button only if we have saved analysis for this file
+                if has_saved_analysis:
+                    if st.button("Continue to Next Step →"):
                         return "next"
     
     return None  # No action taken
