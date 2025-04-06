@@ -5,6 +5,7 @@ from bson.objectid import ObjectId
 import math
 from datetime import datetime
 import base64
+import uuid
 from MongoInFactRenderer import MongoInFactRenderer
 from infact_utils import call_llm
 from bayesian_analysis_utils import _to_probability, _calculate_uncertainty
@@ -19,6 +20,64 @@ def ensure_object_id(id_value):
     # Return the original value if conversion failed or wasn't needed
     return id_value
 
+def handle_chat_submit():
+    """Handle chat submission."""
+    user_input = st.session_state["result_question"].strip()
+    if user_input:
+        # Add user message to chat history
+        st.session_state["result_chat_history"].append({
+            "role": "user",
+            "content": user_input
+        })
+        
+        # Store the question to process after rerun
+        st.session_state["result_pending_question"] = user_input
+        
+        # Clear the input field
+        st.session_state["result_question"] = ""
+
+def process_chat_message(user_question, hypothesis_text, data_points, probability, lower, upper, interpretation):
+    """Process a chat message about the results and generate a response."""
+    try:
+        provider_name = st.session_state["provider"]
+        api_key = st.session_state["api_key"]
+        model = st.session_state["model"]
+
+        # Prepare evidence summary for the prompt
+        evidence_summary = ""
+        for point in data_points:
+            filename = point.get("filename", "Unknown File")
+            impact = point.get("l_plus", 0) - point.get("l_minus", 0)
+            evidence_summary += f"\n- {filename}: Impact on log odds: {impact:.4f}"
+
+        prompt_chat = (
+            f"You are an assistant helping a researcher interpret the results of a Bayesian hypothesis analysis.\n\n"
+            f"The hypothesis is: {hypothesis_text}\n\n"
+            f"Current analysis results:\n"
+            f"- Current probability: {probability:.2%}\n"
+            f"- 95% confidence interval: ({lower:.2%}, {upper:.2%})\n"
+            f"- Interpretation: {interpretation}\n\n"
+            f"Evidence analyzed:{evidence_summary}\n\n"
+            f"The researcher asks: {user_question}\n\n"
+            f"Provide a helpful, specific answer focused on interpreting these results and what they mean for the hypothesis. "
+            f"Consider the strength of evidence, limitations, and what additional evidence might be valuable. "
+            f"Use your knowledge of Bayesian analysis to explain concepts if needed."
+        )
+        
+        return call_llm(provider_name, api_key, model, prompt_chat)
+    
+    except Exception as e:
+        return f"Error processing your question: {str(e)}"
+
+def initialize_chat_state():
+    """Initialize all required session state variables for chat."""
+    if "result_chat_history" not in st.session_state:
+        st.session_state["result_chat_history"] = []
+    if "result_chat_id" not in st.session_state:
+        st.session_state["result_chat_id"] = str(uuid.uuid4())
+    if "result_question" not in st.session_state:
+        st.session_state["result_question"] = ""
+
 def display_results_step(db, fs, hypothesis_collection):
     """
     Handles Step 5: Results and Visualization
@@ -31,6 +90,9 @@ def display_results_step(db, fs, hypothesis_collection):
     Returns:
         str: Navigation action - "back", "restart", or None
     """
+    # Initialize chat state variables
+    initialize_chat_state()
+    
     # Add styling for results page
     st.markdown("""
     <style>
@@ -40,38 +102,6 @@ def display_results_step(db, fs, hypothesis_collection):
         border-radius: 5px; 
         margin: 10px 0;
         border-left: 4px solid #4CAF50;
-    }
-    .evidence-card {
-        background-color: #ffffff;
-        padding: 15px;
-        border-radius: 5px;
-        border: 1px solid #e0e0e0;
-        margin-bottom: 15px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .evidence-header {
-        background-color: #f8f9fa;
-        padding: 10px;
-        border-radius: 5px 5px 0 0;
-        margin: -15px -15px 15px -15px;
-        border-bottom: 1px solid #e0e0e0;
-    }
-    .navigation-buttons {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 20px;
-    }
-    .confidence-high {
-        color: #047857;
-        font-weight: bold;
-    }
-    .confidence-medium {
-        color: #b45309;
-        font-weight: bold;
-    }
-    .confidence-low {
-        color: #dc2626;
-        font-weight: bold;
     }
     .probability-value {
         font-size: 2.5rem;
@@ -97,10 +127,40 @@ def display_results_step(db, fs, hypothesis_collection):
         border: none;
         overflow: hidden;
     }
+    .chat-container {
+        margin-bottom: 20px;
+    }
+    .chat-message {
+        padding: 12px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+        display: flex;
+        flex-direction: column;
+    }
+    .user-message {
+        background-color: rgba(98, 156, 246, 0.2);
+        border: 1px solid rgba(98, 156, 246, 0.4);
+        margin-left: 20%;
+        margin-right: 2%;
+    }
+    .assistant-message {
+        background-color: rgba(131, 131, 131, 0.2);
+        border: 1px solid rgba(131, 131, 131, 0.4);
+        margin-right: 20%;
+        margin-left: 2%;
+    }
+    .message-content {
+        margin-top: 5px;
+    }
+    .message-sender {
+        font-weight: bold;
+        font-size: 0.85em;
+        opacity: 0.8;
+    }
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("### :orange[Process Results]")
+    st.markdown("### :orange[Hypothesis Results]")
     
     # Get hypothesis information
     hypothesis_id = st.session_state.get("hypothesis_id", None)
@@ -173,140 +233,8 @@ def display_results_step(db, fs, hypothesis_collection):
     st.markdown(f'<div class="confidence-interval">95% Confidence Interval: ({lower:.1%}, {upper:.1%})</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="interpretation">{interpretation}</div>', unsafe_allow_html=True)
     
-    # Display tabs for different views
-    results_tab, evidence_tab, visual_tab = st.tabs(["Summary", "Evidence Details", "Visualization"])
-    
-    with results_tab:
-        # Display summary of the analysis
-        st.subheader("Analysis Summary")
-        
-        # Add a bit more space
-        st.write("")
-        
-        # Create summary metrics
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Data Points Analyzed", len(data_points))
-        with col2:
-            # Format the posterior for display
-            posterior_display = f"{current_posterior:.2f}"
-            st.metric("Log Odds", posterior_display)
-        with col3:
-            # For last evidence, calculate the change
-            if len(data_points) > 0:
-                last_point = data_points[-1]
-                change = last_point["l_plus"] - last_point["l_minus"]
-                change_display = f"{change:+.2f}"
-                st.metric("Last Evidence Impact", change_display)
-        
-        # Add a list of the files analyzed
-        st.write("##### Files Analyzed")
-        for idx, point in enumerate(data_points, 1):
-            filename = point.get("filename", f"File {idx}")
-            impact = point["l_plus"] - point["l_minus"]
-            sign = "+" if impact >= 0 else ""
-            
-            # Display with color based on impact
-            if impact > 0:
-                st.markdown(f"- {filename}: <span style='color:#047857;'>{sign}{impact:.2f}</span>", unsafe_allow_html=True)
-            elif impact < 0:
-                st.markdown(f"- {filename}: <span style='color:#dc2626;'>{impact:.2f}</span>", unsafe_allow_html=True)
-            else:
-                st.markdown(f"- {filename}: {impact:.2f}")
-    
-    with evidence_tab:
-        # Display detailed evidence cards for each data point
-        st.subheader("Evidence Analysis")
-        
-        # Create a selectbox to choose which evidence to view
-        evidence_names = [f"{point.get('filename', 'Unknown File')} - {datetime.fromisoformat(str(point['timestamp'])).strftime('%Y-%m-%d %H:%M')}" 
-                          for point in data_points]
-        
-        selected_evidence = st.selectbox("Select evidence to view:", evidence_names)
-        selected_index = evidence_names.index(selected_evidence)
-        point = data_points[selected_index]
-        
-        st.markdown("---")
-        st.subheader(f"Analysis of {point.get('filename', 'Unknown File')}")
-        
-        # Main statistics in a card
-        st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
-        
-        # Main statistics
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.write("**Log Likelihood (H):**")
-            st.write(f"{point.get('l_plus', 0):.4f}")
-        with col2:
-            st.write("**Log Likelihood (¬H):**")
-            st.write(f"{point.get('l_minus', 0):.4f}")
-        with col3:
-            impact = point.get('l_plus', 0) - point.get('l_minus', 0)
-            st.write("**Net Impact:**")
-            if impact > 0:
-                st.markdown(f"<span style='color:#047857;'>+{impact:.4f}</span>", unsafe_allow_html=True)
-            elif impact < 0:
-                st.markdown(f"<span style='color:#dc2626;'>{impact:.4f}</span>", unsafe_allow_html=True)
-            else:
-                st.write(f"{impact:.4f}")
-        
-        # Probability info
-        st.write("**Prior Probability:**", f"{point.get('probability', 0) - (point.get('l_plus', 0) - point.get('l_minus', 0)):.2%}")
-        st.write("**Posterior Probability:**", f"{point.get('probability', 0):.2%}")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # What to show section
-        show_options = []
-        if point.get('confidence_assessment'):
-            show_options.append("Confidence Assessment")
-        if 'analysis_code' in point:
-            show_options.append("Analysis Code")
-        if 'analysis_rationale' in point:
-            show_options.append("Analysis Rationale")
-        
-        if show_options:
-            selected_view = st.radio("Show:", show_options)
-            
-            if selected_view == "Confidence Assessment" and point.get('confidence_assessment'):
-                st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
-                st.write("### Confidence Assessment")
-                
-                confidence = point['confidence_assessment'].get('confidence_score', 0)
-                confidence_class = ""
-                if confidence > 0.7:
-                    confidence_class = "confidence-high"
-                elif confidence > 0.4:
-                    confidence_class = "confidence-medium"
-                else:
-                    confidence_class = "confidence-low"
-                
-                st.markdown(f"<span class='{confidence_class}'>{confidence:.0%} Confidence</span>", unsafe_allow_html=True)
-                
-                # Display strengths and limitations
-                if 'key_strengths' in point['confidence_assessment'] and point['confidence_assessment']['key_strengths']:
-                    st.write("**Key Strengths:**")
-                    for strength in point['confidence_assessment']['key_strengths']:
-                        st.markdown(f"- {strength}")
-                
-                if 'key_limitations' in point['confidence_assessment'] and point['confidence_assessment']['key_limitations']:
-                    st.write("**Key Limitations:**")
-                    for limitation in point['confidence_assessment']['key_limitations']:
-                        st.markdown(f"- {limitation}")
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-            elif selected_view == "Analysis Code" and 'analysis_code' in point:
-                st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
-                st.write("### Analysis Code")
-                st.code(point['analysis_code'], language="python")
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-            elif selected_view == "Analysis Rationale" and 'analysis_rationale' in point:
-                st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
-                st.write("### Analysis Rationale")
-                st.write(point['analysis_rationale'])
-                st.markdown('</div>', unsafe_allow_html=True)
+    # Display just two tabs: Visual Report and Chat
+    visual_tab, chat_tab = st.tabs(["Visual Report", "Chat with Results"])
     
     with visual_tab:
         # Render HTML visualization
@@ -315,7 +243,7 @@ def display_results_step(db, fs, hypothesis_collection):
         # Create a temporary directory to store the HTML file
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
-                # Just use the hypothesis_entry directly without extra transformations
+                # Just use the hypothesis_entry directly
                 render_doc = hypothesis_entry.copy()
                 
                 # Add probability field (current posterior as probability)
@@ -368,66 +296,78 @@ def display_results_step(db, fs, hypothesis_collection):
                     st.write("Hypothesis Entry:")
                     st.json(hypothesis_entry)
     
-    # Generate summary report if requested
-    if st.button("Generate Summary Report"):
-        with st.spinner("Generating report..."):
-            try:
-                model = st.session_state.get("model", None)
-                api_key = st.session_state.get("api_key", None)
-                provider = st.session_state.get("provider", None)
+    with chat_tab:
+        st.subheader("Discuss Analysis Results")
+        st.markdown("Ask questions about what these results mean for your hypothesis. The assistant will help interpret the data and suggest next steps.")
+        
+        # Process any pending question from previous run
+        if "result_pending_question" in st.session_state and st.session_state["result_pending_question"]:
+            with st.spinner("Generating response..."):
+                user_question = st.session_state["result_pending_question"]
                 
-                if not provider or not model or not api_key:
-                    st.warning("LLM model information not found. Please ensure provider, model and API key are set.")
+                # Generate response
+                ai_response = process_chat_message(
+                    user_question,
+                    hypothesis_text,
+                    data_points,
+                    probability,
+                    lower,
+                    upper,
+                    interpretation
+                )
+                
+                # Add AI response to chat history
+                st.session_state["result_chat_history"].append({
+                    "role": "assistant",
+                    "content": ai_response
+                })
+                
+                # Clear the pending question
+                st.session_state["result_pending_question"] = ""
+        
+        # Display the chat messages using custom HTML
+        chat_container = st.container()
+        with chat_container:
+            for message in st.session_state["result_chat_history"]:
+                role = message["role"]
+                content = message["content"]
+                
+                if role == "user":
+                    st.markdown(f"""
+                    <div class="chat-message user-message">
+                        <div class="message-sender">You</div>
+                        <div class="message-content">{content}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
-                    # Create a prompt to generate a summary
-                    prompt = f"""
-                    Generate a detailed summary report for the following hypothesis:
-                    
-                    Hypothesis: {hypothesis_text}
-                    
-                    Current probability: {probability:.2%}
-                    95% confidence interval: ({lower:.2%}, {upper:.2%})
-                    Interpretation: {interpretation}
-                    
-                    Evidence analyzed:
-                    """
-                    
-                    # Add information about each piece of evidence
-                    for point in data_points:
-                        filename = point.get("filename", "Unknown File")
-                        impact = point.get("l_plus", 0) - point.get("l_minus", 0)
-                        prompt += f"\n- {filename}: Impact on log odds: {impact:.4f}"
-                    
-                    prompt += """
-                    
-                    Please include in your summary:
-                    1. A clear interpretation of the current probability
-                    2. An analysis of the strength of evidence
-                    3. Key limitations or uncertainties in the analysis
-                    4. Suggestions for what additional evidence would be valuable
-                    5. A conclusion about the hypothesis
-                    
-                    Format the response as a professional report with sections.
-                    """
-                    
-                    # Call the LLM
-                    summary_report = call_llm(provider, api_key, model, prompt)
-                    
-                    # Display the generated report
-                    st.subheader("Summary Report")
-                    st.markdown(summary_report)
-                    
-                    # Add download button for the report
-                    report_filename = f"hypothesis_{hypothesis_id}_report.md"
-                    st.download_button(
-                        label="Download Report",
-                        data=summary_report,
-                        file_name=report_filename,
-                        mime="text/markdown"
-                    )
-            
-            except Exception as e:
-                st.error(f"Error generating report: {str(e)}")
+                    st.markdown(f"""
+                    <div class="chat-message assistant-message">
+                        <div class="message-sender">Assistant</div>
+                        <div class="message-content">{content}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        # Suggest some example questions
+        if not st.session_state["result_chat_history"]:
+            st.markdown("#### Example questions you might ask:")
+            st.markdown("- What do these results mean for my hypothesis?")
+            st.markdown("- How strong is the evidence so far?")
+            st.markdown("- What additional evidence would be most valuable?")
+            st.markdown("- What are the main limitations of this analysis?")
+            st.markdown("- How should I interpret the confidence interval?")
+        
+        # Chat input with on_change callback
+        st.text_input(
+            "Ask a question about the analysis results",
+            key="result_question",
+            on_change=handle_chat_submit
+        )
+        
+        # Clear chat button
+        if st.session_state["result_chat_history"] and st.button("Clear Chat", key="clear_result_chat_btn"):
+            st.session_state["result_chat_history"] = []
+            st.session_state["result_chat_id"] = str(uuid.uuid4())
+            st.rerun()
     
     # Navigation buttons
     st.divider()
@@ -444,7 +384,8 @@ def display_results_step(db, fs, hypothesis_collection):
                 "hypothesis_id", "current_file_id", "current_filename", 
                 "parsed_data", "generated_code", "current_code", 
                 "validated_code", "l_plus", "l_minus", 
-                "simple_analysis", "tech_analysis", "html_output"
+                "result_chat_history", "result_chat_id", "result_question",
+                "result_pending_question", "html_output"
             ]
             
             for key in keys_to_clear:
