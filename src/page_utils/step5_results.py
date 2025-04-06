@@ -308,6 +308,9 @@ def display_results_step(db, fs, hypothesis_collection):
                 st.write(point['analysis_rationale'])
                 st.markdown('</div>', unsafe_allow_html=True)
     
+    # This is an updated section of the display_results_step function in step5_results.py
+    # Replace the visualization section in the visual_tab with this code
+
     with visual_tab:
         # Render HTML visualization
         st.subheader("Interactive Visualization")
@@ -315,50 +318,8 @@ def display_results_step(db, fs, hypothesis_collection):
         # Create a temporary directory to store the HTML file
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
-                # Prepare the document for rendering
-                # Add necessary fields expected by the renderer
+                # Just use the hypothesis_entry directly without extra transformations
                 render_doc = hypothesis_entry.copy()
-                
-                # Ensure we have a valid prior_log_odds value
-                render_doc["prior_log_odds"] = 0.0  # Default to even odds if not present
-                
-                # Set data points with the right structure for the renderer
-                if "node_metadata" in render_doc and "data_points" in render_doc["node_metadata"]:
-                    # Create a properly structured data_points array for the renderer
-                    prepared_data_points = []
-                    
-                    for point in render_doc["node_metadata"]["data_points"]:
-                        # Ensure all required fields have valid values
-                        prepared_point = {
-                            "filename": point.get("filename", "Unknown File"),
-                            "posterior": point.get("new_posterior", 0.0),
-                            "l_plus": point.get("l_plus", 0.0),
-                            "l_minus": point.get("l_minus", 0.0),
-                            "timestamp": point.get("timestamp", datetime.now()),
-                            "metadata": {
-                                "filename": point.get("filename", "Unknown File")
-                            },
-                            "analysis_rationale": point.get("analysis_rationale", "No rationale provided")
-                        }
-                        
-                        # Add confidence assessment if available
-                        if "confidence_assessment" in point:
-                            prepared_point["confidence_assessment"] = point["confidence_assessment"]
-                        else:
-                            # Add default confidence assessment
-                            prepared_point["confidence_assessment"] = {
-                                "confidence_score": 0.5,
-                                "explanation": "No confidence assessment available",
-                                "key_strengths": [],
-                                "key_limitations": []
-                            }
-                        
-                        prepared_data_points.append(prepared_point)
-                    
-                    render_doc["data_points"] = prepared_data_points
-                else:
-                    # Create empty data points if none exist
-                    render_doc["data_points"] = []
                 
                 # Add probability field (current posterior as probability)
                 render_doc["probability"] = probability
@@ -409,68 +370,68 @@ def display_results_step(db, fs, hypothesis_collection):
                 with st.expander("Debug Data"):
                     st.write("Hypothesis Entry:")
                     st.json(hypothesis_entry)
-    
-    # Generate summary report if requested
-    if st.button("Generate Summary Report"):
-        with st.spinner("Generating report..."):
-            try:
-                model = st.session_state.get("model", None)
-                api_key = st.session_state.get("api_key", None)
-                provider = st.session_state.get("provider", None)
+        
+        # Generate summary report if requested
+        if st.button("Generate Summary Report"):
+            with st.spinner("Generating report..."):
+                try:
+                    model = st.session_state.get("model", None)
+                    api_key = st.session_state.get("api_key", None)
+                    provider = st.session_state.get("provider", None)
+                    
+                    if not provider or not model or not api_key:
+                        st.warning("LLM model information not found. Please ensure provider, model and API key are set.")
+                    else:
+                        # Create a prompt to generate a summary
+                        prompt = f"""
+                        Generate a detailed summary report for the following hypothesis:
+                        
+                        Hypothesis: {hypothesis_text}
+                        
+                        Current probability: {probability:.2%}
+                        95% confidence interval: ({lower:.2%}, {upper:.2%})
+                        Interpretation: {interpretation}
+                        
+                        Evidence analyzed:
+                        """
+                        
+                        # Add information about each piece of evidence
+                        for point in data_points:
+                            filename = point.get("filename", "Unknown File")
+                            impact = point.get("l_plus", 0) - point.get("l_minus", 0)
+                            prompt += f"\n- {filename}: Impact on log odds: {impact:.4f}"
+                        
+                        prompt += """
+                        
+                        Please include in your summary:
+                        1. A clear interpretation of the current probability
+                        2. An analysis of the strength of evidence
+                        3. Key limitations or uncertainties in the analysis
+                        4. Suggestions for what additional evidence would be valuable
+                        5. A conclusion about the hypothesis
+                        
+                        Format the response as a professional report with sections.
+                        """
+                        
+                        # Call the LLM
+                        summary_report = call_llm(provider, api_key, model, prompt)
+                        
+                        # Display the generated report
+                        st.subheader("Summary Report")
+                        st.markdown(summary_report)
+                        
+                        # Add download button for the report
+                        report_filename = f"hypothesis_{hypothesis_id}_report.md"
+                        st.download_button(
+                            label="Download Report",
+                            data=summary_report,
+                            file_name=report_filename,
+                            mime="text/markdown"
+                        )
                 
-                if not provider or not model or not api_key:
-                    st.warning("LLM model information not found. Please ensure provider, model and API key are set.")
-                else:
-                    # Create a prompt to generate a summary
-                    prompt = f"""
-                    Generate a detailed summary report for the following hypothesis:
-                    
-                    Hypothesis: {hypothesis_text}
-                    
-                    Current probability: {probability:.2%}
-                    95% confidence interval: ({lower:.2%}, {upper:.2%})
-                    Interpretation: {interpretation}
-                    
-                    Evidence analyzed:
-                    """
-                    
-                    # Add information about each piece of evidence
-                    for point in data_points:
-                        filename = point.get("filename", "Unknown File")
-                        impact = point.get("l_plus", 0) - point.get("l_minus", 0)
-                        prompt += f"\n- {filename}: Impact on log odds: {impact:.4f}"
-                    
-                    prompt += """
-                    
-                    Please include in your summary:
-                    1. A clear interpretation of the current probability
-                    2. An analysis of the strength of evidence
-                    3. Key limitations or uncertainties in the analysis
-                    4. Suggestions for what additional evidence would be valuable
-                    5. A conclusion about the hypothesis
-                    
-                    Format the response as a professional report with sections.
-                    """
-                    
-                    # Call the LLM
-                    summary_report = call_llm(provider, api_key, model, prompt)
-                    
-                    # Display the generated report
-                    st.subheader("Summary Report")
-                    st.markdown(summary_report)
-                    
-                    # Add download button for the report
-                    report_filename = f"hypothesis_{hypothesis_id}_report.md"
-                    st.download_button(
-                        label="Download Report",
-                        data=summary_report,
-                        file_name=report_filename,
-                        mime="text/markdown"
-                    )
-            
-            except Exception as e:
-                st.error(f"Error generating report: {str(e)}")
-    
+                except Exception as e:
+                    st.error(f"Error generating report: {str(e)}")
+        
     # Navigation buttons
     st.divider()
     
