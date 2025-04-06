@@ -26,41 +26,76 @@ class MongoInFactRenderer(InFactRenderer):
         # Prepare evidence points data
         evidence_points = []
         
-        # Get current probability from the document - no default
+        # Get current probability from the document or calculate it
         current_probability = hypothesis_doc.get("probability")
         
-        for point in hypothesis_doc.get("data_points", []):
-            # Use the exact data from MongoDB with no defaults
-            posterior = point.get('posterior')
-            l_plus = point.get('l_plus')
-            l_minus = point.get('l_minus')
+        # Check if data points are in node_metadata (as stored in step4) or top level
+        data_points = []
+        if "node_metadata" in hypothesis_doc and "data_points" in hypothesis_doc["node_metadata"]:
+            data_points = hypothesis_doc["node_metadata"]["data_points"]
+        elif "data_points" in hypothesis_doc:
+            data_points = hypothesis_doc["data_points"]
+            
+        # Get prior_log_odds from the hypothesis document, default to 0.0 if not present
+        prior_log_odds = hypothesis_doc.get("prior_log_odds", 0.0)
+        
+        # Store the first data point's prior for use later
+        first_point_prior = None
+        
+        for point in data_points:
+            # Use the exact data from MongoDB with field name flexibility
+            posterior = point.get('posterior', point.get('new_posterior', 0.0))
+            l_plus = point.get('l_plus', 0.0)
+            l_minus = point.get('l_minus', 0.0)
             
             # Calculate likelihood ratio and probabilities
             likelihood_ratio = math.exp(l_plus - l_minus)
+            
+            # Calculate prior probability for this data point
             prior_prob = math.exp(posterior - (l_plus - l_minus)) / \
                         (1 + math.exp(posterior - (l_plus - l_minus)))
+                        
+            if first_point_prior is None:
+                first_point_prior = prior_prob
+                
             posterior_prob = math.exp(posterior) / (1 + math.exp(posterior))
 
+            # Create a confidence assessment if it doesn't exist
+            confidence_assessment = point.get('confidence_assessment', {
+                'confidence_score': 0.5,
+                'explanation': 'No confidence assessment available',
+                'key_strengths': [],
+                'key_limitations': []
+            })
+
             evidence_points.append({
-                'file': point.get('filename'),
-                'confidence_assessment': point.get('confidence_assessment', {}),
+                'file': point.get('filename', 'Unknown File'),
+                'confidence_assessment': confidence_assessment,
                 'prior_prob': prior_prob,
                 'likelihood_ratio': likelihood_ratio,
                 'posterior': posterior_prob,
                 'analysis_rationale': point.get('analysis_rationale', '')
             })
 
-        # Calculate prior probability from prior log odds - no default
-        prior_log_odds = point.get("prior_log_odds")
-        prior_probability = math.exp(prior_log_odds) / (1 + math.exp(prior_log_odds))
+        # Calculate prior probability from prior log odds
+        prior_probability = first_point_prior if first_point_prior is not None else math.exp(prior_log_odds) / (1 + math.exp(prior_log_odds))
 
-        # Get confidence interval from document - no default
-        confidence_interval = hypothesis_doc.get("confidence_interval", [])
-        ci_low, ci_high = confidence_interval if len(confidence_interval) >= 2 else (None, None)
+        # Get confidence interval from document, with fallbacks
+        ci_low, ci_high = None, None
+        if "confidence_interval" in hypothesis_doc and len(hypothesis_doc["confidence_interval"]) >= 2:
+            ci_low, ci_high = hypothesis_doc["confidence_interval"]
+        else:
+            # Try to get from the last data point
+            if data_points:
+                last_point = data_points[-1]
+                ci_low = last_point.get("confidence_lower", 0.25)
+                ci_high = last_point.get("confidence_upper", 0.75)
+            else:
+                ci_low, ci_high = 0.25, 0.75  # Default values
 
         # Render template
         html = template.render(
-            hypothesis=hypothesis_doc.get("text"),
+            hypothesis=hypothesis_doc.get("text", "Unknown Hypothesis"),
             prior_probability=prior_probability,
             final_probability=current_probability,
             ci_low=ci_low,

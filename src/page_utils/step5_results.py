@@ -315,50 +315,8 @@ def display_results_step(db, fs, hypothesis_collection):
         # Create a temporary directory to store the HTML file
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
-                # Prepare the document for rendering
-                # Add necessary fields expected by the renderer
+                # Just use the hypothesis_entry directly without extra transformations
                 render_doc = hypothesis_entry.copy()
-                
-                # Ensure we have a valid prior_log_odds value
-                render_doc["prior_log_odds"] = 0.0  # Default to even odds if not present
-                
-                # Set data points with the right structure for the renderer
-                if "node_metadata" in render_doc and "data_points" in render_doc["node_metadata"]:
-                    # Create a properly structured data_points array for the renderer
-                    prepared_data_points = []
-                    
-                    for point in render_doc["node_metadata"]["data_points"]:
-                        # Ensure all required fields have valid values
-                        prepared_point = {
-                            "filename": point.get("filename", "Unknown File"),
-                            "posterior": point.get("new_posterior", 0.0),
-                            "l_plus": point.get("l_plus", 0.0),
-                            "l_minus": point.get("l_minus", 0.0),
-                            "timestamp": point.get("timestamp", datetime.now()),
-                            "metadata": {
-                                "filename": point.get("filename", "Unknown File")
-                            },
-                            "analysis_rationale": point.get("analysis_rationale", "No rationale provided")
-                        }
-                        
-                        # Add confidence assessment if available
-                        if "confidence_assessment" in point:
-                            prepared_point["confidence_assessment"] = point["confidence_assessment"]
-                        else:
-                            # Add default confidence assessment
-                            prepared_point["confidence_assessment"] = {
-                                "confidence_score": 0.5,
-                                "explanation": "No confidence assessment available",
-                                "key_strengths": [],
-                                "key_limitations": []
-                            }
-                        
-                        prepared_data_points.append(prepared_point)
-                    
-                    render_doc["data_points"] = prepared_data_points
-                else:
-                    # Create empty data points if none exist
-                    render_doc["data_points"] = []
                 
                 # Add probability field (current posterior as probability)
                 render_doc["probability"] = probability
