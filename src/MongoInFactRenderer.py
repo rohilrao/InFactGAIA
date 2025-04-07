@@ -74,7 +74,7 @@ class MongoInFactRenderer(InFactRenderer):
                 'prior_prob': prior_prob,
                 'likelihood_ratio': likelihood_ratio,
                 'posterior': posterior_prob,
-                'analysis_rationale': point.get('analysis_code', '')
+                'analysis_code': point.get('analysis_code', '')
             })
 
         # Calculate prior probability from prior log odds
