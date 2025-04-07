@@ -32,7 +32,7 @@ def display_setup_step():
         
         verify_col1, verify_col2 = st.columns([1, 5])
         with verify_col1:
-            verify_button = st.button("Verify")
+            verify_button = st.button("Verify Credentials", use_container_width=True)
         
         if verify_button:
             if not api_key.strip():
