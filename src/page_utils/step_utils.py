@@ -12,7 +12,7 @@ process_steps = {
 def initialize_session_state():
     """Initialize necessary session state variables if they don't exist."""
     if "process_step" not in st.session_state:
-        st.session_state.process_step = 1
+        st.session_state.process_step = 0
 
 def show_step_progress():
     """Display step progress indicator at the top of the app."""
