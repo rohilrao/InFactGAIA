@@ -54,10 +54,12 @@ def display_setup_step():
                     else:
                         st.error(f"Admin {provider} API key not configured.")
                         return None
-            except Exception:
-                # If there's any issue with secrets, proceed with user's key
-                pass
-                
+            except Exception as e:
+                # Show error and debugging information
+                st.error(f"Error accessing admin secrets: {str(e)}")
+                st.error("Please enter your own API key instead")
+                st.write("Available secrets:", list(st.secrets.keys()) if hasattr(st, "secrets") else "None")
+                return None
             # Test the API key with a simple call
             try:
                 with st.spinner("Verifying API credentials..."):
