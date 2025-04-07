@@ -610,7 +610,10 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                     existing_data_point_index = i
                                     break
                             
-                            # Prepare the data point with updated information
+                            # Get file metadata
+                            file_obj = db.fs.files.find_one({"_id": ensure_object_id(file_id)})
+
+                            # Create the base data point with standard analysis results
                             updated_data_point = {
                                 "file_id": file_id,
                                 "filename": st.session_state.get("current_filename", "Unknown file"),
@@ -624,6 +627,14 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 "confidence_upper": test_results["confidence_upper"],
                                 "analysis_code": validated_code
                             }
+
+                            # Copy each metadata key from the file to the data point
+                            if file_obj and "metadata" in file_obj:
+                                file_metadata = file_obj["metadata"]
+                                for key, value in file_metadata.items():
+                                    # Skip hypothesis_id and status as they're duplicative or not needed
+                                    if key not in ["hypothesis_id", "status"]:
+                                        updated_data_point[key] = value
                             
                             # Update existing or add new data point
                             if existing_data_point_index is not None:
