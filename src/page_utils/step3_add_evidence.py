@@ -2,7 +2,7 @@ import streamlit as st
 import datetime
 import time
 from file_processor import process_file
-
+from evidence_recommender import display_evidence_recommendations
 from bson.objectid import ObjectId
 
 def ensure_object_id(id_value):
@@ -80,6 +80,26 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     # Simple hypothesis display
     st.write(f"**Hypothesis ID:** `{hypothesis_id}`")
     st.write(f"**Hypothesis:** {hypothesis_text}")
+    st.divider()
+
+     # NEW SECTION: Evidence Recommender
+    # Get API keys from session state or use None
+    api_keys = {
+        'semantic_scholar': st.session_state.get('semantic_scholar_api_key', None)
+    }
+    
+    # Display evidence recommendations and get selected evidence
+    evidence_selected, selected_evidence = display_evidence_recommendations(hypothesis_text, api_keys)
+    
+    # If evidence was selected, you might want to do something with it
+    if evidence_selected and selected_evidence:
+        # Store in session state for later use
+        st.session_state['selected_evidence_paper'] = selected_evidence
+        
+        # Optionally: You could automatically download the paper if it has a direct PDF URL
+        if 'pdf_url' in selected_evidence and selected_evidence['pdf_url']:
+            st.info(f"You can download the selected paper from the link above and upload it below.")
+            
     st.divider()
     
     # 2. EXISTING FILES SECTION - Always fresh from database
