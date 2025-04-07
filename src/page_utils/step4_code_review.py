@@ -483,18 +483,32 @@ def display_code_review_step(db, fs, hypothesis_collection):
                 st.success("Code tested successfully")
                 
                 # Display results in a container with styling
-                st.markdown('<div class="results-container">', unsafe_allow_html=True)
-                st.markdown("#### Test Results (Temporary)")
-                test_results = st.session_state["test_results"]
-                
-                st.write(f"**l_plus (log P(data | hypothesis)):** {test_results['l_plus']:.4f}")
-                st.write(f"**l_minus (log P(data | not hypothesis)):** {test_results['l_minus']:.4f}")
-                st.write(f"**Current posterior log odds:** {test_results['current_posterior']:.4f}")
-                st.write(f"**New posterior log odds:** {test_results['new_posterior']:.4f}")
-                st.write(f"**Probability of hypothesis given this data:** {test_results['probability']:.2%}")
-                st.write(f"**Confidence interval (95%):** ({test_results['confidence_lower']:.2%}, {test_results['confidence_upper']:.2%})")
-                st.info("These results are temporary and have not been saved to the database yet.")
-                st.markdown('</div>', unsafe_allow_html=True)
+                # Use Streamlit's built-in components instead of custom HTML
+                with st.container():
+                    st.subheader("Test Results (Temporary)")
+                    test_results = st.session_state["test_results"]
+                    
+                    # Create a bordered container with custom styling
+                    st.markdown("""
+                    <style>
+                    .stContainer {
+                        border-left: 4px solid #4CAF50;
+                        background-color: rgba(0, 100, 0, 0.1);
+                        padding: 10px;
+                        border-radius: 5px;
+                        margin-bottom: 10px;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
+                    
+                    # Display results using Streamlit's native components
+                    st.write(f"**l_plus (log P(data | hypothesis)):** {test_results['l_plus']:.4f}")
+                    st.write(f"**l_minus (log P(data | not hypothesis)):** {test_results['l_minus']:.4f}")
+                    st.write(f"**Current posterior log odds:** {test_results['current_posterior']:.4f}")
+                    st.write(f"**New posterior log odds:** {test_results['new_posterior']:.4f}")
+                    st.write(f"**Probability of hypothesis given this data:** {test_results['probability']:.2%}")
+                    st.write(f"**Confidence interval (95%):** ({test_results['confidence_lower']:.2%}, {test_results['confidence_upper']:.2%})")
+                    st.info("These results are temporary and have not been saved to the database yet.")
             else:
                 st.info("Code needs to be tested before it can be saved to the database")
             
