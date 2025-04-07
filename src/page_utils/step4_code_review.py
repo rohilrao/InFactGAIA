@@ -650,7 +650,8 @@ def display_code_review_step(db, fs, hypothesis_collection):
                             # Show success message and next button
                             st.markdown("### 📊 Data Updated Successfully")
                             
-                            if st.button("Continue to Next Step →"):
+                            # Use a unique key for this button to avoid duplicates
+                            if st.button("Continue to Next Step →", key="save_continue_button"):
                                 return "next"
                             
                         except Exception as e:
@@ -685,7 +686,8 @@ def display_code_review_step(db, fs, hypothesis_collection):
             with col2:
                 # Show Next button only if we have saved analysis for this file
                 if has_saved_analysis:
-                    if st.button("Continue to Next Step →"):
+                    # Use a unique key for this button to avoid duplicates
+                    if st.button("Continue to Next Step →", key="nav_continue_button"):
                         return "next"
     
     return None  # No action taken
