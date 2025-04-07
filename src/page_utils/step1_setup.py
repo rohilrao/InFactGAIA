@@ -86,7 +86,7 @@ def display_setup_step():
         # Allow changing configuration
         if st.button("Change Configuration"):
             st.session_state["credentials_verified"] = False
-            st.experimental_rerun()
+            st.rerun()
     
     # Navigation buttons
     nav_col1, nav_col2 = st.columns([1, 5])
