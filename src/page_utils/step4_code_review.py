@@ -635,6 +635,13 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                     # Skip hypothesis_id and status as they're duplicative or not needed
                                     if key not in ["hypothesis_id", "status"]:
                                         updated_data_point[key] = value
+                                
+                                # Special handling for parsed_data and confidence_assessment to support the UI template
+                                if "parsed_data" in file_metadata:
+                                    parsed_data = file_metadata["parsed_data"]
+                                    # Copy confidence_assessment to the top level if it exists in parsed_data
+                                    if "confidence_assessment" in parsed_data:
+                                        updated_data_point["confidence_assessment"] = parsed_data["confidence_assessment"]
                             
                             # Update existing or add new data point
                             if existing_data_point_index is not None:
