@@ -74,8 +74,9 @@ class MongoInFactRenderer(InFactRenderer):
                 'prior_prob': prior_prob,
                 'likelihood_ratio': likelihood_ratio,
                 'posterior': posterior_prob,
-                'analysis_code': point.get('analysis_code', '')
-            })
+                'analysis_code': point.get('analysis_code', point.get('analysis_rationale', '')),
+                'analysis_rationale': point.get('analysis_code', point.get('analysis_rationale', ''))
+            })  
 
         # Calculate prior probability from prior log odds
         prior_probability = first_point_prior if first_point_prior is not None else math.exp(prior_log_odds) / (1 + math.exp(prior_log_odds))

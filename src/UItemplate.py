@@ -207,7 +207,9 @@ TEMPLATE = """
                 <details>
                     <summary>Analysis Details</summary>
                     <div class="rationale">
-                        {% if point.analysis_rationale %}
+                        {% if point.analysis_code %}
+                        <pre><code>{{ point.analysis_code }}</code></pre>
+                        {% elif point.analysis_rationale %}
                         <pre><code>{{ point.analysis_rationale }}</code></pre>
                         {% else %}
                         <p>No detailed analysis rationale available.</p>
