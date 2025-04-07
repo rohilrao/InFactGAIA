@@ -690,6 +690,13 @@ def display_code_review_step(db, fs, hypothesis_collection):
                 if has_saved_analysis:
                     # Use a unique key for this button to avoid duplicates
                     if st.button("Continue to Next Step →", key="nav_continue_button"):
+                        
+                        for key in ["generated_code", "current_code", "validated_code", 
+                              "test_results", "edit_mode",
+                              "simple_analysis", "tech_analysis"]:
+                            if key in st.session_state:
+                                del st.session_state[key]
+
                         return "next"
     
     return None  # No action taken
