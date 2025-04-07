@@ -479,20 +479,23 @@ def display_code_review_step(db, fs, hypothesis_collection):
             st.markdown("### :orange[Validate and Test Code]")
             
             # Show test results if available
-            if "test_results" in st.session_state and not edit_mode:
-                # Display in a simpler format that won't cause styling issues
+            if "test_results" in st.session_state:
                 st.success("Code tested successfully")
-                st.subheader("Test Results (Temporary)")
                 
+                # Display results in a container with styling
+                st.markdown('<div class="results-container">', unsafe_allow_html=True)
+                st.markdown("#### Test Results (Temporary)")
                 test_results = st.session_state["test_results"]
-                st.text(f"l_plus (log P(data | hypothesis)): {test_results['l_plus']:.4f}")
-                st.text(f"l_minus (log P(data | not hypothesis)): {test_results['l_minus']:.4f}")
-                st.text(f"Current posterior log odds: {test_results['current_posterior']:.4f}")
-                st.text(f"New posterior log odds: {test_results['new_posterior']:.4f}")
-                st.text(f"Probability of hypothesis: {test_results['probability']:.2%}")
-                st.text(f"Confidence interval (95%): ({test_results['confidence_lower']:.2%}, {test_results['confidence_upper']:.2%})")
+                
+                st.write(f"**l_plus (log P(data | hypothesis)):** {test_results['l_plus']:.4f}")
+                st.write(f"**l_minus (log P(data | not hypothesis)):** {test_results['l_minus']:.4f}")
+                st.write(f"**Current posterior log odds:** {test_results['current_posterior']:.4f}")
+                st.write(f"**New posterior log odds:** {test_results['new_posterior']:.4f}")
+                st.write(f"**Probability of hypothesis given this data:** {test_results['probability']:.2%}")
+                st.write(f"**Confidence interval (95%):** ({test_results['confidence_lower']:.2%}, {test_results['confidence_upper']:.2%})")
                 st.info("These results are temporary and have not been saved to the database yet.")
-            elif not edit_mode:
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
                 st.info("Code needs to be tested before it can be saved to the database")
             
             # Test button to execute code without updating DB
@@ -555,16 +558,6 @@ def display_code_review_step(db, fs, hypothesis_collection):
                         st.session_state["test_results"] = test_results
 
                         st.success("Code executed successfully!")
-                        
-                        # Display test results immediately
-                        st.subheader("Temporary Test Results")
-                        st.text(f"l_plus (log P(data | hypothesis)): {l_plus:.4f}")
-                        st.text(f"l_minus (log P(data | not hypothesis)): {l_minus:.4f}")
-                        st.text(f"Current posterior log odds: {current_posterior:.4f}")
-                        st.text(f"New posterior log odds: {new_posterior:.4f}")
-                        st.text(f"Probability of hypothesis: {probability:.2%}")
-                        st.text(f"Confidence interval (95%): ({lower:.2%}, {upper:.2%})")
-                        st.info("These results are temporary and not yet saved to the database.")
                         
                         # Exit edit mode after validation if we're in it
                         if edit_mode:
@@ -657,10 +650,8 @@ def display_code_review_step(db, fs, hypothesis_collection):
                             # Show success message and next button
                             st.markdown("### 📊 Data Updated Successfully")
                             
-                            # Don't need a continue button here since we have one in the navigation section
-                            # This prevents duplicate button IDs
-                            st.session_state["analysis_saved"] = True
-                            return "reload"
+                            if st.button("Continue to Next Step →"):
+                                return "next"
                             
                         except Exception as e:
                             st.error(f"Error saving analysis: {str(e)}")
@@ -670,16 +661,13 @@ def display_code_review_step(db, fs, hypothesis_collection):
             st.divider()
             
             # Check if we have existing analysis for this file in data points
-            # or if analysis was just saved
-            has_saved_analysis = st.session_state.get("analysis_saved", False)
-            
-            if not has_saved_analysis:
-                hypothesis_doc = hypothesis_collection.find_one({"_id": hypothesis_id})
-                if hypothesis_doc and "node_metadata" in hypothesis_doc and "data_points" in hypothesis_doc["node_metadata"]:
-                    for data_point in hypothesis_doc["node_metadata"]["data_points"]:
-                        if data_point.get("file_id") == file_id:
-                            has_saved_analysis = True
-                            break
+            has_saved_analysis = False
+            hypothesis_doc = hypothesis_collection.find_one({"_id": hypothesis_id})
+            if hypothesis_doc and "node_metadata" in hypothesis_doc and "data_points" in hypothesis_doc["node_metadata"]:
+                for data_point in hypothesis_doc["node_metadata"]["data_points"]:
+                    if data_point.get("file_id") == file_id:
+                        has_saved_analysis = True
+                        break
             
             col1, col2 = st.columns([1, 1])
             with col1:
@@ -697,7 +685,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
             with col2:
                 # Show Next button only if we have saved analysis for this file
                 if has_saved_analysis:
-                    if st.button("Continue to Next Step →", key="footer_next_button"):
+                    if st.button("Continue to Next Step →"):
                         return "next"
     
     return None  # No action taken
