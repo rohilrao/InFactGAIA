@@ -559,10 +559,12 @@ def display_code_review_step(db, fs, hypothesis_collection):
 
                         st.success("Code executed successfully!")
                         
-                        # Exit edit mode after validation if we're in it
+                        # Always trigger a reload after successful test to show results
                         if edit_mode:
                             st.session_state["edit_mode"] = False
-                            return "reload"
+                        
+                        # Force reload to ensure results display
+                        return "reload"
                         
                     except Exception as e:
                         st.error(f"Code execution failed: {str(e)}")
