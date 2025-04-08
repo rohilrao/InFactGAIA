@@ -82,23 +82,38 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     st.write(f"**Hypothesis:** {hypothesis_text}")
     st.divider()
 
-     # NEW SECTION: Evidence Recommender
-    # Get API keys from session state or use None
-    api_keys = {
-        'semantic_scholar': st.session_state.get('semantic_scholar_api_key', None)
-    }
-    
-    # Display evidence recommendations and get selected evidence
-    evidence_selected, selected_evidence = display_evidence_recommendations(hypothesis_text, api_keys)
-    
-    # If evidence was selected, you might want to do something with it
-    if evidence_selected and selected_evidence:
-        # Store in session state for later use
-        st.session_state['selected_evidence_paper'] = selected_evidence
+
+
+    # NEW SECTION: Evidence Recommender
+    # Get values from session state
+    api_key = st.session_state.get("api_key", "")
+    provider = st.session_state.get("llm_provider", "openai")
+    model = st.session_state.get("llm_model", "gpt-4o")
+
+    api_keys = {}        
+    # Add the current provider's API key
+    if api_key:
+        api_keys[provider.lower()] = api_key
         
-        # Optionally: You could automatically download the paper if it has a direct PDF URL
-        if 'pdf_url' in selected_evidence and selected_evidence['pdf_url']:
-            st.info(f"You can download the selected paper from the link above and upload it below.")
+    # Try to get additional API keys from secrets
+    if hasattr(st, 'secrets'):
+        if 'SERPAPI_KEY' in st.secrets:
+            api_keys['serpapi'] = st.secrets['SERPAPI_KEY']
+        if 'SEMANTIC_SCHOLAR_API_KEY' in st.secrets:
+            api_keys['semantic_scholar'] = st.secrets['SEMANTIC_SCHOLAR_API_KEY']
+
+    # Display evidence recommendations with the correct provider settings
+    evidence_selected, selected_evidence = display_evidence_recommendations(
+        hypothesis_text,
+        api_key=api_key,
+        provider=provider,
+        model=model,
+        api_keys=api_keys
+    )
+        
+    # If evidence was selected, offer to download it
+    if evidence_selected and selected_evidence and 'pdf_url' in selected_evidence and selected_evidence['pdf_url']:
+        st.info(f"**Recommended evidence found**: You can download the paper from the link above and upload it below.")
             
     st.divider()
     
