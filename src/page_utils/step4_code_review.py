@@ -681,12 +681,6 @@ def display_code_review_step(db, fs, hypothesis_collection):
                             st.success("Analysis saved! Results have been stored in the database.")
                             st.session_state["file_ready_for_processing"] = True
                             
-                            # Show success message and next button
-                            st.markdown("### 📊 Data Updated Successfully")
-                            
-                            # Use a unique key for this button to avoid duplicates
-                            if st.button("Continue to Next Step →", key="save_continue_button"):
-                                return "next"
                             
                         except Exception as e:
                             st.error(f"Error saving analysis: {str(e)}")

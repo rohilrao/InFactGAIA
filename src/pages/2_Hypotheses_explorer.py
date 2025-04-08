@@ -4,13 +4,14 @@ import gridfs
 from pymongo.server_api import ServerApi
 from bson.objectid import ObjectId
 import pandas as pd
+import json
 
 # -------------------
 # Streamlit Page Config
 # -------------------
 st.set_page_config(
-    page_title="InFactGAIAV3",
-    page_icon="📂",
+    page_title="GAIA - InFact - Demo",
+    page_icon="",
     layout="wide"
 )
 
@@ -53,7 +54,8 @@ if hypotheses:
         hypothesis_id = hypothesis["_id"]
         hypothesis_text = hypothesis["text"]
         
-        # Exclude node_state and rendered_hypothesis
+        # Query for files related to this hypothesis
+        # Look for the hypothesis_id in the metadata field
         file_query = {
             "metadata.hypothesis_id": str(hypothesis_id),
             "filename": {"$not": {"$regex": "node_state|rendered_hypothesis"}}
@@ -85,7 +87,11 @@ if hypotheses:
                     st.markdown('<div class="compact-items">', unsafe_allow_html=True)
                     for file in all_files:
                         filename = file.get("filename", "unnamed")
+                        
+                        # Properly access the status field (could be at top level or in metadata)
                         status = file.get("status", "unknown")
+                        if status == "unknown" and "metadata" in file and "status" in file["metadata"]:
+                            status = file["metadata"]["status"]
                         
                         col1, col2 = st.columns([3, 2])
                         with col1:
@@ -103,6 +109,8 @@ if hypotheses:
                 "metadata.hypothesis_id": str(hypothesis_id),
                 "metadata.is_latest": True
             })
+            
+            # If we don't find a node state file, we can use the hypothesis data itself
             latest_html = db.fs.files.find_one({
                 "metadata.type": "rendered_html",
                 "metadata.hypothesis_id": str(hypothesis_id),
@@ -114,6 +122,7 @@ if hypotheses:
             
             with col1:
                 if latest_node_state:
+                    # Download the node state file if it exists
                     node_state_data = fs.get(ensure_object_id(latest_node_state["_id"])).read()
                     st.download_button(
                         label="Download Node State (JSON)",
@@ -123,7 +132,18 @@ if hypotheses:
                         use_container_width=True
                     )
                 else:
-                    st.info("No node state available")
+                    # If no node state file exists, create a JSON from the hypothesis document
+                    hypothesis_json = json.dumps(
+                        {k: str(v) if isinstance(v, ObjectId) else v for k, v in hypothesis.items()},
+                        indent=2
+                    )
+                    st.download_button(
+                        label="Download Hypothesis (JSON)",
+                        data=hypothesis_json,
+                        file_name=f"hypothesis_{hypothesis_id}.json",
+                        mime="application/json",
+                        use_container_width=True
+                    )
             
             with col2:
                 if latest_html:

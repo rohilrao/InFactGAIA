@@ -1,6 +1,6 @@
 import streamlit as st 
 
-st.set_page_config(page_title="InFactGAIAV3", page_icon="📂", layout="wide")
+st.set_page_config(page_title="GAIA - InFact - Demo", page_icon="", layout="wide")
 
 # Title & Subtitle
 st.markdown("### :orange[InFact Demo: Building Trust in Science through Collaborative Evaluation]")
