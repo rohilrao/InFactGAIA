@@ -356,12 +356,19 @@ def display_results_step(db, fs, hypothesis_collection):
             st.markdown("- What are the main limitations of this analysis?")
             st.markdown("- How should I interpret the confidence interval?")
         
-        # Chat input with on_change callback
-        st.text_input(
-            "Ask a question about the analysis results",
-            key="result_question",
-            on_change=handle_chat_submit
-        )
+        # Chat input with on_change callback and a send button
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.text_input(
+                "Ask a question about the analysis results",
+                key="result_question",
+                on_change=handle_chat_submit
+            )
+        with col2:
+            send_button = st.button("Send", key="send_result_chat_btn")
+            if send_button and st.session_state["result_question"].strip():
+                handle_chat_submit()
+                st.rerun()
         
         # Clear chat button
         if st.session_state["result_chat_history"] and st.button("Clear Chat", key="clear_result_chat_btn"):
