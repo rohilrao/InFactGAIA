@@ -463,8 +463,11 @@ def display_code_review_step(db, fs, hypothesis_collection):
                                 
                                 Keep your response developer-focused, identifying specific technical issues.
                                 """
-                                
-                                
+                                # Retrieve model, api_key, and provider here
+                                model = st.session_state.get("model", None)
+                                api_key = st.session_state.get("api_key", None)
+                                provider = st.session_state.get("provider", None)
+                                                                    
                                 tech_analysis_text = call_llm(provider, api_key, model, tech_analysis_prompt)
                                 
                                 st.session_state["tech_analysis"] = tech_analysis_text
