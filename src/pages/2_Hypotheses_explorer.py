@@ -5,6 +5,7 @@ from pymongo.server_api import ServerApi
 from bson.objectid import ObjectId
 import pandas as pd
 import json
+from datetime import datetime
 
 # -------------------
 # Streamlit Page Config
@@ -133,10 +134,24 @@ if hypotheses:
                     )
                 else:
                     # If no node state file exists, create a JSON from the hypothesis document
-                    hypothesis_json = json.dumps(
-                        {k: str(v) if isinstance(v, ObjectId) else v for k, v in hypothesis.items()},
-                        indent=2
-                    )
+                    # Create a serializable version of the hypothesis
+                    def serialize_for_json(obj):
+                        if isinstance(obj, ObjectId):
+                            return str(obj)
+                        elif isinstance(obj, datetime):
+                            return obj.isoformat()
+                        elif isinstance(obj, dict):
+                            return {k: serialize_for_json(v) for k, v in obj.items()}
+                        elif isinstance(obj, list):
+                            return [serialize_for_json(item) for item in obj]
+                        elif isinstance(obj, (str, int, float, bool, type(None))):
+                            return obj
+                        else:
+                            return str(obj)
+                    
+                    serializable_hypothesis = serialize_for_json(hypothesis)
+                    hypothesis_json = json.dumps(serializable_hypothesis, indent=2)
+                    
                     st.download_button(
                         label="Download Hypothesis (JSON)",
                         data=hypothesis_json,
