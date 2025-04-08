@@ -36,6 +36,58 @@ def handle_chat_submit():
         # Clear the input field
         st.session_state["result_question"] = ""
 
+def generate_analysis_takeaways(hypothesis_entry):
+    """Generate key takeaways based on the hypothesis analysis."""
+    takeaways = []
+    
+    # Get data points and metadata
+    data_points = hypothesis_entry["node_metadata"].get("data_points", [])
+    current_posterior = hypothesis_entry["node_metadata"].get("current_posterior", 0.0)
+    probability = _to_probability(current_posterior)
+    
+    # Takeaway 1: Evidence quantity assessment
+    num_data_points = len(data_points)
+    if num_data_points < 3:
+        takeaways.append("Limited evidence base: Analysis is based on only a few sources, which may affect reliability. Consider adding more evidence files.")
+    elif num_data_points < 6:
+        takeaways.append("Moderate evidence base: Analysis includes several sources but could benefit from additional evidence for more robust conclusions.")
+    else:
+        takeaways.append("Strong evidence base: Analysis includes multiple sources providing a more comprehensive assessment.")
+    
+    # Takeaway 2: Evidence quality and consistency assessment
+    log_odds_impacts = [abs(point.get("l_plus", 0) - point.get("l_minus", 0)) for point in data_points]
+    
+    if log_odds_impacts:
+        avg_impact = sum(log_odds_impacts) / len(log_odds_impacts)
+        max_impact = max(log_odds_impacts)
+        min_impact = min(log_odds_impacts)
+        consistency = max_impact - min_impact
+        
+        if consistency > 8:
+            takeaways.append("Inconsistent evidence strength: There are large variations in how strongly different sources support or contradict the hypothesis. Review the strongest contradicting evidence.")
+        elif avg_impact < 2:
+            takeaways.append("Weak evidence impact: The available evidence has relatively little impact on the hypothesis. Consider seeking stronger evidence.")
+        else:
+            takeaways.append("Consistent evidence: The evidence sources show reasonable consistency in their impact on the hypothesis.")
+    
+    # Takeaway 3: Confidence assessment
+    lower, upper = _calculate_uncertainty(current_posterior, data_points)
+    confidence_range = upper - lower
+    
+    if confidence_range > 0.4:
+        takeaways.append("High uncertainty: The wide confidence interval suggests that more evidence is needed to reach a confident conclusion.")
+    elif confidence_range < 0.1 and probability > 0.9:
+        takeaways.append("Strong confidence in conclusion: The narrow confidence interval and high probability provide strong support for the hypothesis.")
+    elif confidence_range < 0.1 and probability < 0.1:
+        takeaways.append("Strong confidence in rejection: The narrow confidence interval and low probability provide strong evidence against the hypothesis.")
+    else:
+        takeaways.append("Moderate confidence: The confidence interval suggests a reasonable level of certainty in the conclusion, but more evidence could strengthen the finding.")
+    
+    # Store the full hypothesis entry in session state for use in chat
+    st.session_state["hypothesis_entry"] = hypothesis_entry
+    
+    return takeaways
+
 def process_chat_message(user_question, hypothesis_text, data_points, probability, lower, upper, interpretation):
     """Process a chat message about the results and generate a response."""
     try:
@@ -43,6 +95,9 @@ def process_chat_message(user_question, hypothesis_text, data_points, probabilit
         api_key = st.session_state["api_key"]
         model = st.session_state["model"]
 
+        # Include the full hypothesis JSON data for more context
+        hypothesis_json = st.session_state.get("hypothesis_entry", {})
+        
         # Prepare evidence summary for the prompt
         evidence_summary = ""
         for point in data_points:
@@ -58,6 +113,7 @@ def process_chat_message(user_question, hypothesis_text, data_points, probabilit
             f"- 95% confidence interval: ({lower:.2%}, {upper:.2%})\n"
             f"- Interpretation: {interpretation}\n\n"
             f"Evidence analyzed:{evidence_summary}\n\n"
+            f"Full hypothesis data: {str(hypothesis_json)}\n\n"
             f"The researcher asks: {user_question}\n\n"
             f"Provide a helpful, specific answer focused on interpreting these results and what they mean for the hypothesis. "
             f"Consider the strength of evidence, limitations, and what additional evidence might be valuable. "
@@ -68,6 +124,7 @@ def process_chat_message(user_question, hypothesis_text, data_points, probabilit
     
     except Exception as e:
         return f"Error processing your question: {str(e)}"
+
 
 def initialize_chat_state():
     """Initialize all required session state variables for chat."""
@@ -376,6 +433,21 @@ def display_results_step(db, fs, hypothesis_collection):
             st.session_state["result_chat_id"] = str(uuid.uuid4())
             st.rerun()
     
+
+    # Add a new section for key takeaways
+    st.markdown("---")
+    st.subheader("Key Takeaways")
+    
+    # Analyze the hypothesis data to generate takeaways
+    takeaways = generate_analysis_takeaways(hypothesis_entry)
+    
+    # Display the takeaways in a styled container
+    st.markdown('<div class="results-container">', unsafe_allow_html=True)
+    for point in takeaways:
+        st.markdown(f"• {point}")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
     # Navigation buttons
     st.divider()
     
