@@ -441,11 +441,9 @@ def display_results_step(db, fs, hypothesis_collection):
     # Analyze the hypothesis data to generate takeaways
     takeaways = generate_analysis_takeaways(hypothesis_entry)
     
-    # Display the takeaways in a styled container
-    st.markdown('<div class="results-container">', unsafe_allow_html=True)
+    # Display the takeaways normally without styled container
     for point in takeaways:
         st.markdown(f"• {point}")
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
     # Navigation buttons
