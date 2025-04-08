@@ -63,7 +63,7 @@ if hypotheses:
         }
         all_files = list(db.fs.files.find(file_query))
         
-        with st.expander(f"Hypothesis ID: {hypothesis_id}", expanded=False):
+        with st.expander(f"Hypothesis ID: :orange[{hypothesis_id}]", expanded=False):
             # Highlight the hypothesis text in orange
             st.markdown(f"**Hypothesis:** :orange[{hypothesis_text}]")
             
@@ -153,7 +153,7 @@ if hypotheses:
                     hypothesis_json = json.dumps(serializable_hypothesis, indent=2)
                     
                     st.download_button(
-                        label="Download Hypothesis (JSON)",
+                        label="Download InFact Node State (JSON)",
                         data=hypothesis_json,
                         file_name=f"hypothesis_{hypothesis_id}.json",
                         mime="application/json",
