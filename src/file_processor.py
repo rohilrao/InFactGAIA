@@ -464,8 +464,7 @@ def _extract_metadata(data_file: str) -> Dict[str, Any]:
     
 def validate_parsed_data(db, file_id, hypothesis, parsed_data, api_key, provider="openai", model="gpt-4o"):
     """
-    Validate if the parsed data contains numerical values that are appropriate for Bayesian analysis
-    in the context of the given hypothesis.
+    Validate if the parsed data contains numerical values that are relevant to the given hypothesis.
     
     Args:
         db: MongoDB database connection
@@ -513,14 +512,14 @@ def validate_parsed_data(db, file_id, hypothesis, parsed_data, api_key, provider
         And these extracted numerical values from a document:
         {parsed_data["numerical_values"]}
         
-        Evaluate if these numerical values are appropriate for a Bayesian analysis of the hypothesis.
+        Evaluate if these numerical values are relevant to the hypothesis.
         
-        Your evaluation should consider:
-        1. Are the numerical values relevant to the hypothesis?
-        2. Are the values quantifiable and suitable for statistical analysis?
-        3. Do the values provide evidence for or against the hypothesis?
-        4. Are there sufficient values to perform a meaningful Bayesian analysis?
-        5. Are the values of appropriate quality (precision, reliability, etc.)?
+        Your evaluation should primarily consider:
+        1. Are the numerical values contextually relevant to the hypothesis?
+        2. Could these values contribute to understanding or evaluating the hypothesis?
+        
+        For example, if the hypothesis is "the earth is flat or round", numerical values about earth's curvature would be relevant, 
+        while values like the year a conference was held or number of attendees would not be relevant.
         
         Return your response as a JSON object with the following format:
         ```json
@@ -566,7 +565,7 @@ def validate_parsed_data(db, file_id, hypothesis, parsed_data, api_key, provider
                 }}
             )
             
-            logger.info(f"Numerical values validated as appropriate for Bayesian analysis")
+            logger.info(f"Numerical values validated as relevant to the hypothesis")
         else:
             # Data is not valid, update status to "not fit for analysis"
             db.fs.files.update_one(
@@ -577,7 +576,7 @@ def validate_parsed_data(db, file_id, hypothesis, parsed_data, api_key, provider
                 }}
             )
             
-            logger.warning(f"Numerical values not appropriate for Bayesian analysis: {validation_result.get('reason', '')}")
+            logger.warning(f"Numerical values not relevant to the hypothesis: {validation_result.get('reason', '')}")
         
         return validation_result
     
