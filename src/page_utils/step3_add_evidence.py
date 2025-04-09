@@ -132,9 +132,24 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     ready_for_analysis_files = [f for f in existing_files if f.get("metadata", {}).get("status") == "ready_for_analysis" and 
                                f.get("metadata", {}).get("parsing_complete", False)]
     processed_files = [f for f in existing_files if f.get("metadata", {}).get("status") == "processed"]
+    not_fit_files = [f for f in existing_files if f.get("metadata", {}).get("status") == "not fit for analysis"]
+    error_files = [f for f in existing_files if f.get("metadata", {}).get("status") == "error"]
+    pending_validation_files = [f for f in existing_files if f.get("metadata", {}).get("status") == "pending_validation"]
     
     # Any files that are ready for analysis or already processed
     analyzed_files = ready_for_analysis_files #+ processed_files
+    
+    # If we have any pending validation files, we should show a processing indicator
+    if pending_validation_files:
+        st.info("⏳ Some files are being validated. Please wait for validation to complete.")
+        st.progress(0.7, "Validation in progress")
+        
+        # Add automatic refresh capability for pending files
+        if st.button("Refresh Status", key="refresh_validation", use_container_width=True):
+            st.rerun()
+    
+    # Any files that are ready for analysis or already processed
+    analyzed_files = ready_for_analysis_files 
 
     if existing_files:
         st.caption(f"{len(existing_files)} file(s) associated with this hypothesis")
@@ -167,8 +182,21 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                         st.markdown("<span style='color:orange'>⏳ Processing</span>", unsafe_allow_html=True)
                     elif status == "processed":
                         st.markdown("<span style='color:green'>✅ Processed</span>", unsafe_allow_html=True)
+                    elif status == "not fit for analysis":
+                        st.markdown("<span style='color:red'>❌ Not Fit for Analysis</span>", unsafe_allow_html=True)
+                    elif status == "pending_validation":
+                        st.markdown("<span style='color:blue'>🔄 Validating Data</span>", unsafe_allow_html=True)
+                    elif status == "error":
+                        st.markdown("<span style='color:red'>⚠️ Error</span>", unsafe_allow_html=True)
                     else:
                         st.markdown("<span style='color:#888'>⚪ Unprocessed</span>", unsafe_allow_html=True)
+                        
+                # Add expander for error messages when status is "error"
+                if status == "error":
+                    with st.expander("See error details"):
+                        error_message = file.get("metadata", {}).get("error_message", "Unknown error")
+                        st.error(f"**Error:** {error_message}")
+                        st.warning("Please try uploading a different file or contact the developer if the issue persists.")
 
                 # Download column
                 with col4:
@@ -376,93 +404,132 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     
     # 4. DISPLAY PARSED DATA SECTION (only if we have analyzed files)
     
-    if analyzed_files:
+    if analyzed_files or not_fit_files:
         st.divider()
         st.markdown("### :orange[Parsed Data Preview]")
         
-        # Create dropdown with analyzed files
-        file_options = {f"{file['filename']} (ID: {str(file['_id'])[-6:]})": str(file["_id"]) for file in analyzed_files}
-        selected_file = st.selectbox(
-            "Select a file to view its parsed data:", 
-            options=list(file_options.keys()),
-            key="parsed_data_file_selector"
-        )
+        # Create dropdown with analyzed files and not fit files
+        file_options = {f"{file['filename']} (ID: {str(file['_id'])[-6:]})": str(file["_id"]) 
+                        for file in analyzed_files + not_fit_files}
         
-        if selected_file:
-            selected_file_id = file_options[selected_file]
+        if file_options:
+            selected_file = st.selectbox(
+                "Select a file to view its parsed data:", 
+                options=list(file_options.keys()),
+                key="parsed_data_file_selector"
+            )
             
-            # Convert to ObjectId if needed
-            object_id = ensure_object_id(selected_file_id)
-            
-            # Query with the proper ID
-            file_doc = db.fs.files.find_one({"_id": object_id})
-            
-            if file_doc and "metadata" in file_doc and "parsed_data" in file_doc["metadata"]:
-                parsed_data = file_doc["metadata"]["parsed_data"]
-                # Display the parsed data in a nice format
-                st.markdown(f"#### Data from: {file_doc['filename']}")
+            if selected_file:
+                selected_file_id = file_options[selected_file]
                 
-                # Create tabs for different views
-                summary_tab, raw_data_tab = st.tabs(["Summary View", "Raw JSON Data"])
+                # Convert to ObjectId if needed
+                object_id = ensure_object_id(selected_file_id)
                 
-                with summary_tab:
-                    # If there's a confidence assessment, show it prominently
-                    confidence_data = parsed_data.get("confidence_assessment", {})
-                    if confidence_data:
-                        confidence_score = confidence_data.get("confidence_score", 0)
+                # Query with the proper ID
+                file_doc = db.fs.files.find_one({"_id": object_id})
+                
+                if file_doc and "metadata" in file_doc:
+                    file_status = file_doc.get("metadata", {}).get("status", "")
+                    
+                    # First display file status prominently
+                    if file_status == "ready_for_analysis":
+                        st.success(f"✅ This file is **ready for analysis**")
+                    elif file_status == "not fit for analysis":
+                        st.error(f"❌ This file is **not fit for Bayesian analysis**")
+                    
+                    # Get parsed data if available
+                    if "parsed_data" in file_doc["metadata"]:
+                        parsed_data = file_doc["metadata"]["parsed_data"]
                         
-                        # Create columns for better layout
-                        col1, col2 = st.columns([1, 2])
+                        # Display the parsed data in a nice format
+                        st.markdown(f"#### Data from: {file_doc['filename']}")
                         
-                        with col1:
-                            st.subheader("Confidence")
-                            # Display confidence score as a progress bar
-                            st.progress(float(confidence_score))
-                            # Determine color based on score
-                            if confidence_score >= 0.75:
-                                score_color = "green"
-                            elif confidence_score >= 0.5:
-                                score_color = "orange"
-                            else:
-                                score_color = "red"
-                            
-                            st.markdown(f"<h3 style='color:{score_color}'>{confidence_score:.2f}</h3>", unsafe_allow_html=True)
+                        # Create tabs for different views - ONLY for parsed data
+                        summary_tab, raw_data_tab = st.tabs(["Summary View", "Raw JSON Data"])
                         
-                        with col2:
-                            st.subheader("Assessment")
-                            st.write(f"{confidence_data.get('explanation', '')}")
-                            
-                            # Display strengths and limitations in expandable sections
-                            if "key_strengths" in confidence_data:
-                                with st.expander("Key Strengths"):
-                                    for strength in confidence_data["key_strengths"]:
-                                        st.write(f"- {strength}")
+                        with summary_tab:
+                            # Display confidence assessment if available
+                            confidence_data = parsed_data.get("confidence_assessment", {})
+                            if confidence_data:
+                                confidence_score = confidence_data.get("confidence_score", 0)
+                                
+                                # Create columns for better layout
+                                col1, col2 = st.columns([1, 2])
+                                
+                                with col1:
+                                    st.subheader("Confidence")
+                                    # Display confidence score as a progress bar
+                                    st.progress(float(confidence_score))
+                                    # Determine color based on score
+                                    if confidence_score >= 0.75:
+                                        score_color = "green"
+                                    elif confidence_score >= 0.5:
+                                        score_color = "orange"
+                                    else:
+                                        score_color = "red"
                                     
-                            if "key_limitations" in confidence_data:
-                                with st.expander("Key Limitations"):
-                                    for limitation in confidence_data["key_limitations"]:
-                                        st.write(f"- {limitation}")
+                                    st.markdown(f"<h3 style='color:{score_color}'>{confidence_score:.2f}</h3>", unsafe_allow_html=True)
+                                
+                                with col2:
+                                    st.subheader("Assessment")
+                                    st.write(f"{confidence_data.get('explanation', '')}")
+                                    
+                                    # Display strengths and limitations in expandable sections
+                                    if "key_strengths" in confidence_data:
+                                        with st.expander("Key Strengths"):
+                                            for strength in confidence_data["key_strengths"]:
+                                                st.write(f"- {strength}")
+                                            
+                                    if "key_limitations" in confidence_data:
+                                        with st.expander("Key Limitations"):
+                                            for limitation in confidence_data["key_limitations"]:
+                                                st.write(f"- {limitation}")
+                            
+                            # Display other parsed data components
+                            if "numerical_values" in parsed_data:
+                                with st.expander("Numerical Values"):
+                                    st.write(parsed_data["numerical_values"])
+                            
+                            if "metadata" in parsed_data:
+                                with st.expander("Metadata"):
+                                    st.json(parsed_data["metadata"])
+                            
+                            if "issues" in parsed_data:
+                                with st.expander("Issues"):
+                                    for issue in parsed_data["issues"]:
+                                        st.warning(issue)
+                        
+                        with raw_data_tab:
+                            st.caption("Complete data structure returned by the parser")
+                            st.json(parsed_data)
+                        
+                        # AFTER the tabs, display validation results separately for "not fit for analysis" files
+                        if file_status == "not fit for analysis":
+                            st.divider()
+                            validation_result = file_doc.get("metadata", {}).get("validation_result", {})
+                            
+                            st.markdown("### :red[Validation Results]")
+                            
+                            # Display reason with detailed explanation
+                            st.error(f"**This file is not suitable for Bayesian analysis**")
+                            st.write(f"**Reason:** {validation_result.get('reason', 'The numerical values in this file are not appropriate for the hypothesis.')}")
+                            
+                            # Display suggestions with guidance
+                            if "suggestions" in validation_result and validation_result["suggestions"]:
+                                st.info("**Recommendations:**")
+                                st.write(validation_result["suggestions"])
+                            
+                            # Display key points about the numerical values
+                            if "key_points" in validation_result and validation_result["key_points"]:
+                                st.subheader("Key Points")
+                                for point in validation_result["key_points"]:
+                                    st.markdown(f"- {point}")
                     
-                    # Display other parsed data components if they exist
-                    if "numerical_values" in parsed_data:
-                        with st.expander("Numerical Values"):
-                            st.write(parsed_data["numerical_values"])
-                    
-                    if "metadata" in parsed_data:
-                        with st.expander("Metadata"):
-                            st.json(parsed_data["metadata"])
-                    
-                    if "issues" in parsed_data:
-                        with st.expander("Issues"):
-                            for issue in parsed_data["issues"]:
-                                st.warning(issue)
-                
-                with raw_data_tab:
-                    st.caption("Complete data structure returned by the parser")
-                    st.json(parsed_data)
-            else:
-                st.warning("No parsed data available for this file.")
-    
+                    else:
+                        st.warning("No parsed data available for this file.")
+                else:
+                    st.warning("File metadata not found.")
+
     # 5. NAVIGATION BUTTONS
     st.divider()
     

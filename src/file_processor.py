@@ -85,14 +85,14 @@ def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o"):
             logger.info("Parsing file data using LLM...")
             parsed_data, extracted_content = _parse_data(temp_file_path, hypothesis, api_key, provider, model)
             
-            # Update file in GridFS with the results - proper status transition to ready_for_analysis
+            # Initially set to pending_validation
             db.fs.files.update_one(
                 {"_id": file_id},
                 {"$set": {
-                    "metadata.status": "ready_for_analysis",
+                    "metadata.status": "pending_validation",
                     "metadata.parsed_data": parsed_data,
                     "metadata.extracted_metadata": metadata,
-                    "metadata.extracted_content": extracted_content,  # Store the extracted content
+                    "metadata.extracted_content": extracted_content,
                     "metadata.processing_date": datetime.now().isoformat(),
                     "metadata.parsing_complete": True,
                     "metadata.processing_provider": provider,
@@ -100,16 +100,29 @@ def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o"):
                 }}
             )
             
-            logger.info(f"Updated file status to 'ready_for_analysis'")
+            # Validate the parsed data for Bayesian analysis
+            logger.info("Validating parsed data for Bayesian analysis...")
+            validation_result = validate_parsed_data(
+                db, 
+                file_id, 
+                hypothesis, 
+                parsed_data, 
+                api_key, 
+                provider, 
+                model
+            )
             
-            logger.info(f"File processing completed successfully for {filename}")
+            # Final status is set by validate_parsed_data function
+            
+            logger.info(f"File processing and validation completed for {filename}")
             return {
                 "success": True,
                 "file_id": str(file_id),
                 "filename": filename,
                 "metadata": metadata,
                 "parsed_data": parsed_data,
-                "extracted_content": extracted_content  # Include extracted content in the response
+                "extracted_content": extracted_content,
+                "validation_result": validation_result
             }
             
         finally:
@@ -447,4 +460,141 @@ def _extract_metadata(data_file: str) -> Dict[str, Any]:
         return {
             "filename": Path(data_file).name,
             "error": str(e)
+        }
+    
+def validate_parsed_data(db, file_id, hypothesis, parsed_data, api_key, provider="openai", model="gpt-4o"):
+    """
+    Validate if the parsed data contains numerical values that are appropriate for Bayesian analysis
+    in the context of the given hypothesis.
+    
+    Args:
+        db: MongoDB database connection
+        file_id: ID of the file in GridFS
+        hypothesis: The hypothesis text
+        parsed_data: The parsed data dictionary extracted from the file
+        api_key: API key for LLM provider
+        provider: LLM provider name (default: "openai")
+        model: LLM model to use
+        
+    Returns:
+        Dictionary with validation results
+    """
+    logger.info(f"Validating parsed data for file ID: {file_id}")
+    
+    try:
+        # Check if numerical_values exist in the parsed data
+        if "numerical_values" not in parsed_data or not parsed_data["numerical_values"]:
+            logger.warning(f"No numerical values found in parsed data for file ID: {file_id}")
+            
+            # Update file status to "not fit for analysis"
+            db.fs.files.update_one(
+                {"_id": file_id},
+                {"$set": {
+                    "metadata.status": "not fit for analysis",
+                    "metadata.validation_result": {
+                        "is_valid": False,
+                        "reason": "No numerical values found in the parsed data",
+                        "suggestions": "Please upload a file that contains numerical data relevant to the hypothesis."
+                    }
+                }}
+            )
+            
+            return {
+                "is_valid": False,
+                "reason": "No numerical values found in the parsed data",
+                "suggestions": "Please upload a file that contains numerical data relevant to the hypothesis."
+            }
+        
+        # Prepare the prompt for LLM to evaluate the numerical values
+        prompt = f"""
+        Given this hypothesis:
+        "{hypothesis}"
+        
+        And these extracted numerical values from a document:
+        {parsed_data["numerical_values"]}
+        
+        Evaluate if these numerical values are appropriate for a Bayesian analysis of the hypothesis.
+        
+        Your evaluation should consider:
+        1. Are the numerical values relevant to the hypothesis?
+        2. Are the values quantifiable and suitable for statistical analysis?
+        3. Do the values provide evidence for or against the hypothesis?
+        4. Are there sufficient values to perform a meaningful Bayesian analysis?
+        5. Are the values of appropriate quality (precision, reliability, etc.)?
+        
+        Return your response as a JSON object with the following format:
+        ```json
+        {{
+            "is_valid": true/false,
+            "reason": "Brief explanation of your decision",
+            "suggestions": "If invalid, provide suggestions for what kind of data would be appropriate",
+            "key_points": [
+                "Point 1 about the numerical values",
+                "Point 2 about the numerical values"
+            ]
+        }}
+        ```
+        """
+        
+        # Call LLM to evaluate the parsed data
+        logger.info(f"Calling {provider} LLM to validate numerical values")
+        response_text = call_llm(provider, api_key, model, prompt)
+        
+        # Extract JSON from the response
+        import re
+        import json
+        
+        json_match = re.search(r'```json\s*({[\s\S]*?})\s*```', response_text)
+        if json_match:
+            validation_result = json.loads(json_match.group(1))
+        else:
+            # Try to find anything that looks like JSON
+            json_match = re.search(r'({[\s\S]*})', response_text)
+            if json_match:
+                validation_result = json.loads(json_match.group(1))
+            else:
+                raise ValueError("Could not extract JSON from LLM response")
+        
+        # Update file status based on validation result
+        if validation_result.get("is_valid", False):
+            # Data is valid, update status to "ready_for_analysis"
+            db.fs.files.update_one(
+                {"_id": file_id},
+                {"$set": {
+                    "metadata.status": "ready_for_analysis",
+                    "metadata.validation_result": validation_result
+                }}
+            )
+            
+            logger.info(f"Numerical values validated as appropriate for Bayesian analysis")
+        else:
+            # Data is not valid, update status to "not fit for analysis"
+            db.fs.files.update_one(
+                {"_id": file_id},
+                {"$set": {
+                    "metadata.status": "not fit for analysis",
+                    "metadata.validation_result": validation_result
+                }}
+            )
+            
+            logger.warning(f"Numerical values not appropriate for Bayesian analysis: {validation_result.get('reason', '')}")
+        
+        return validation_result
+    
+    except Exception as e:
+        logger.error(f"Error validating parsed data: {str(e)}", exc_info=True)
+        
+        # Update file status to error
+        db.fs.files.update_one(
+            {"_id": file_id},
+            {"$set": {
+                "metadata.status": "error",
+                "metadata.error_message": f"Validation error: {str(e)}"
+            }}
+        )
+        
+        return {
+            "is_valid": False,
+            "reason": f"Error during validation: {str(e)}",
+            "suggestions": "Please try uploading the file again or contact the developer if the issue persists."
         }
