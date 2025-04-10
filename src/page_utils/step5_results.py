@@ -352,7 +352,33 @@ def display_results_step(db, fs, hypothesis_collection):
                 with st.expander("Debug Data"):
                     st.write("Hypothesis Entry:")
                     st.json(hypothesis_entry)
-    
+
+    try:
+        # Get current timestamp for versioning
+        current_timestamp = datetime.now()
+        
+        # Get the current filename or file_id being processed (if available)
+        current_filename = st.session_state.get("current_filename", "no_filename")
+        current_file_id = st.session_state.get("current_file_id", "no_file_id")
+        
+        # Save the new HTML file to GridFS
+        html_file_id = fs.put(
+            html_output.encode(),
+            filename=f"hypothesis_{hypothesis_id}_visualization.html",
+            metadata={
+                "type": "rendered_html",
+                "hypothesis_id": str(hypothesis_id),
+                "rendered_at": current_timestamp,
+                "filename": current_filename,
+                "file_id": str(current_file_id),
+                "created_at": datetime.now()
+            }
+        )
+        
+        st.success("Visualization saved to database for future access.")
+    except Exception as e:
+        st.warning(f"Could not save visualization to database: {str(e)}")
+        
     with chat_tab:
         st.subheader("Discuss Analysis Results")
         st.markdown("Ask questions about what these results mean for your hypothesis. The assistant will help interpret the data and suggest next steps.")

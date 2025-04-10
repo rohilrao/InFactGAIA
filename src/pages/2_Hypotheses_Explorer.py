@@ -114,9 +114,8 @@ if hypotheses:
             # If we don't find a node state file, we can use the hypothesis data itself
             latest_html = db.fs.files.find_one({
                 "metadata.type": "rendered_html",
-                "metadata.hypothesis_id": str(hypothesis_id),
-                "metadata.is_latest": True
-            })
+                "metadata.hypothesis_id": str(hypothesis_id)
+            }, sort=[("metadata.rendered_at", -1)]) # Get the latest HTML file based on rendered_at timestamp
             
             # Download Buttons
             col1, col2 = st.columns(2)
