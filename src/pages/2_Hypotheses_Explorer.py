@@ -67,6 +67,15 @@ if hypotheses:
             # Highlight the hypothesis text in orange
             st.markdown(f"**Hypothesis:** :orange[{hypothesis_text}]")
             
+            # Update file query to exclude visualization.html files
+            file_query = {
+            "metadata.hypothesis_id": str(hypothesis_id),
+            "filename": {
+                "$not": {"$regex": "node_state|rendered_hypothesis|_visualization\\.html$"}
+            }
+            }
+            all_files = list(db.fs.files.find(file_query))
+            
             # Simple count of files
             st.markdown(f"**Files Attached:** {len(all_files)}")
             if all_files:
@@ -77,8 +86,8 @@ if hypotheses:
                 st.markdown("""
                 <style>
                     .compact-items p {
-                        margin-bottom: 0px;
-                        padding-bottom: 0px;
+                    margin-bottom: 0px;
+                    padding-bottom: 0px;
                     }
                 </style>
                 """, unsafe_allow_html=True)
