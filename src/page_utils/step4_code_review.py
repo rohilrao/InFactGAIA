@@ -591,7 +591,7 @@ def display_code_review_step(db, fs, hypothesis_collection):
             # Add Save button that appears only after successful code testing
             if "test_results" in st.session_state:
                 st.markdown("### :orange[Save Analysis to Database]")
-                st.info("Saving will update the database with these results and update your data points.")
+                st.info("Saving will update the infact node state.")
                 
                 if st.button("Save Code to DB and Update Node", type="primary"):
                     with st.spinner("Saving analysis to database..."):
