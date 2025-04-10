@@ -123,7 +123,11 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     # Get existing files for this hypothesis, excluding node state and rendered hypothesis files
     existing_files = list(db.fs.files.find({
         "metadata.hypothesis_id": hypothesis_id,
-        "filename": {"$not": {"$regex": "node_state|rendered_hypothesis"}}
+        "filename": {
+            "$not": {
+                "$regex": "node_state|rendered_hypothesis|_visualization\.html$"
+            }
+        }
     }))
 
     # Categorize files by their status from the database
