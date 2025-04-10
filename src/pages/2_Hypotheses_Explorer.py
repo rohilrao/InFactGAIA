@@ -169,15 +169,23 @@ if hypotheses:
                     )
             
             with col2:
-                if latest_html:
-                    html_data = fs.get(ensure_object_id(latest_html["_id"])).read()
+                # Get rendered HTML directly from the hypothesis document
+                latest_html_content = hypothesis.get("node_metadata", {}).get("latest_rendered_html")
+                latest_rendered_at = hypothesis.get("node_metadata", {}).get("rendered_at")
+                
+                if latest_html_content:
+                    # Use the HTML content stored directly in the document
                     st.download_button(
                         label="Download Visualization (HTML)",
-                        data=html_data,
+                        data=latest_html_content,
                         file_name=f"hypothesis_{hypothesis_id}_visualization.html",
                         mime="text/html",
                         use_container_width=True
                     )
+                    
+                    # Show when it was last rendered if timestamp is available
+                    if latest_rendered_at:
+                        st.caption(f"Last rendered: {latest_rendered_at.strftime('%Y-%m-%d %H:%M:%S')}")
                 else:
                     st.info("No visualization available")
 
