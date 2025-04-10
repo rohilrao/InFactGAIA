@@ -546,7 +546,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                 return "next"
         else:
             st.button("Next →", use_container_width=True, disabled=True)
-            st.caption("You need at least one processed file to continue")
+            st.caption("You need at least one \"ready for analysis\" file to continue")
     
     # Default return value if no navigation occurs
     return None
