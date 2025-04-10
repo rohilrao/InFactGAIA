@@ -511,8 +511,7 @@ def display_file_upload_step(db, fs, hypothesis_collection):
                             st.markdown("### :red[Unsuitable file]")
                             
                             # Display reason with detailed explanation
-                            st.error(f"**Either the document is unsuitable or there was a failure to extract numerical data that could be relevant to the hypothesis. 
-                            If you think this is a mistake then please contact the developer.**")
+                            st.error(f"**Either the document is unsuitable or there was a failure to extract numerical data that could be relevant to the hypothesis. If you think this is a mistake then please contact the developer.**")
                             st.write(f"**Reason:** {validation_result.get('reason', 'The numerical values in this file are not appropriate for the hypothesis.')}")
                             
                             # Display suggestions with guidance
