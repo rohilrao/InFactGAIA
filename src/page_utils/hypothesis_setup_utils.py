@@ -273,7 +273,7 @@ def render_hypothesis_setup(hypothesis_collection):
     Please enter a unique **Hypothesis ID** to identify your hypothesis. This ID will be used to associate all results and files with your hypothesis.  
     You can retrieve existing IDs from the Hypotheses Explorer page.  
 
-    For example, if you want to test a hypothesis like *'Is the earth flat?'*, you could use an ID like `hyp_flat_earth`.  
+    For example, if you want to test a hypothesis like *'Do Human emitted GHGs contribute signifcantly to global warming?'*, you could use an ID like `hyp_global_warming`.  
     If the ID already exists, the associated hypothesis will be loaded. Otherwise, a new hypothesis will be created.
     """)
     
