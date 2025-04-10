@@ -16,7 +16,7 @@ def display_setup_step():
     
     model_options = {
         "openai": ["gpt-4o", "chatgpt-4o-latest"],
-        "anthropic": ["claude-3-5-sonnet"]
+        "anthropic": ["claude-3-5-sonnet-20241022"]
     }
     
     model_default = st.session_state.get("model", model_options[provider][0])
