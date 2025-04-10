@@ -87,8 +87,8 @@ def display_file_upload_step(db, fs, hypothesis_collection):
     # NEW SECTION: Evidence Recommender
     # Get values from session state
     api_key = st.session_state.get("api_key", "")
-    provider = st.session_state.get("llm_provider", "openai")
-    model = st.session_state.get("llm_model", "gpt-4o")
+    provider = st.session_state.get("provider", "openai")
+    model = st.session_state.get("model", "gpt-4o")
 
     api_keys = {}        
     # Add the current provider's API key
@@ -282,9 +282,9 @@ def display_file_upload_step(db, fs, hypothesis_collection):
             )
             
             # Get values from session state
-            api_key = st.session_state.get("api_key", "")
-            provider = st.session_state.get("llm_provider", "openai")
-            model = st.session_state.get("llm_model", "gpt-4o")
+            api_key = st.session_state.get("api_key",)
+            provider = st.session_state.get("provider")
+            model = st.session_state.get("model")
             
             try:
                 # Call the process_file function
