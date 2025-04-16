@@ -8,6 +8,9 @@ on:
       - main
       - streamlit_app_v4
 
+permissions:
+  contents: write
+
 jobs:
   monitor-mongo-storage:
     name: Check MongoDB Atlas Storage Usage
