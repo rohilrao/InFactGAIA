@@ -1,22 +1,21 @@
 # MongoDB Atlas Storage Usage Report
-*Generated on: 2025-04-16 14:25:16*
+*Generated on: 2025-04-17 05:24:20*
 
 ## Summary
 
-- **Total storage used:** 126.32 MB
+- **Total storage used:** 23.38 MB
 - **Free tier limit:** 512.00 MB
-- **Remaining storage:** 385.68 MB
-- **Usage percentage:** 24.67%
-- **Status:** 🟢 **GOOD** - 24.67% of storage limit used
+- **Remaining storage:** 488.62 MB
+- **Usage percentage:** 4.57%
+- **Status:** 🟢 **GOOD** - 4.57% of storage limit used
 
 ## Database Breakdown
 
 | Database | Size (MB) | Percentage |
 |----------|-----------|------------|
-| sample_mflix | 102.95 | 81.50% |
-| hypothesis_management | 12.50 | 9.89% |
-| infact_db | 9.88 | 7.82% |
-| infact_db_v3 | 1.00 | 0.79% |
+| hypothesis_management | 12.50 | 53.46% |
+| infact_db | 9.88 | 42.25% |
+| infact_db_v3 | 1.00 | 4.29% |
 
 ## Collection Details
 
@@ -39,16 +38,7 @@
 | hypotheses | 0.52 |
 | fs.files | 0.48 |
 
-### sample_mflix
-
-| Collection | Size (MB) |
-|------------|-----------|
-| embedded_movies | 74.30 |
-| movies | 21.75 |
-| comments | 6.68 |
-| theaters | 0.16 |
-
 ## Statistics
 
-- **Total databases:** 4
-- **Total collections:** 15
+- **Total databases:** 3
+- **Total collections:** 9
