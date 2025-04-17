@@ -30,17 +30,17 @@ jobs:
           pip install pymongo
       
       - name: Create monitoring directory
-        run: mkdir -p monitoring
+        run: mkdir -p .github/monitoring
           
       - name: Check MongoDB Atlas storage usage
         env:
           MONGO_URI: ${{ secrets.MONGO_URI }}
-        run: python .github/scripts/check_mongodb_usage.py --output-file monitoring/mongodb_storage_report.md
+        run: python .github/scripts/check_mongodb_usage.py --output-file .github/monitoring/mongodb_storage_report.md
       
       - name: Commit report to repository
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add monitoring/mongodb_storage_report.md
+          git add .github/monitoring/mongodb_storage_report.md
           git commit -m "Update MongoDB storage report" || echo "No changes to commit"
           git push
