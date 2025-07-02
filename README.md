@@ -2,8 +2,9 @@
 
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?style=flat&logo=github)](https://github.com/rohilrao/InFactGAIA)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Streamlit](https://img.shields.io/badge/Streamlit-Demo-FF4B4B?style=flat&logo=streamlit)]([https://streamlit.io](https://infact-gaia-demo.streamlit.app/))
-[![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=flat&logo=python)](https://python.org)
+[![Streamlit](https://img.shields.io/badge/Streamlit-Demo-FF4B4B?style=flat&logo=streamlit)](https://infact-gaia-demo.streamlit.app/)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=flat&logo=python)](https://www.python.org)
+
 
 **A Gaia Lab Project**
 
