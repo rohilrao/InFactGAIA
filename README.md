@@ -11,7 +11,7 @@
 [![Website](https://img.shields.io/badge/🌐-Website-blue?style=for-the-badge)](https://gaia-lab.de)
 [![Blog Post](https://img.shields.io/badge/📖-Blog_Post-green?style=for-the-badge)](https://www.lesswrong.com/posts/TK92QZ8L6cXvvhXbF/gaia-network-an-illustrated-primer)
 [![Watch on YouTube](https://img.shields.io/badge/🎥%20Watch-YouTube-red?style=for-the-badge)](https://www.youtube.com/watch?v=47r5P6xtjms)
-
+[![Watch the video](https://cdn.loom.com/sessions/thumbnails/f27fe6e5818d46868a8240840ddfa019-with-preview.gif)](https://www.loom.com/share/f27fe6e5818d46868a8240840ddfa019)
 
 ---
 
@@ -19,6 +19,7 @@
 > — [Sabine Hossenfelder](https://www.youtube.com/watch?v=zucXnn64qtk&t=314s)
 
 InFact is our attempt to realize this vision: a **decentralized model-based inference engine** that evaluates scientific claims and provides clear confidence measures based on available evidence. By combining AI with rigorous Bayesian statistics, InFact enables scientists and the public to collaboratively assess the reliability of scientific findings.
+▶️ [Watch the demo on Loom](https://www.loom.com/share/f27fe6e5818d46868a8240840ddfa019)
 
 ## 🚀 Quick Start
 
