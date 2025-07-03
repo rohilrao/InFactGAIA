@@ -8,10 +8,11 @@
 
 **A Gaia Lab Project**
 
-[![Website](https://img.shields.io/badge/🌐-Website-blue?style=for-the-badge)](https://gaia-lab.de)
-[![Blog Post](https://img.shields.io/badge/📖-Blog_Post-green?style=for-the-badge)](https://www.lesswrong.com/posts/TK92QZ8L6cXvvhXbF/gaia-network-an-illustrated-primer)
-[![Watch on YouTube](https://img.shields.io/badge/🎥%20Watch-YouTube-red?style=for-the-badge)](https://www.youtube.com/watch?v=47r5P6xtjms)
-[![Watch the video](https://cdn.loom.com/sessions/thumbnails/f27fe6e5818d46868a8240840ddfa019-with-preview.gif)](https://www.loom.com/share/f27fe6e5818d46868a8240840ddfa019)
+[![Website](https://img.shields.io/badge/-Website-0A66C2?logo=internet-explorer&logoColor=white&style=for-the-badge)](https://gaia-lab.de)
+[![Blog Post](https://img.shields.io/badge/-Blog_Post-3CB371?logo=book&logoColor=white&style=for-the-badge)](https://www.lesswrong.com/posts/TK92QZ8L6cXvvhXbF/gaia-network-an-illustrated-primer)
+[![Watch on YouTube](https://img.shields.io/badge/-YouTube-FF0000?logo=youtube&logoColor=white&style=for-the-badge)](https://www.youtube.com/watch?v=47r5P6xtjms)
+[![Loom Demo](https://img.shields.io/badge/-Loom-4E5AE8?logo=loom&logoColor=white&style=for-the-badge)](https://www.loom.com/share/f27fe6e5818d46868a8240840ddfa019)
+
 
 ---
 
