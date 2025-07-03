@@ -2,17 +2,34 @@
 
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?style=flat&logo=github)](https://github.com/rohilrao/InFactGAIA)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Streamlit](https://img.shields.io/badge/Streamlit-Demo-FF4B4B?style=flat&logo=streamlit)](https://infact-gaia-demo.streamlit.app/)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=flat&logo=python)](https://www.python.org)
-
 
 **A Gaia Lab Project**
 
 [![Website](https://img.shields.io/badge/-Website-0A66C2?logo=internet-explorer&logoColor=white&style=for-the-badge)](https://gaia-lab.de)
 [![Blog Post](https://img.shields.io/badge/-Blog_Post-3CB371?logo=book&logoColor=white&style=for-the-badge)](https://www.lesswrong.com/posts/TK92QZ8L6cXvvhXbF/gaia-network-an-illustrated-primer)
 [![Watch on YouTube](https://img.shields.io/badge/-YouTube-FF0000?logo=youtube&logoColor=white&style=for-the-badge)](https://www.youtube.com/watch?v=47r5P6xtjms)
-[![Loom Demo](https://img.shields.io/badge/-Loom-4E5AE8?logo=loom&logoColor=white&style=for-the-badge)](https://www.loom.com/share/f27fe6e5818d46868a8240840ddfa019)
 
+---
+
+## 🚀 Try InFact Now
+
+### 🌟 [**➤ Launch Interactive Demo on Streamlit**](https://infact-gaia-demo.streamlit.app/)
+*Click here to experience InFact in action with our interactive web application*
+
+### 🎥 [**➤ Watch the Demo Video on Loom**](https://www.loom.com/share/f27fe6e5818d46868a8240840ddfa019)
+*Click here to see how InFact evaluates scientific claims step-by-step*
+
+---
+
+## About InFact
+
+> *"What we should do is create an institution that collects and evaluates scientific evidence and gives out confidence values based on evidence."*
+> — [Sabine Hossenfelder](https://www.youtube.com/watch?v=zucXnn64qtk&t=314s)
+
+InFact is our attempt to realize this vision: a **decentralized model-based inference engine** that evaluates scientific claims and provides clear confidence measures based on available evidence. By combining AI with rigorous Bayesian statistics, InFact enables scientists and the public to collaboratively assess the reliability of scientific findings.
+
+**Ready to explore?** Start with our [**Streamlit demo**](https://infact-gaia-demo.streamlit.app/) or [**watch the walkthrough**](https://www.loom.com/share/f27fe6e5818d46868a8240840ddfa019) to see InFact in action.
 
 ---
 
