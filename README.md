@@ -12,12 +12,12 @@
 
 ---
 
-## 🚀 Try InFact Now
+## Try InFact Now
 
-### 🌟 [**➤ Launch Interactive Demo on Streamlit**](https://infact-gaia-demo.streamlit.app/)
+### [**Launch Interactive Demo on Streamlit**](https://infact-gaia-demo.streamlit.app/)
 *Click here to experience InFact in action with our interactive web application*
 
-### 🎥 [**➤ Watch the Demo Video on Loom**](https://www.loom.com/share/f27fe6e5818d46868a8240840ddfa019)
+### [**Watch the Demo Video on Loom**](https://www.loom.com/share/f27fe6e5818d46868a8240840ddfa019)
 *Click here to see how InFact evaluates scientific claims step-by-step*
 
 ---
