@@ -455,7 +455,7 @@ def display_results_step(db, fs, hypothesis_collection):
 
     # Add a new section for key takeaways
     st.markdown("---")
-    st.subheader("Key Takeaways")
+    st.subheader("Key Checks and Takeaways")
     
     # Analyze the hypothesis data to generate takeaways
     takeaways = generate_analysis_takeaways(hypothesis_entry)

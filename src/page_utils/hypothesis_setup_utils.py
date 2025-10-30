@@ -50,8 +50,8 @@ def reformulate_hypothesis_as_yes_no(original_text, active_id, hypothesis_collec
         yes_no_formulation = call_llm(provider_name, api_key, model, prompt_reformulate)
         
         # Validate the response
-        if not yes_no_formulation.endswith('?'):
-            yes_no_formulation = yes_no_formulation.rstrip('.') + '?'
+        # if not yes_no_formulation.endswith('?'):
+        #    yes_no_formulation = yes_no_formulation.rstrip('.') + '?'
         
         # Update DB
         hypothesis_collection.update_one(
@@ -81,9 +81,9 @@ def generate_hypothesis_description(hypothesis_text, active_id, hypothesis_colle
         model = st.session_state["model"]
         
         prompt_description = (
-            f"Given this yes/no hypothesis question:\n\n'{hypothesis_text}'\n\n"
+            f"Given this hypothesis statement:\n\n'{hypothesis_text}'\n\n"
             "Create a concise 3-4 sentence description that includes:\n"
-            "1. A restatement of the hypothesis as a yes-no question\n"
+            "1. A restatement of the hypothesis\n"
             "2. A brief summary of the current state of knowledge\n"
             "3. What kind of data would be relevant for evaluating this hypothesis\n\n"
             "Make it clear and succinct, suitable as a hypothesis description that a researcher might write."
@@ -112,7 +112,7 @@ def generate_background_summary(hypothesis_text, active_id, hypothesis_collectio
         model = st.session_state["model"]
 
         prompt_summary = (
-            f"Given this yes/no hypothesis question:\n\n'{hypothesis_text}'\n\n"
+            f"Given this hypothesis statement:\n\n'{hypothesis_text}'\n\n"
             "Create a comprehensive background summary with the following structure:\n\n"
             "## Current State of Knowledge\n"
             "Provide a detailed paragraph summarizing what is currently known about this topic. Include specific references to key studies and exact page numbers when applicable.\n\n"
@@ -282,7 +282,7 @@ def render_hypothesis_setup(hypothesis_collection):
     Please enter a unique **Hypothesis ID** to identify your hypothesis. This ID will be used to associate all results and files with your hypothesis.  
     You can retrieve existing IDs from the Hypotheses Explorer page.  
 
-    For example, if you want to test a hypothesis like *'Do Human emitted GHGs contribute signifcantly to global warming?'*, you could use an ID like `hyp_global_warming`.  
+    For example, if you want to test a hypothesis like *'Human emitted GHGs contribute signifcantly to global warming'*, you could use an ID like `hyp_global_warming`.  
     If the ID already exists, the associated hypothesis will be loaded. Otherwise, a new hypothesis will be created.
     """)
     
