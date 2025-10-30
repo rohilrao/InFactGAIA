@@ -28,51 +28,58 @@ This is the core idea behind InFact.
 # Section: How does InFact work?
 st.markdown("### :orange[How does InFact work?]")
 st.markdown("""
-At its heart, InFact uses a <b>network of interconnected nodes</b>. Each node focuses on a specific scientific question, such as:
+At its heart, InFact uses a <b>network of interconnected nodes</b>. Each node focuses on a specific scientific question, like 
+"Do human-generated greenhouse gas emissions significantly increase global temperatures?"
 
-> <b>Do human-generated greenhouse gas emissions significantly increase global temperatures?</b>
+Within each node, a sophisticated <b>"inference engine"</b> analyzes data related to the question. This engine combines the power of 
+artificial intelligence (specifically, large language models or LLMs) with Bayesian statistics, a mathematical framework for 
+updating beliefs based on evidence.
 
-Within each node, an <b>inference engine</b> analyzes data related to the question. This system combines:
-- <b>AI-powered evidence extraction</b>
-- <b>Bayesian statistical models</b>
-- <b>Fully auditable confidence scoring</b>
+<b>Breaking down the process:</b>
+
+• <b>Data collection:</b> The node gathers data from various sources (research papers, datasets, etc.) related to the scientific question.
+
+• <b>AI-powered analysis:</b> LLMs are used to automatically extract key information from the data, identify relevant studies, 
+and even assess the quality of the evidence.
+
+• <b>Bayesian updating:</b> The system uses Bayesian methods to weigh the evidence and update a "confidence score" for the scientific claim. 
+This score reflects the strength of the evidence supporting the claim.
+
+• <b>Transparency and traceability:</b> All data, analyses, and confidence scores are recorded and made available for scrutiny. 
+This ensures transparency and allows for continuous improvement of the system.
 """, unsafe_allow_html=True)
 
-# Section: Challenges in Scientific Evaluation
-st.markdown("### :orange[Challenges in Scientific Evaluation]")
+# Section: Addressing the Challenges of Data Analysis
+st.markdown("### :orange[Addressing the Challenges of Data Analysis]")
 st.markdown("""
-One of the biggest challenges in evaluating scientific claims is the <b>diversity and complexity of data</b>.  
-InFact tackles this challenge using <b>LLMs to generate adaptive data analysis pipelines</b>.  
-
-We currently integrate <b>Claude 3.5 Sonnet</b>, a state-of-the-art AI model trained on scientific literature, 
-allowing it to analyze different study formats with precision.
+One of the biggest challenges in evaluating scientific claims is the <b>sheer diversity and complexity of scientific data</b>. 
+InFact tackles this challenge by using <b>LLMs to generate custom data analysis pipelines</b> for each new piece of evidence. 
+We use frontier off-the-shelf LLMs (currently, <b>Claude 3.5 Sonnet</b>). These AI models are pre-trained on vast amounts of 
+scientific literature, allowing them to adapt to different types of studies and data formats.
 """, unsafe_allow_html=True)
 
 # Section: Beyond the Prototype
 st.markdown("### :orange[Beyond the Prototype]")
 st.markdown("""
-To address this, our team is developing a <b>hybrid analysis framework</b> that blends:
-- <b>The adaptability of AI</b>
-- <b>The reliability of established statistical methods</b>
-
-This will result in a <b>robust, bias-resistant system</b> for evaluating scientific claims.
+While our current prototype relies heavily on LLMs, we recognize the need for even greater rigor. Our team is developing a 
+framework for <b>"automatic progressive data analysis."</b> This framework will combine the flexibility of LLMs with the 
+reliability of established statistical models, creating a <b>more robust and trustworthy system</b> for evaluating scientific claims.
 """, unsafe_allow_html=True)
 
 # Section: InFact in Action
 st.markdown("### :orange[InFact in Action]")
 st.markdown("""
-Our goal is to build a <b>user-friendly platform</b> that presents complex scientific evidence in an <b>accessible format</b>.
-
-🔹 <b>Interactive visualizations</b> track how confidence scores evolve over time.  
-🔹 <b>Transparent explanations</b> clarify why specific conclusions are reached.  
+We envision InFact as a <b>user-friendly platform</b> that presents complex scientific information in a <b>clear and accessible way</b>. 
+Imagine interactive visualizations that show how confidence scores evolve as new evidence emerges, along with explanations that 
+help users understand the reasoning behind the scores.
 """, unsafe_allow_html=True)
 
 # Section: The Future of Scientific Confidence
 st.markdown("### :orange[The Future of Scientific Confidence]")
 st.markdown("""
-<b>InFact is not just a tool—it's a movement towards a more transparent scientific process.</b>  
-By allowing <b>scientists and the public</b> to work together in assessing claims, 
-we aim to <b>increase public trust in science and improve evidence-based decision-making</b>.
+<b>InFact is more than just a technology; it's a vision for a future where scientific knowledge is more accessible, transparent, 
+and trustworthy.</b> By empowering scientists and the public to collaboratively evaluate evidence, we can foster a deeper 
+understanding of science and its role in shaping our world.
 """, unsafe_allow_html=True)
 
 # Section: The Gaia Network
