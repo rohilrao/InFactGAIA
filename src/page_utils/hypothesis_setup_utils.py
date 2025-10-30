@@ -43,7 +43,8 @@ def reformulate_hypothesis_as_yes_no(original_text, active_id, hypothesis_collec
         prompt_reformulate = (
     f"Given this initial idea:\n\n'{original_text}'\n\n"
     "Rewrite/Reformulate it as a clear, concise, and testable **hypothesis statement**. "
-    "The statement should be declarative and specific, not a question. "
+    "Do not change the contents of the statement. Only focus on making it a declarative statement."
+    "The statement should be declarative and specific, not a question."
     "Keep your response brief — ONLY return the reformulated statement, nothing else."
 )
         
