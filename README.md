@@ -33,12 +33,6 @@ InFact is our attempt to realize this vision: a **decentralized model-based infe
 
 ---
 
-> *"What we should do is create an institution that collects and evaluates scientific evidence and gives out confidence values based on evidence."*
-> — [Sabine Hossenfelder](https://www.youtube.com/watch?v=zucXnn64qtk&t=314s)
-
-InFact is our attempt to realize this vision: a **decentralized model-based inference engine** that evaluates scientific claims and provides clear confidence measures based on available evidence. By combining AI with rigorous Bayesian statistics, InFact enables scientists and the public to collaboratively assess the reliability of scientific findings.
-▶️ [Watch the demo on Loom](https://www.loom.com/share/f27fe6e5818d46868a8240840ddfa019)
-
 ## 🚀 Quick Start
 
 ```bash
