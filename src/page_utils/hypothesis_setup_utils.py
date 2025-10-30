@@ -31,12 +31,21 @@ def reformulate_hypothesis_as_yes_no(original_text, active_id, hypothesis_collec
         api_key = st.session_state["api_key"]
         model = st.session_state["model"]
         
+        '''
         prompt_reformulate = (
             f"Given this hypothesis:\n\n'{original_text}'\n\n"
             "Rewrite/Reformulate it as a clear, concise Yes-No question. " 
             "The answer to the reformulated question should be either 'Yes' or 'No'. "
             "Keep your response brief — ONLY return the reformulated question, nothing else."
         )
+        '''
+
+        prompt_reformulate = (
+    f"Given this initial idea:\n\n'{original_text}'\n\n"
+    "Rewrite/Reformulate it as a clear, concise, and testable **hypothesis statement**. "
+    "The statement should be declarative and specific, not a question. "
+    "Keep your response brief — ONLY return the reformulated statement, nothing else."
+)
         
         yes_no_formulation = call_llm(provider_name, api_key, model, prompt_reformulate)
         
@@ -354,7 +363,7 @@ def render_hypothesis_refinement(hypothesis_id, hypothesis_doc, hypothesis_colle
         need_reformulation = True
     
     if need_reformulation:
-        with st.spinner("Reformulating hypothesis as a yes-no question..."):
+        with st.spinner("Refining hypothesis statement..."):
             yes_no_formulation = reformulate_hypothesis_as_yes_no(
                 original_text, 
                 hypothesis_id, 
@@ -367,7 +376,7 @@ def render_hypothesis_refinement(hypothesis_id, hypothesis_doc, hypothesis_colle
             st.session_state["hypothesis_text"] = yes_no_formulation
     
     # Display the refined hypothesis
-    st.info(f"**Refined Question:** {hypothesis_doc['text']}")
+    st.info(f"**Refined Hypothesis:** {hypothesis_doc['text']}")
     
     return hypothesis_doc
 
