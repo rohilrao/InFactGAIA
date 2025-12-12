@@ -26,7 +26,7 @@ def extract_code(text: str) -> List[Tuple[str, str]]:
     matches = re.findall(pattern, text, re.DOTALL)
     return matches
 
-def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o"):
+def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o", validate=False):
     """
     Process a file from GridFS, extract metadata, and use LLM to parse its contents.
     
@@ -37,6 +37,7 @@ def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o"):
         api_key: API key for LLM provider
         provider: LLM provider name (default: "openai")
         model: LLM model to use
+        validate: Whether to validate parsed data for Bayesian analysis (default: True)
         
     Returns:
         Dictionary with processing results
@@ -85,11 +86,12 @@ def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o"):
             logger.info("Parsing file data using LLM...")
             parsed_data, extracted_content = _parse_data(temp_file_path, hypothesis, api_key, provider, model)
             
-            # Initially set to pending_validation
+            # Set initial status based on whether validation will be performed
+            initial_status = "pending_validation" if validate else "ready_for_analysis"
             db.fs.files.update_one(
                 {"_id": file_id},
                 {"$set": {
-                    "metadata.status": "pending_validation",
+                    "metadata.status": initial_status,
                     "metadata.parsed_data": parsed_data,
                     "metadata.extracted_metadata": metadata,
                     "metadata.extracted_content": extracted_content,
@@ -100,21 +102,25 @@ def process_file(db, fs, file_id, api_key, provider="openai", model="gpt-4o"):
                 }}
             )
             
-            # Validate the parsed data for Bayesian analysis
-            logger.info("Validating parsed data for Bayesian analysis...")
-            validation_result = validate_parsed_data(
-                db, 
-                file_id, 
-                hypothesis, 
-                parsed_data, 
-                api_key, 
-                provider, 
-                model
-            )
+            validation_result = None
+            if validate:
+                # Validate the parsed data for Bayesian analysis
+                logger.info("Validating parsed data for Bayesian analysis...")
+                validation_result = validate_parsed_data(
+                    db, 
+                    file_id, 
+                    hypothesis, 
+                    parsed_data, 
+                    api_key, 
+                    provider, 
+                    model
+                )
+            else:
+                logger.info("Skipping validation as requested")
             
-            # Final status is set by validate_parsed_data function
+            # Final status is set by validate_parsed_data if validation is performed
             
-            logger.info(f"File processing and validation completed for {filename}")
+            logger.info(f"File processing {'and validation ' if validate else ''}completed for {filename}")
             return {
                 "success": True,
                 "file_id": str(file_id),
