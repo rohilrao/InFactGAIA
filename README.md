@@ -21,7 +21,6 @@
 *Click here to see how InFact evaluates scientific claims step-by-step*
 
 ---
-
 ## About InFact
 
 > *"What we should do is create an institution that collects and evaluates scientific evidence and gives out confidence values based on evidence."*
@@ -31,6 +30,9 @@ InFact is our attempt to realize this vision: a **decentralized model-based infe
 
 **Ready to explore?** Start with our [**Streamlit demo**](https://infact-gaia-demo.streamlit.app/) or [**watch the walkthrough**](https://www.loom.com/share/f27fe6e5818d46868a8240840ddfa019) to see InFact in action.
 
+---
+## InFact system overview 
+<img src="data/imgs/InFactWorkflow.jpg" alt="alt text" width="600">
 ---
 
 ## 🚀 Quick Start
