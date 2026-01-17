@@ -57,7 +57,7 @@ protobuf==5.29.3
 ptyprocess==0.7.0
 pure_eval==0.2.3
 pyarrow==19.0.1
-pyautogen==0.7.3
+ag2==0.7.3
 pycparser==2.22
 pydantic==2.10.6
 pydantic_core==2.27.2
